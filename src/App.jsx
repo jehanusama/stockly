@@ -3,12 +3,13 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import { Sidebar }       from "@/components/layout/Sidebar";
 
-import Dashboard    from "@/pages/Dashboard";
-import Products     from "@/pages/Products";
-import Customers    from "@/pages/Customers";
-import NewSale      from "@/pages/NewSale";
-import SalesHistory from "@/pages/SalesHistory";
-import ProfitReport from "@/pages/ProfitReport";
+import Dashboard       from "@/pages/Dashboard";
+import Products        from "@/pages/Products";
+import Customers       from "@/pages/Customers";
+import CustomerDetails from "@/pages/CustomerDetails";
+import NewSale         from "@/pages/NewSale";
+import SalesHistory    from "@/pages/SalesHistory";
+import ProfitReport    from "@/pages/ProfitReport";
 
 
 function AppLayout() {
@@ -41,12 +42,13 @@ function AppLayout() {
 
         
         <Routes>
-          <Route path="/"          element={<Dashboard />} />
-          <Route path="/products"  element={<Products />} />
-          <Route path="/customers" element={<Customers />} />
-          <Route path="/new-sale"  element={<NewSale />} />
-          <Route path="/sales"     element={<SalesHistory />} />
-          <Route path="/profit"    element={<ProfitReport />} />
+          <Route path="/"               element={<Dashboard />} />
+          <Route path="/products"       element={<Products />} />
+          <Route path="/customers"      element={<Customers />} />
+          <Route path="/customers/:id"  element={<CustomerDetails />} />
+          <Route path="/new-sale"       element={<NewSale />} />
+          <Route path="/sales"          element={<SalesHistory />} />
+          <Route path="/profit"         element={<ProfitReport />} />
         </Routes>
       </div>
     </div>
