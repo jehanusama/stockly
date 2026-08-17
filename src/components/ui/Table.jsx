@@ -1,4 +1,4 @@
-﻿
+
 export function Table({
   columns = [],
   rows = [],
@@ -69,7 +69,8 @@ export function Table({
                   "border-b border-[var(--color-app-border)] last:border-0",
                   "bg-[var(--color-app-panel)] hover:bg-[var(--color-app-panel-hover)]",
                   "transition-colors duration-100",
-                ].join(" ")}
+                  row.className || ""
+                ].filter(Boolean).join(" ")}
               >
                 {columns.map((col) => (
                   <td

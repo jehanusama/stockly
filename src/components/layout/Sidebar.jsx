@@ -117,7 +117,7 @@ export function Sidebar({ mobileOpen, onMobileClose }) {
   // Close mobile drawer on route change
   useEffect(() => {
     onMobileClose?.();
-  }, [location.pathname]);
+  }, [location.pathname, onMobileClose]);
 
   const sidebarWidth = collapsed ? "w-16" : "w-60";
 

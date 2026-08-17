@@ -2,7 +2,6 @@ import { useState } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import { Sidebar }       from "@/components/layout/Sidebar";
-import { PageContainer } from "@/components/layout/PageContainer";
 
 import Dashboard    from "@/pages/Dashboard";
 import Products     from "@/pages/Products";
@@ -11,32 +10,22 @@ import NewSale      from "@/pages/NewSale";
 import SalesHistory from "@/pages/SalesHistory";
 import ProfitReport from "@/pages/ProfitReport";
 
-/* Page metadata — drives PageContainer titles per route */
-const PAGE_META = {
-  "/":        { title: "Dashboard",     subtitle: "Your business at a glance" },
-  "/products":{ title: "Products",      subtitle: "Manage your inventory" },
-  "/customers":{ title: "Customers",    subtitle: "View and manage customers" },
-  "/new-sale":{ title: "New Sale",      subtitle: "Record a new transaction" },
-  "/sales":   { title: "Sales History", subtitle: "Browse past transactions" },
-  "/profit":  { title: "Profit Report", subtitle: "Earnings and margin overview" },
-};
 
-/* ── Root layout ────────────────────────────────────────────── */
 function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
     <div className="flex min-h-screen bg-[var(--color-app-bg)]">
-      {/* Sidebar */}
+
       <Sidebar
         mobileOpen={mobileOpen}
         onMobileClose={() => setMobileOpen(false)}
       />
 
-      {/* Main area — offset by sidebar width on desktop */}
+      
       <div className="flex flex-col flex-1 lg:pl-60 transition-all duration-300">
 
-        {/* ── Mobile top bar ─────────────────────────── */}
+        
         <header className="lg:hidden sticky top-0 z-20 flex items-center gap-3 h-14 px-4 border-b border-[var(--color-app-border)] bg-[var(--color-app-panel)]">
           <button
             onClick={() => setMobileOpen(true)}
@@ -50,21 +39,21 @@ function AppLayout() {
           <span className="font-semibold text-[var(--color-app-text)] text-sm tracking-tight">Stockly</span>
         </header>
 
-        {/* ── Page routes ───────────────────────────── */}
+        
         <Routes>
-          <Route path="/"          element={<PageContainer {...PAGE_META["/"]}><Dashboard /></PageContainer>} />
-          <Route path="/products"  element={<PageContainer {...PAGE_META["/products"]}><Products /></PageContainer>} />
-          <Route path="/customers" element={<PageContainer {...PAGE_META["/customers"]}><Customers /></PageContainer>} />
-          <Route path="/new-sale"  element={<PageContainer {...PAGE_META["/new-sale"]}><NewSale /></PageContainer>} />
-          <Route path="/sales"     element={<PageContainer {...PAGE_META["/sales"]}><SalesHistory /></PageContainer>} />
-          <Route path="/profit"    element={<PageContainer {...PAGE_META["/profit"]}><ProfitReport /></PageContainer>} />
+          <Route path="/"          element={<Dashboard />} />
+          <Route path="/products"  element={<Products />} />
+          <Route path="/customers" element={<Customers />} />
+          <Route path="/new-sale"  element={<NewSale />} />
+          <Route path="/sales"     element={<SalesHistory />} />
+          <Route path="/profit"    element={<ProfitReport />} />
         </Routes>
       </div>
     </div>
   );
 }
 
-/* ── App root ───────────────────────────────────────────────── */
+
 function App() {
   return (
     <BrowserRouter>
