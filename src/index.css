@@ -1,49 +1,53 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 
 @theme {
-  /* Backgrounds */
+  /* ── Backgrounds ─────────────────────────────── */
   --color-app-bg:           #111827;  /* page background  */
   --color-app-panel:        #1f2937;  /* card / panel     */
   --color-app-panel-hover:  #263244;  /* card hover state */
   --color-app-elevated:     #2d3748;  /* modal, dropdown  */
 
-  /* Borders */
+  /* ── Borders ─────────────────────────────────── */
   --color-app-border:       #374151;
   --color-app-border-focus: #60a5fa;
 
-  /* Text */
+  /* ── Text ────────────────────────────────────── */
   --color-app-text:         #f3f4f6;
   --color-app-text-muted:   #9ca3af;
   --color-app-text-subtle:  #6b7280;
 
-  /* Accent / Primary (Blue) */
+  /* ── Accent / Primary (Blue) ─────────────────── */
   --color-app-accent:       #3b82f6;
   --color-app-accent-hover: #2563eb;
   --color-app-accent-muted: #1d3a6b;
 
-  /* Danger (Red) */
+  /* ── Danger (Red) ────────────────────────────── */
   --color-app-danger:       #ef4444;
   --color-app-danger-hover: #dc2626;
   --color-app-danger-muted: #5c1a1a;
 
-  /* Warning (Amber) */
+  /* ── Warning (Amber) ─────────────────────────── */
   --color-app-warning:      #f59e0b;
   --color-app-warning-muted:#44300c;
 
-  /* Success (Green) */
+  /* ── Success (Green) ─────────────────────────── */
   --color-app-success:      #10b981;
   --color-app-success-muted:#0a3628;
+  
+  /* ── Typography ─────────────────────────── */
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
 }
 
-/* Global base */
+/* ── Global base ──────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; }
 
 body {
   margin: 0;
   background-color: var(--color-app-bg);
   color: var(--color-app-text);
-  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
