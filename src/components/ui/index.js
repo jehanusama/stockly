@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Barrel export — import any UI component from "@/components/ui"
  *
  * Usage:
@@ -11,3 +11,4 @@ export { Modal }   from "./Modal";
 export { Input }   from "./Input";
 export { Select }  from "./Select";
 export { Badge }   from "./Badge";
+export { Logo }    from "./Logo";
