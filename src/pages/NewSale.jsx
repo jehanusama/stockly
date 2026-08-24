@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button, Card, Input, StockBar } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
@@ -21,6 +21,8 @@ export default function NewSale() {
   });
 
   const [cart, setCart] = useState(() => [newItem()]);
+  const [discountType, setDiscountType] = useState("none");
+  const [discountValue, setDiscountValue] = useState("");
   const [isSuccess, setIsSuccess] = useState(false);
   const [lastSale, setLastSale] = useState(null);
 
@@ -79,8 +81,19 @@ export default function NewSale() {
       item => item.product && item.qty > 0 && item.price >= 0 && item.hasEnoughStock
     );
 
-  const netProfit = totalRevenue - totalCost;
-  const margin = totalRevenue > 0 ? ((netProfit / totalRevenue) * 100).toFixed(0) : 0;
+  const preDiscountProfit = totalRevenue - totalCost;
+
+  const discountAmount = useMemo(() => {
+    if (discountType === "none" || !discountValue) return 0;
+    const val = parseFloat(discountValue) || 0;
+    if (discountType === "fixed") return Math.min(val, totalRevenue); // can't discount more than revenue
+    if (discountType === "percentage") return totalRevenue * Math.min(val / 100, 1);
+    return 0;
+  }, [discountType, discountValue, totalRevenue]);
+
+  const finalTotal = totalRevenue - discountAmount;
+  const finalProfit = finalTotal - totalCost;
+  const finalMargin = finalTotal > 0 ? ((finalProfit / finalTotal) * 100).toFixed(0) : 0;
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -90,14 +103,19 @@ export default function NewSale() {
       customer: selectedCustomer,
       items: processedCart,
       totalItemsCount,
-      totalRevenue,
-      netProfit
+      subtotal: totalRevenue,
+      discountAmount,
+      finalTotal,
+      finalProfit
     });
     setIsSuccess(true);
   };
 
   const resetForm = () => {
+    setCustomerId("");
     setCart([newItem()]);
+    setDiscountType("none");
+    setDiscountValue("");
     setIsSuccess(false);
     setLastSale(null);
   };
@@ -122,14 +140,24 @@ export default function NewSale() {
               </p>
             </div>
 
-            <div className="w-full bg-[var(--color-app-bg)] rounded-xl p-4 border border-[var(--color-app-border)] flex justify-between items-center my-2">
-              <div className="flex flex-col text-left">
-                <span className="text-xs uppercase font-semibold text-[var(--color-app-text-muted)] tracking-wider">Total Revenue</span>
-                <span className="font-mono text-xl font-bold text-[var(--color-app-text)]">{formatCurrency(lastSale.totalRevenue)}</span>
+            <div className="w-full bg-[var(--color-app-bg)] rounded-xl p-4 border border-[var(--color-app-border)] flex flex-col gap-3 my-2">
+              <div className="flex justify-between items-center pb-2 border-b border-dashed border-[var(--color-app-border)]">
+                <span className="text-xs font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider">Subtotal</span>
+                <span className="font-mono text-sm font-semibold text-[var(--color-app-text)]">{formatCurrency(lastSale.subtotal)}</span>
               </div>
-              <div className="flex flex-col text-right">
-                <span className="text-xs uppercase font-semibold text-[var(--color-app-text-muted)] tracking-wider">Net Profit</span>
-                <span className="font-mono text-xl font-bold text-[var(--color-app-success)]">+{formatCurrency(lastSale.netProfit)}</span>
+              {lastSale.discountAmount > 0 && (
+                <div className="flex justify-between items-center pb-2 border-b border-dashed border-[var(--color-app-border)]">
+                  <span className="text-xs font-semibold text-[var(--color-app-warning)] uppercase tracking-wider">Discount</span>
+                  <span className="font-mono text-sm font-semibold text-[var(--color-app-warning)]">-{formatCurrency(lastSale.discountAmount)}</span>
+                </div>
+              )}
+              <div className="flex justify-between items-center pb-2 border-b border-dashed border-[var(--color-app-border)]">
+                <span className="text-xs font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider">Total</span>
+                <span className="font-mono text-xl font-bold text-[var(--color-app-text)]">{formatCurrency(lastSale.finalTotal)}</span>
+              </div>
+              <div className="flex justify-between items-center pt-1">
+                <span className="text-xs font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider">Net Profit</span>
+                <span className="font-mono text-xl font-bold text-[var(--color-app-success)]">+{formatCurrency(lastSale.finalProfit)}</span>
               </div>
             </div>
 
@@ -262,6 +290,38 @@ export default function NewSale() {
               </Button>
             </div>
 
+            {/* Discount Card */}
+            <Card padding="lg" className="flex flex-col gap-4 bg-[var(--color-app-panel)] border-[var(--color-app-border)]">
+              <h3 className="text-sm font-semibold text-[var(--color-app-text)] uppercase tracking-wider border-b border-[var(--color-app-border)] pb-3">3. Apply Discount (Optional)</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-[var(--color-app-text-subtle)]">Discount Type</label>
+                  <select 
+                    value={discountType} 
+                    onChange={e => { setDiscountType(e.target.value); setDiscountValue(""); }}
+                    className="h-11 w-full bg-[var(--color-app-bg)] border border-[var(--color-app-border)] rounded-lg px-3 text-sm text-[var(--color-app-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-app-border-focus)] appearance-none"
+                  >
+                    <option value="none">No Discount</option>
+                    <option value="fixed">Fixed Amount</option>
+                    <option value="percentage">Percentage (%)</option>
+                  </select>
+                </div>
+                {discountType !== "none" && (
+                  <div className="flex flex-col gap-1.5">
+                    <Input 
+                      type="number" 
+                      min="0"
+                      step={discountType === "percentage" ? "1" : "0.01"}
+                      max={discountType === "percentage" ? "100" : undefined}
+                      label={discountType === "percentage" ? "Percentage Off (%)" : "Amount Off (EGP)"} 
+                      value={discountValue} 
+                      onChange={e => setDiscountValue(e.target.value)} 
+                    />
+                  </div>
+                )}
+              </div>
+            </Card>
+
           </form>
         </div>
 
@@ -276,6 +336,13 @@ export default function NewSale() {
                 <span className="font-mono text-[var(--color-app-text)] font-semibold">{formatCurrency(totalRevenue)}</span>
               </div>
               
+              {discountAmount > 0 && (
+                <div className="flex justify-between items-center pb-4 border-b border-dashed border-[var(--color-app-border)]">
+                  <span className="text-sm text-[var(--color-app-warning)]">Discount</span>
+                  <span className="font-mono text-[var(--color-app-warning)] font-semibold">-{formatCurrency(discountAmount)}</span>
+                </div>
+              )}
+
               <div className="flex justify-between items-center pb-4 border-b border-dashed border-[var(--color-app-border)]">
                 <span className="text-sm text-[var(--color-app-text-muted)]">Total Cost</span>
                 <span className="font-mono text-[var(--color-app-text-subtle)]">-{formatCurrency(totalCost)}</span>
@@ -283,13 +350,21 @@ export default function NewSale() {
               
               <div className="flex flex-col pt-2 gap-1">
                 <div className="flex justify-between items-end mb-1">
-                  <span className="text-xs uppercase font-bold text-[var(--color-app-text-subtle)] tracking-wider">Net Profit</span>
-                  <span className="text-[10px] font-mono font-medium text-[var(--color-app-success)] bg-[var(--color-app-success)]/10 px-1.5 rounded">{margin}% Margin</span>
+                  <span className="text-xs uppercase font-bold text-[var(--color-app-text-subtle)] tracking-wider">
+                    {discountAmount > 0 ? "Final Profit" : "Net Profit"}
+                  </span>
+                  <span className="text-[10px] font-mono font-medium text-[var(--color-app-success)] bg-[var(--color-app-success)]/10 px-1.5 rounded">{finalMargin}% Margin</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-3xl font-mono font-bold text-[var(--color-app-success)]">+{formatCurrency(netProfit)}</span>
+                  <span className="text-3xl font-mono font-bold text-[var(--color-app-success)]">+{formatCurrency(finalProfit)}</span>
                 </div>
+                {discountAmount > 0 && (
+                  <span className="text-right text-xs text-[var(--color-app-text-muted)] mt-1">
+                    (was {formatCurrency(preDiscountProfit)} before discount)
+                  </span>
+                )}
               </div>
+
 
               <div className="mt-4 pt-6 border-t border-[var(--color-app-border)]">
                 <Button 

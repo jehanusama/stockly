@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Button, Card, Modal } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { formatCurrency } from "@/utils/currency";
-import { mockSales as initialSales } from "@/data/mockSales";
+import { mockOrders as initialOrders } from "@/data/mockOrders";
 import { mockCustomers } from "@/data/mockCustomers";
 import { mockProducts } from "@/data/mockProducts";
 
@@ -113,27 +113,34 @@ function MiniCalendar({ selectedDate, activeDates, onSelect }) {
 }
 
 // ── Reassign Modal ───────────────────────────────────────────────
-function ReassignModal({ isOpen, onClose, targetDate, allSales, onReassign }) {
+function ReassignModal({ isOpen, onClose, targetDate, allOrders, onReassign }) {
   const [query, setQuery] = useState("");
 
-  const enriched = allSales
-    .filter(s => toISODate(s.sale_date) !== targetDate)
-    .map(s => {
-      const customer = mockCustomers.find(c => c.id === s.customer_id);
-      const product = mockProducts.find(p => p.id === s.product_id);
-      return { ...s, customerName: customer?.name ?? "—", productName: product?.name ?? "—" };
+  const enriched = allOrders
+    .filter(o => toISODate(o.order_date) !== targetDate)
+    .map(o => {
+      const customer = mockCustomers.find(c => c.id === o.customer_id);
+      let itemsSummary = "—";
+      if (o.items.length > 0) {
+        const firstProduct = mockProducts.find(p => p.id === o.items[0].product_id);
+        itemsSummary = firstProduct?.name ?? "Unknown";
+        if (o.items.length > 1) {
+          itemsSummary += ` (+${o.items.length - 1} more)`;
+        }
+      }
+      return { ...o, customerName: customer?.name ?? "—", itemsSummary };
     })
-    .filter(s => {
+    .filter(o => {
       const q = query.toLowerCase();
-      return !q || s.customerName.toLowerCase().includes(q) || s.productName.toLowerCase().includes(q) ||
-             toISODate(s.sale_date).includes(q);
+      return !q || o.customerName.toLowerCase().includes(q) || o.itemsSummary.toLowerCase().includes(q) ||
+             toISODate(o.order_date).includes(q);
     });
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={`Move Sale to ${formatDisplayDate(targetDate)}`}>
+    <Modal isOpen={isOpen} onClose={onClose} title={`Move Order to ${formatDisplayDate(targetDate)}`}>
       <div className="flex flex-col gap-5">
         <p className="text-sm text-[var(--color-app-text-muted)]">
-          Select a sale from any other date to reassign it to <strong className="text-[var(--color-app-text)]">{formatDisplayDate(targetDate)}</strong>.
+          Select an order from any other date to reassign it to <strong className="text-[var(--color-app-text)]">{formatDisplayDate(targetDate)}</strong>.
         </p>
 
         <input
@@ -146,18 +153,18 @@ function ReassignModal({ isOpen, onClose, targetDate, allSales, onReassign }) {
 
         <div className="flex flex-col gap-2 max-h-72 overflow-y-auto pr-1">
           {enriched.length === 0 ? (
-            <p className="text-sm text-center text-[var(--color-app-text-muted)] py-6 italic">No sales found.</p>
+            <p className="text-sm text-center text-[var(--color-app-text-muted)] py-6 italic">No orders found.</p>
           ) : (
-            enriched.map(sale => (
-              <div key={sale.id} className="flex items-center justify-between gap-4 p-3 bg-[var(--color-app-elevated)] border border-[var(--color-app-border)] rounded-xl hover:border-[var(--color-app-accent)]/40 transition-colors">
+            enriched.map(order => (
+              <div key={order.id} className="flex items-center justify-between gap-4 p-3 bg-[var(--color-app-elevated)] border border-[var(--color-app-border)] rounded-xl hover:border-[var(--color-app-accent)]/40 transition-colors">
                 <div className="flex flex-col gap-0.5 min-w-0">
-                  <span className="text-sm font-semibold text-[var(--color-app-text)] truncate">{sale.customerName}</span>
-                  <span className="text-xs text-[var(--color-app-text-subtle)] truncate">{sale.productName} · {sale.quantity} unit{sale.quantity !== 1 ? "s" : ""}</span>
-                  <span className="text-[10px] font-mono text-[var(--color-app-text-muted)]">{toISODate(sale.sale_date)}</span>
+                  <span className="text-sm font-semibold text-[var(--color-app-text)] truncate">{order.customerName}</span>
+                  <span className="text-xs text-[var(--color-app-text-subtle)] truncate">{order.itemsSummary} · {order.items.reduce((s, i) => s + i.quantity, 0)} item(s)</span>
+                  <span className="text-[10px] font-mono text-[var(--color-app-text-muted)]">{toISODate(order.order_date)}</span>
                 </div>
                 <div className="flex flex-col items-end gap-2 shrink-0">
-                  <span className="font-mono text-sm font-semibold text-[var(--color-app-text)]">{formatCurrency(sale.total_price)}</span>
-                  <Button variant="primary" className="text-xs h-7 px-3" onClick={() => { onReassign(sale.id); onClose(); }}>
+                  <span className="font-mono text-sm font-semibold text-[var(--color-app-text)]">{formatCurrency(order.final_total)}</span>
+                  <Button variant="primary" className="text-xs h-7 px-3" onClick={() => { onReassign(order.id); onClose(); }}>
                     Move here
                   </Button>
                 </div>
@@ -179,47 +186,46 @@ export default function SalesByDay() {
   const navigate = useNavigate();
   const today = new Date().toISOString().slice(0, 10);
 
-  // Default to most recent sale date if available
-  const latestSaleDate = initialSales.length > 0
-    ? toISODate(initialSales.reduce((a, b) => new Date(a.sale_date) > new Date(b.sale_date) ? a : b).sale_date)
+  // Default to most recent order date if available
+  const latestOrderDate = initialOrders.length > 0
+    ? toISODate(initialOrders.reduce((a, b) => new Date(a.order_date) > new Date(b.order_date) ? a : b).order_date)
     : today;
 
-  const [selectedDate, setSelectedDate] = useState(latestSaleDate);
-  const [sales, setSales] = useState(initialSales);
+  const [selectedDate, setSelectedDate] = useState(latestOrderDate);
+  const [orders, setOrders] = useState(initialOrders);
   const [isReassignOpen, setIsReassignOpen] = useState(false);
 
-  // Build the set of active (sale-having) dates for the calendar dots
-  const activeDates = new Set(sales.map(s => toISODate(s.sale_date)));
+  // Build the set of active (order-having) dates for the calendar dots
+  const activeDates = new Set(orders.map(o => toISODate(o.order_date)));
 
-  // Sales for the selected day
-  const daySales = sales
-    .filter(s => toISODate(s.sale_date) === selectedDate)
-    .map(s => {
-      const customer = mockCustomers.find(c => c.id === s.customer_id);
-      const product = mockProducts.find(p => p.id === s.product_id);
-      return { ...s, customerName: customer?.name ?? "—", productName: product?.name ?? "—" };
+  // Orders for the selected day
+  const dayOrders = orders
+    .filter(o => toISODate(o.order_date) === selectedDate)
+    .map(o => {
+      const customer = mockCustomers.find(c => c.id === o.customer_id);
+      return { ...o, customerName: customer?.name ?? "—" };
     })
     .sort((a, b) => a.customer_id.localeCompare(b.customer_id));
 
   // Group by customer
-  const byCustomer = daySales.reduce((acc, sale) => {
-    if (!acc[sale.customer_id]) {
-      acc[sale.customer_id] = { customerName: sale.customerName, sales: [] };
+  const byCustomer = dayOrders.reduce((acc, order) => {
+    if (!acc[order.customer_id]) {
+      acc[order.customer_id] = { customerName: order.customerName, orders: [] };
     }
-    acc[sale.customer_id].sales.push(sale);
+    acc[order.customer_id].orders.push(order);
     return acc;
   }, {});
 
   // Day totals
-  const dayRevenue = daySales.reduce((s, r) => s + r.total_price, 0);
-  const dayProfit = daySales.reduce((s, r) => s + r.profit, 0);
-  const daySalesCount = daySales.length;
+  const dayRevenue = dayOrders.reduce((s, r) => s + r.final_total, 0);
+  const dayProfit = dayOrders.reduce((s, r) => s + r.final_profit, 0);
+  const dayOrdersCount = dayOrders.length;
 
-  const handleReassign = (saleId) => {
-    setSales(prev => prev.map(s =>
-      s.id === saleId
-        ? { ...s, sale_date: selectedDate + "T12:00:00Z" }
-        : s
+  const handleReassign = (orderId) => {
+    setOrders(prev => prev.map(o =>
+      o.id === orderId
+        ? { ...o, order_date: selectedDate + "T12:00:00Z" }
+        : o
     ));
   };
 
@@ -283,9 +289,9 @@ export default function SalesByDay() {
               <h2 className="text-xl font-bold text-[var(--color-app-text)] tracking-tight">
                 {formatDisplayDate(selectedDate)}
               </h2>
-              {daySalesCount > 0 && (
+              {dayOrdersCount > 0 && (
                 <p className="text-sm text-[var(--color-app-text-muted)] mt-0.5">
-                  {daySalesCount} transaction{daySalesCount !== 1 ? "s" : ""}
+                  {dayOrdersCount} transaction{dayOrdersCount !== 1 ? "s" : ""}
                 </p>
               )}
             </div>
@@ -303,12 +309,12 @@ export default function SalesByDay() {
           </div>
 
           {/* Day Summary Strip */}
-          {daySalesCount > 0 && (
+          {dayOrdersCount > 0 && (
             <div className="grid grid-cols-3 gap-4">
               {[
                 { label: "Revenue", value: formatCurrency(dayRevenue), highlight: false },
                 { label: "Net Profit", value: `+${formatCurrency(dayProfit)}`, highlight: true },
-                { label: "Sales Made", value: daySalesCount.toString(), highlight: false },
+                { label: "Orders Made", value: dayOrdersCount.toString(), highlight: false },
               ].map(({ label, value, highlight }) => (
                 <Card key={label} padding="md" className="flex flex-col bg-[var(--color-app-panel)] border-[var(--color-app-border)]">
                   <span className="text-[10px] font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider mb-1">{label}</span>
@@ -323,8 +329,8 @@ export default function SalesByDay() {
             </div>
           )}
 
-          {/* Sales Feed */}
-          {daySalesCount === 0 ? (
+          {/* Orders Feed */}
+          {dayOrdersCount === 0 ? (
             <Card padding="lg" className="flex flex-col items-center justify-center py-16 text-center border-dashed bg-[var(--color-app-bg)] border-[var(--color-app-border)] shadow-none">
               <div className="w-14 h-14 rounded-full bg-[var(--color-app-elevated)] flex items-center justify-center mb-4 border border-[var(--color-app-border)] text-[var(--color-app-text-muted)]">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -332,20 +338,20 @@ export default function SalesByDay() {
                   <line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
                 </svg>
               </div>
-              <h3 className="text-lg font-semibold text-[var(--color-app-text)] mb-2">No sales on this day</h3>
+              <h3 className="text-lg font-semibold text-[var(--color-app-text)] mb-2">No orders on this day</h3>
               <p className="text-sm text-[var(--color-app-text-muted)] max-w-sm mb-6">
-                No transactions were recorded for this date. You can record a new sale or move an existing sale to this day.
+                No transactions were recorded for this date. You can record a new order or move an existing order to this day.
               </p>
               <div className="flex gap-3">
-                <Button variant="secondary" onClick={() => setIsReassignOpen(true)}>Move a Sale Here</Button>
-                <Button variant="primary" onClick={() => navigate("/new-sale")}>Record New Sale</Button>
+                <Button variant="secondary" onClick={() => setIsReassignOpen(true)}>Move an Order Here</Button>
+                <Button variant="primary" onClick={() => navigate("/new-sale")}>Record New Order</Button>
               </div>
             </Card>
           ) : (
             <div className="flex flex-col gap-5">
-              {Object.entries(byCustomer).map(([customerId, { customerName, sales: custSales }]) => {
-                const custRevenue = custSales.reduce((s, r) => s + r.total_price, 0);
-                const custProfit = custSales.reduce((s, r) => s + r.profit, 0);
+              {Object.entries(byCustomer).map(([customerId, { customerName, orders: custOrders }]) => {
+                const custRevenue = custOrders.reduce((s, r) => s + r.final_total, 0);
+                const custProfit = custOrders.reduce((s, r) => s + r.final_profit, 0);
                 const initials = customerName.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
 
                 return (
@@ -358,7 +364,7 @@ export default function SalesByDay() {
                         </div>
                         <div>
                           <span className="font-semibold text-[var(--color-app-text)]">{customerName}</span>
-                          <p className="text-xs text-[var(--color-app-text-muted)]">{custSales.length} item{custSales.length !== 1 ? "s" : ""} purchased</p>
+                          <p className="text-xs text-[var(--color-app-text-muted)]">{custOrders.length} order{custOrders.length !== 1 ? "s" : ""} placed</p>
                         </div>
                       </div>
                       <div className="flex flex-col items-end">
@@ -367,31 +373,49 @@ export default function SalesByDay() {
                       </div>
                     </div>
 
-                    {/* Nested Sale Lines */}
+                    {/* Nested Orders */}
                     <div className="flex flex-col divide-y divide-[var(--color-app-border)]">
-                      {custSales.map(sale => {
-                        const marginPct = ((sale.profit / sale.total_price) * 100).toFixed(0);
+                      {custOrders.map(order => {
+                        const marginPct = order.final_total > 0 ? ((order.final_profit / order.final_total) * 100).toFixed(0) : 0;
+                        const discountAmount = order.discount_type === "none" ? 0 : order.subtotal - order.final_total;
+                        
                         return (
-                          <div key={sale.id} className="flex items-center justify-between px-5 py-3.5 gap-4 hover:bg-[var(--color-app-panel-hover)] transition-colors">
-                            {/* Product */}
-                            <div className="flex items-center gap-3 min-w-0">
-                              <div className="w-2 h-2 rounded-full bg-[var(--color-app-border)] shrink-0 ml-1" />
-                              <div className="min-w-0">
-                                <span className="text-sm font-medium text-[var(--color-app-text)] truncate block">{sale.productName}</span>
-                                <span className="text-xs text-[var(--color-app-text-subtle)]">
-                                  {sale.quantity} × {formatCurrency(sale.sale_price)}/unit
-                                </span>
-                              </div>
-                            </div>
+                          <div key={order.id} className="flex flex-col px-5 py-3.5 gap-2 hover:bg-[var(--color-app-panel-hover)] transition-colors">
+                            {order.items.map((item, idx) => {
+                              const product = mockProducts.find(p => p.id === item.product_id);
+                              return (
+                                <div key={idx} className="flex items-center justify-between gap-4">
+                                  <div className="flex items-center gap-3 min-w-0">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-app-border)] shrink-0 ml-1" />
+                                    <div className="min-w-0">
+                                      <span className="text-sm font-medium text-[var(--color-app-text)] truncate block">{product?.name || "Unknown Product"}</span>
+                                      <span className="text-xs text-[var(--color-app-text-subtle)]">
+                                        {item.quantity} × {formatCurrency(item.sale_price)}/unit
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <div className="flex flex-col items-end shrink-0">
+                                    <span className="font-mono text-sm font-semibold text-[var(--color-app-text)]">{formatCurrency(item.line_total)}</span>
+                                  </div>
+                                </div>
+                              );
+                            })}
 
-                            {/* Financials */}
-                            <div className="flex items-center gap-6 shrink-0">
+                            {discountAmount > 0 && (
+                              <div className="flex items-center justify-between gap-4 pt-2 mt-1 border-t border-dashed border-[var(--color-app-border)]">
+                                <span className="text-xs font-medium text-[var(--color-app-warning)] uppercase tracking-wider pl-6">Order Discount</span>
+                                <span className="font-mono text-xs font-semibold text-[var(--color-app-warning)]">-{formatCurrency(discountAmount)}</span>
+                              </div>
+                            )}
+
+                            {/* Financials (Order level) */}
+                            <div className="flex items-center justify-end gap-6 shrink-0 pt-2 mt-1 border-t border-[var(--color-app-border)]">
                               <div className="flex flex-col items-end">
-                                <span className="font-mono text-sm font-semibold text-[var(--color-app-text)]">{formatCurrency(sale.total_price)}</span>
-                                <span className="text-[10px] text-[var(--color-app-text-muted)]">total</span>
+                                <span className="font-mono text-sm font-semibold text-[var(--color-app-text)]">{formatCurrency(order.final_total)}</span>
+                                <span className="text-[10px] text-[var(--color-app-text-muted)]">order total</span>
                               </div>
                               <div className="flex flex-col items-end min-w-[60px]">
-                                <span className="font-mono text-sm font-bold text-[var(--color-app-success)]">+{formatCurrency(sale.profit)}</span>
+                                <span className="font-mono text-sm font-bold text-[var(--color-app-success)]">+{formatCurrency(order.final_profit)}</span>
                                 <span className="text-[10px] font-mono text-[var(--color-app-success)] bg-[var(--color-app-success)]/10 px-1.5 rounded-full">{marginPct}%</span>
                               </div>
                             </div>
@@ -411,7 +435,7 @@ export default function SalesByDay() {
         isOpen={isReassignOpen}
         onClose={() => setIsReassignOpen(false)}
         targetDate={selectedDate}
-        allSales={sales}
+        allOrders={orders}
         onReassign={handleReassign}
       />
     </PageContainer>

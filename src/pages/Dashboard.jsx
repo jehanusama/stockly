@@ -2,7 +2,7 @@ import { Card, Table, StockBar } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { mockProducts } from "@/data/mockProducts";
 import { mockCustomers } from "@/data/mockCustomers";
-import { mockSales } from "@/data/mockSales";
+import { mockOrders } from "@/data/mockOrders";
 import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { formatCurrency } from "@/utils/currency";
 
@@ -23,43 +23,44 @@ const CustomTooltip = ({ active, payload, label }) => {
 
 export default function Dashboard() {
 
-  const totalRevenue = mockSales.reduce((sum, sale) => sum + sale.total_price, 0);
-  const totalProfit = mockSales.reduce((sum, sale) => sum + sale.profit, 0);
+  const totalRevenue = mockOrders.reduce((sum, o) => sum + o.final_total, 0);
+  const totalProfit = mockOrders.reduce((sum, o) => sum + o.final_profit, 0);
   const productCount = mockProducts.length;
   const customerCount = mockCustomers.length;
 
   const profitTrend = "+12.5%";
 
-
-  const lastSales = [...mockSales]
-    .sort((a, b) => new Date(b.sale_date).getTime() - new Date(a.sale_date).getTime())
+  const lastOrders = [...mockOrders]
+    .sort((a, b) => new Date(b.order_date).getTime() - new Date(a.order_date).getTime())
     .slice(0, 5)
-    .map(sale => {
-      const customer = mockCustomers.find(c => c.id === sale.customer_id);
-      const product = mockProducts.find(p => p.id === sale.product_id);
+    .map(order => {
+      const customer = mockCustomers.find(c => c.id === order.customer_id);
+      const firstProduct = mockProducts.find(p => p.id === order.items[0]?.product_id);
+      const itemsSummary = order.items.length === 1
+        ? `${firstProduct?.name ?? "Product"} ×${order.items[0].quantity}`
+        : `${order.items.length} products`;
       return {
-        ...sale,
+        ...order,
         customerName: customer ? customer.name : "Unknown",
-        productName: product ? product.name : "Unknown"
+        itemsSummary
       };
     });
 
   const salesColumns = [
-    { key: "sale_date", label: "Date", render: (val) => <span className="font-mono text-xs text-[var(--color-app-text-muted)]">{new Date(val).toLocaleDateString()}</span> },
+    { key: "order_date", label: "Date", render: (val) => <span className="font-mono text-xs text-[var(--color-app-text-muted)]">{new Date(val).toLocaleDateString()}</span> },
     { key: "customerName", label: "Customer", render: (val) => <span className="font-medium text-[var(--color-app-text)]">{val}</span> },
-    { key: "productName", label: "Product", render: (val) => <span className="text-[var(--color-app-text-subtle)]">{val}</span> },
-    { key: "quantity", label: "Qty", align: "right", render: (val) => <span className="font-mono text-[var(--color-app-text)]">{val}</span> },
-    { key: "total_price", label: "Total", align: "right", render: (val) => <span className="font-mono font-medium text-[var(--color-app-text)]">{formatCurrency(val)}</span> }
-
+    { key: "itemsSummary", label: "Items", render: (val) => <span className="text-[var(--color-app-text-subtle)]">{val}</span> },
+    { key: "final_total", label: "Total", align: "right", render: (val) => <span className="font-mono font-medium text-[var(--color-app-text)]">{formatCurrency(val)}</span> },
+    { key: "final_profit", label: "Profit", align: "right", render: (val) => <span className="font-mono font-semibold text-[var(--color-app-success)]">+{formatCurrency(val)}</span> }
   ];
 
   // 3. Profit Per Month Chart (AreaChart)
   const months = {};
-  mockSales.forEach(sale => {
-    const date = new Date(sale.sale_date);
+  mockOrders.forEach(order => {
+    const date = new Date(order.order_date);
     const monthYear = date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
     if (!months[monthYear]) months[monthYear] = 0;
-    months[monthYear] += sale.profit;
+    months[monthYear] += order.final_profit;
   });
   // Add dummy data for a more interesting curve
   const dummyData = [
@@ -155,7 +156,7 @@ export default function Dashboard() {
           <div className="xl:col-span-2">
             <h3 className="text-sm font-semibold text-[var(--color-app-text)] uppercase tracking-wider mb-4 px-1">Recent Transactions</h3>
             <Card padding="sm">
-              <Table columns={salesColumns} rows={lastSales} />
+              <Table columns={salesColumns} rows={lastOrders} />
             </Card>
           </div>
 

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button, Modal } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { formatCurrency } from "@/utils/currency";
-import { mockSales as initialSales } from "@/data/mockSales";
+import { mockOrders as initialOrders } from "@/data/mockOrders";
 import { mockCustomers } from "@/data/mockCustomers";
 import { mockProducts } from "@/data/mockProducts";
 
@@ -62,45 +62,67 @@ function FilterToolbar({ filters, onChange, onClear, hasActiveFilters }) {
 
 // ── Main Component ──────────────────────────────────────────────
 export default function SalesHistory() {
-  const [sales, setSales] = useState(initialSales);
-  const [filters, setFilters] = useState({ customerId: "", productId: "", dateFrom: "", dateTo: "" });
-  const [deleteTarget, setDeleteTarget] = useState(null); // sale to confirm-delete
+  const [orders, setOrders] = useState(initialOrders);
+  const [filters, setFilters] = useState({ customer: "", product: "", dateFrom: "", dateTo: "" });
+  const [deleteTarget, setDeleteTarget] = useState(null); // order to confirm-delete
 
   const hasActiveFilters = Object.values(filters).some(v => v !== "");
 
   const updateFilter = (key, value) => setFilters(prev => ({ ...prev, [key]: value }));
-  const clearFilters = () => setFilters({ customerId: "", productId: "", dateFrom: "", dateTo: "" });
+  const clearFilters = () => setFilters({ customer: "", product: "", dateFrom: "", dateTo: "" });
 
-  // Join + filter
-  const tableRows = sales
-    .filter(sale => {
-      if (filters.customerId && sale.customer_id !== filters.customerId) return false;
-      if (filters.productId && sale.product_id !== filters.productId) return false;
-      if (filters.dateFrom && new Date(sale.sale_date) < new Date(filters.dateFrom)) return false;
-      if (filters.dateTo && new Date(sale.sale_date) > new Date(filters.dateTo + "T23:59:59Z")) return false;
+  // Process and filter orders
+  const tableRows = orders
+    .filter(order => {
+      if (filters.customer && order.customer_id !== filters.customer) return false;
+      
+      if (filters.product) {
+        const hasProduct = order.items.some(item => item.product_id === filters.product);
+        if (!hasProduct) return false;
+      }
+      
+      if (filters.dateFrom && new Date(order.order_date) < new Date(filters.dateFrom + "T00:00:00Z")) return false;
+      if (filters.dateTo && new Date(order.order_date) > new Date(filters.dateTo + "T23:59:59Z")) return false;
       return true;
     })
-    .sort((a, b) => new Date(b.sale_date) - new Date(a.sale_date))
-    .map(sale => {
-      const customer = mockCustomers.find(c => c.id === sale.customer_id);
-      const product = mockProducts.find(p => p.id === sale.product_id);
-      const marginPct = ((sale.profit / sale.total_price) * 100).toFixed(0);
-      return { ...sale, customerName: customer?.name ?? "—", productName: product?.name ?? "—", marginPct };
+    .sort((a, b) => new Date(b.order_date) - new Date(a.order_date))
+    .map(order => {
+      const customer = mockCustomers.find(c => c.id === order.customer_id);
+      
+      let itemsSummary = "—";
+      if (order.items.length > 0) {
+        const firstProduct = mockProducts.find(p => p.id === order.items[0].product_id);
+        itemsSummary = firstProduct?.name ?? "Unknown";
+        if (order.items.length > 1) {
+          itemsSummary += ` (+${order.items.length - 1} more)`;
+        }
+      }
+
+      const totalItemsCount = order.items.reduce((sum, item) => sum + item.quantity, 0);
+      const marginPct = order.final_total > 0 ? ((order.final_profit / order.final_total) * 100).toFixed(0) : 0;
+      
+      return { 
+        ...order, 
+        customerName: customer?.name ?? "—", 
+        itemsSummary,
+        totalItemsCount,
+        marginPct 
+      };
     });
 
   // Totals for the footer
-  const footerRevenue = tableRows.reduce((s, r) => s + r.total_price, 0);
-  const footerProfit = tableRows.reduce((s, r) => s + r.profit, 0);
+  const footerRevenue = tableRows.reduce((s, r) => s + r.final_total, 0);
+  const footerProfit = tableRows.reduce((s, r) => s + r.final_profit, 0);
 
   const handleDeleteConfirm = () => {
     if (!deleteTarget) return;
-    setSales(prev => prev.filter(s => s.id !== deleteTarget.id));
+    setOrders(prev => prev.filter(o => o.id !== deleteTarget.id));
     setDeleteTarget(null);
   };
 
   const columns = [
     {
-      key: "sale_date",
+      key: "order_date",
       label: "Date",
       render: (val) => (
         <span className="font-mono text-xs text-[var(--color-app-text-muted)]">
@@ -114,30 +136,37 @@ export default function SalesHistory() {
       render: (val) => <span className="font-medium text-[var(--color-app-text)]">{val}</span>,
     },
     {
-      key: "productName",
-      label: "Product",
+      key: "itemsSummary",
+      label: "Items",
       render: (val) => <span className="text-[var(--color-app-text-subtle)]">{val}</span>,
     },
     {
-      key: "quantity",
-      label: "Qty",
+      key: "totalItemsCount",
+      label: "Total Qty",
       align: "right",
       render: (val) => <span className="font-mono text-[var(--color-app-text)]">{val}</span>,
     },
     {
-      key: "sale_price",
-      label: "Unit Price",
+      key: "discountAmount",
+      label: "Discount",
       align: "right",
-      render: (val) => <span className="font-mono text-[var(--color-app-text)]">{formatCurrency(val)}</span>,
+      render: (_, row) => {
+        const discountAmount = row.discount_type === "none" ? 0 : row.subtotal - row.final_total;
+        return discountAmount > 0 ? (
+          <span className="font-mono text-[var(--color-app-warning)]">-{formatCurrency(discountAmount)}</span>
+        ) : (
+          <span className="text-[var(--color-app-text-muted)]">—</span>
+        );
+      },
     },
     {
-      key: "total_price",
+      key: "final_total",
       label: "Total",
       align: "right",
       render: (val) => <span className="font-mono font-semibold text-[var(--color-app-text)]">{formatCurrency(val)}</span>,
     },
     {
-      key: "profit",
+      key: "final_profit",
       label: "Profit",
       align: "right",
       render: (val, row) => (

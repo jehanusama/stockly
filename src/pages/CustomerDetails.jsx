@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { Button, Card } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { mockCustomers } from "@/data/mockCustomers";
-import { mockSales } from "@/data/mockSales";
+import { mockOrders } from "@/data/mockOrders";
 import { mockProducts } from "@/data/mockProducts";
 import { formatCurrency } from "@/utils/currency";
 
@@ -23,10 +23,10 @@ export default function CustomerDetails() {
 
   const customer = useMemo(() => mockCustomers.find(c => c.id === id), [id]);
 
-  const customerSales = useMemo(() => {
-    return mockSales
-      .filter(sale => sale.customer_id === id)
-      .sort((a, b) => new Date(b.sale_date).getTime() - new Date(a.sale_date).getTime());
+  const customerOrders = useMemo(() => {
+    return mockOrders
+      .filter(o => o.customer_id === id)
+      .sort((a, b) => new Date(b.order_date).getTime() - new Date(a.order_date).getTime());
   }, [id]);
 
   // If customer doesn't exist, handle it gracefully
@@ -42,9 +42,9 @@ export default function CustomerDetails() {
   }
 
   // Aggregate metrics
-  const totalOrders = customerSales.length;
-  const lifetimeSpend = customerSales.reduce((sum, sale) => sum + sale.total_price, 0);
-  const totalProfit = customerSales.reduce((sum, sale) => sum + sale.profit, 0);
+  const totalOrders = customerOrders.length;
+  const lifetimeSpend = customerOrders.reduce((sum, o) => sum + o.final_total, 0);
+  const totalProfit = customerOrders.reduce((sum, o) => sum + o.final_profit, 0);
 
   return (
     <PageContainer
@@ -120,7 +120,7 @@ export default function CustomerDetails() {
         <div>
           <h2 className="text-lg font-semibold text-[var(--color-app-text)] tracking-tight mb-4 px-1">Transaction Ledger</h2>
           
-          {customerSales.length === 0 ? (
+          {customerOrders.length === 0 ? (
             <Card padding="lg" className="flex flex-col items-center justify-center py-16 text-center border-dashed border-[var(--color-app-border)] bg-[var(--color-app-bg)] shadow-none">
               <div className="w-16 h-16 rounded-full bg-[var(--color-app-elevated)] flex items-center justify-center mb-4 border border-[var(--color-app-border)] shadow-sm text-[var(--color-app-accent)]">
                 <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -137,55 +137,69 @@ export default function CustomerDetails() {
             </Card>
           ) : (
             <div className="flex flex-col gap-3">
-              {customerSales.map((sale) => {
-                const product = mockProducts.find(p => p.id === sale.product_id);
-                const margin = ((sale.profit / sale.total_price) * 100).toFixed(0);
+              {customerOrders.map((order) => {
+                const margin = order.final_total > 0 ? ((order.final_profit / order.final_total) * 100).toFixed(0) : 0;
+                const discountAmount = order.discount_type !== "none" ? order.subtotal - order.final_total : 0;
                 
                 return (
-                  <Card key={sale.id} padding="md" className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[var(--color-app-panel)] border-[var(--color-app-border)] hover:bg-[var(--color-app-panel-hover)] transition-colors group shadow-sm">
-                    
-                    {/* Left: Date & Product */}
-                    <div className="flex items-center gap-4">
-                      {/* Date Block */}
-                      <div className="flex flex-col items-center justify-center w-14 h-14 min-w-[56px] min-h-[56px] bg-[var(--color-app-elevated)] border border-[var(--color-app-border)] rounded-xl shrink-0">
-                        <span className="text-[10px] uppercase font-bold text-[var(--color-app-text-muted)] tracking-wider leading-none mb-1">
-                          {new Date(sale.sale_date).toLocaleString('default', { month: 'short' })}
-                        </span>
-                        <span className="text-lg font-mono font-bold text-[var(--color-app-text)] leading-none">
-                          {new Date(sale.sale_date).getDate()}
-                        </span>
+                  <Card key={order.id} padding="none" className="overflow-hidden bg-[var(--color-app-panel)] border-[var(--color-app-border)] hover:bg-[var(--color-app-panel-hover)] transition-colors shadow-sm">
+
+                    {/* Order Header — Date & Totals */}
+                    <div className="flex items-center justify-between gap-4 px-4 py-3 border-b border-[var(--color-app-border)] bg-[var(--color-app-elevated)]">
+                      <div className="flex items-center gap-3">
+                        <div className="flex flex-col items-center justify-center w-12 h-12 bg-[var(--color-app-bg)] border border-[var(--color-app-border)] rounded-xl shrink-0">
+                          <span className="text-[9px] uppercase font-bold text-[var(--color-app-text-muted)] tracking-wider leading-none mb-0.5">
+                            {new Date(order.order_date).toLocaleString('default', { month: 'short' })}
+                          </span>
+                          <span className="text-base font-mono font-bold text-[var(--color-app-text)] leading-none">
+                            {new Date(order.order_date).getDate()}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-xs font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider">Order #{order.id}</span>
+                          <p className="text-xs text-[var(--color-app-text-subtle)]">{order.items.length} product type{order.items.length !== 1 ? 's' : ''}</p>
+                        </div>
                       </div>
-                      
-                      {/* Product Info */}
-                      <div className="flex flex-col">
-                        <span className="font-semibold text-[var(--color-app-text)] group-hover:text-[var(--color-app-accent)] transition-colors">
-                          {product ? product.name : "Unknown Product"}
-                        </span>
-                        <span className="text-sm text-[var(--color-app-text-subtle)] mt-0.5">
-                          {sale.quantity} {product?.unit || 'pcs'} @ {formatCurrency(sale.sale_price)}/each
-                        </span>
+                      <div className="flex items-center gap-6 border-l border-[var(--color-app-border)] pl-4">
+                        <div className="flex flex-col items-end">
+                          <span className="text-[10px] font-semibold text-[var(--color-app-text-subtle)] uppercase tracking-wider mb-0.5">Total</span>
+                          <span className="font-mono font-bold text-lg text-[var(--color-app-text)]">{formatCurrency(order.final_total)}</span>
+                        </div>
+                        <div className="flex flex-col items-end w-20">
+                          <span className="text-[10px] font-semibold text-[var(--color-app-text-subtle)] uppercase tracking-wider mb-0.5">Profit</span>
+                          <span className="font-mono text-sm text-[var(--color-app-success)] font-semibold">+{formatCurrency(order.final_profit)}</span>
+                          <span className="text-[10px] font-mono font-medium text-[var(--color-app-success)] bg-[var(--color-app-success)]/10 px-1.5 rounded mt-0.5">{margin}% mgn</span>
+                        </div>
                       </div>
                     </div>
 
-                    {/* Right: Financials */}
-                    <div className="flex items-center gap-6 sm:border-l border-[var(--color-app-border)] sm:pl-6 pt-2 sm:pt-0 border-t sm:border-t-0">
-                      
-                      <div className="flex flex-col items-end">
-                        <span className="text-[10px] font-semibold text-[var(--color-app-text-subtle)] uppercase tracking-wider mb-0.5">Sale Total</span>
-                        <span className="font-mono font-bold text-lg text-[var(--color-app-text)]">
-                          {formatCurrency(sale.total_price)}
-                        </span>
-                      </div>
-                      
-                      <div className="flex flex-col items-end w-20">
-                        <span className="text-[10px] font-semibold text-[var(--color-app-text-subtle)] uppercase tracking-wider mb-0.5">Profit</span>
-                        <span className="font-mono text-sm text-[var(--color-app-success)] font-semibold flex items-center gap-1">
-                          +{formatCurrency(sale.profit)}
-                        </span>
-                        <span className="text-[10px] font-mono font-medium text-[var(--color-app-success)] bg-[var(--color-app-success)]/10 px-1.5 rounded mt-0.5">
-                          {margin}% mgn
-                        </span>
-                      </div>
+                    {/* Line Items */}
+                    <div className="flex flex-col divide-y divide-[var(--color-app-border)]">
+                      {order.items.map((item, idx) => {
+                        const product = mockProducts.find(p => p.id === item.product_id);
+                        return (
+                          <div key={idx} className="flex items-center justify-between gap-4 px-4 py-3">
+                            <div className="flex items-center gap-3">
+                              <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-app-border)] shrink-0" />
+                              <div>
+                                <span className="text-sm font-medium text-[var(--color-app-text)]">{product ? product.name : "Unknown Product"}</span>
+                                <span className="block text-xs text-[var(--color-app-text-subtle)]">
+                                  {item.quantity} {product?.unit || 'pcs'} @ {formatCurrency(item.sale_price)}/each
+                                </span>
+                              </div>
+                            </div>
+                            <span className="font-mono text-sm font-semibold text-[var(--color-app-text)] shrink-0">{formatCurrency(item.line_total)}</span>
+                          </div>
+                        );
+                      })}
+
+                      {/* Discount row */}
+                      {discountAmount > 0 && (
+                        <div className="flex items-center justify-between gap-4 px-4 py-2 bg-[var(--color-app-warning)]/5">
+                          <span className="text-xs font-semibold text-[var(--color-app-warning)] uppercase tracking-wider pl-4">Order Discount</span>
+                          <span className="font-mono text-xs font-semibold text-[var(--color-app-warning)]">-{formatCurrency(discountAmount)}</span>
+                        </div>
+                      )}
                     </div>
                   </Card>
                 );

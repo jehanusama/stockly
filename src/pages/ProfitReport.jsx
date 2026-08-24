@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button, Card } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
-import { mockSales } from "@/data/mockSales";
+import { mockOrders } from "@/data/mockOrders";
 import { mockProducts } from "@/data/mockProducts";
 import { mockCustomers } from "@/data/mockCustomers";
 import { formatCurrency } from "@/utils/currency";
@@ -111,32 +111,44 @@ export default function ProfitReport() {
     ? { from: customFrom, to: customTo }
     : getPresetRange(preset);
 
-  // Filter sales by date range
-  const filteredSales = useMemo(() => {
-    return mockSales.filter(sale => {
-      const d = new Date(sale.sale_date);
+  // Filter orders by date range
+  const filteredOrders = useMemo(() => {
+    return mockOrders.filter(order => {
+      const d = new Date(order.order_date);
       if (from && d < new Date(from)) return false;
       if (to && d > new Date(to + "T23:59:59Z")) return false;
       return true;
     });
   }, [from, to]);
 
-  const hasData = filteredSales.length > 0;
+  const hasData = filteredOrders.length > 0;
 
   // Hero metrics
-  const totalRevenue = filteredSales.reduce((s, r) => s + r.total_price, 0);
-  const totalProfit = filteredSales.reduce((s, r) => s + r.profit, 0);
+  const totalRevenue = filteredOrders.reduce((s, o) => s + o.final_total, 0);
+  const totalProfit = filteredOrders.reduce((s, o) => s + o.final_profit, 0);
   const totalCost = totalRevenue - totalProfit;
   const overallMargin = totalRevenue > 0 ? ((totalProfit / totalRevenue) * 100).toFixed(1) : "0.0";
 
-  // By-Product aggregation
+  // By-Product aggregation (proportional profit tracking)
   const byProduct = useMemo(() => {
     const map = {};
-    filteredSales.forEach(s => {
-      if (!map[s.product_id]) map[s.product_id] = { profit: 0, revenue: 0, qty: 0 };
-      map[s.product_id].profit += s.profit;
-      map[s.product_id].revenue += s.total_price;
-      map[s.product_id].qty += s.quantity;
+    filteredOrders.forEach(order => {
+      const orderDiscount = order.discount_type !== "none" ? order.subtotal - order.final_total : 0;
+      
+      order.items.forEach(item => {
+        if (!map[item.product_id]) map[item.product_id] = { profit: 0, revenue: 0, qty: 0 };
+        
+        // Calculate proportional discount for this item to ensure totals add up
+        const proportion = order.subtotal > 0 ? (item.line_total / order.subtotal) : 0;
+        const itemDiscount = orderDiscount * proportion;
+        
+        const effectiveRevenue = item.line_total - itemDiscount;
+        const effectiveProfit = item.line_profit - itemDiscount;
+        
+        map[item.product_id].profit += effectiveProfit;
+        map[item.product_id].revenue += effectiveRevenue;
+        map[item.product_id].qty += item.quantity;
+      });
     });
     return Object.entries(map)
       .map(([id, v]) => {
@@ -144,18 +156,18 @@ export default function ProfitReport() {
         return { id, name: product?.name ?? "Unknown", ...v };
       })
       .sort((a, b) => b.profit - a.profit);
-  }, [filteredSales]);
+  }, [filteredOrders]);
 
   const maxProductProfit = byProduct[0]?.profit ?? 0;
 
   // By-Customer aggregation
   const byCustomer = useMemo(() => {
     const map = {};
-    filteredSales.forEach(s => {
-      if (!map[s.customer_id]) map[s.customer_id] = { profit: 0, spend: 0, orders: 0 };
-      map[s.customer_id].profit += s.profit;
-      map[s.customer_id].spend += s.total_price;
-      map[s.customer_id].orders += 1;
+    filteredOrders.forEach(o => {
+      if (!map[o.customer_id]) map[o.customer_id] = { profit: 0, spend: 0, orders: 0 };
+      map[o.customer_id].profit += o.final_profit;
+      map[o.customer_id].spend += o.final_total;
+      map[o.customer_id].orders += 1;
     });
     return Object.entries(map)
       .map(([id, v]) => {
@@ -164,18 +176,23 @@ export default function ProfitReport() {
         return { id, name: customer?.name ?? "Unknown", marginPct, ...v };
       })
       .sort((a, b) => b.profit - a.profit);
-  }, [filteredSales]);
+  }, [filteredOrders]);
 
-  // CSV rows
-  const csvRows = useMemo(() => filteredSales.map(s => ({
-    date: new Date(s.sale_date).toLocaleDateString("en-GB"),
-    customerName: mockCustomers.find(c => c.id === s.customer_id)?.name ?? "—",
-    productName: mockProducts.find(p => p.id === s.product_id)?.name ?? "—",
-    quantity: s.quantity,
-    sale_price: s.sale_price,
-    total_price: s.total_price,
-    profit: s.profit,
-  })), [filteredSales]);
+  // CSV rows (flatten items)
+  const csvRows = useMemo(() => filteredOrders.flatMap(o => 
+    o.items.map(item => ({
+      order_id: o.id,
+      date: new Date(o.order_date).toLocaleDateString("en-GB"),
+      customerName: mockCustomers.find(c => c.id === o.customer_id)?.name ?? "—",
+      productName: mockProducts.find(p => p.id === item.product_id)?.name ?? "—",
+      quantity: item.quantity,
+      sale_price: item.sale_price,
+      line_total: item.line_total,
+      line_profit: item.line_profit,
+      order_discount_type: o.discount_type,
+      order_discount_value: o.discount_value
+    }))
+  ), [filteredOrders]);
 
   const presetOptions = [
     { key: "all", label: "All Time" },
@@ -219,7 +236,7 @@ export default function ProfitReport() {
                   </div>
                   <div className="flex flex-col">
                     <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-app-text-muted)]">Transactions</span>
-                    <span className="font-mono text-sm font-semibold text-[var(--color-app-text)]">{filteredSales.length}</span>
+                    <span className="font-mono text-sm font-semibold text-[var(--color-app-text)]">{filteredOrders.length}</span>
                   </div>
                 </div>
               )}
