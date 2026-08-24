@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button, Modal } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
+import { formatCurrency } from "@/utils/currency";
 import { mockSales as initialSales } from "@/data/mockSales";
 import { mockCustomers } from "@/data/mockCustomers";
 import { mockProducts } from "@/data/mockProducts";
@@ -127,13 +128,13 @@ export default function SalesHistory() {
       key: "sale_price",
       label: "Unit Price",
       align: "right",
-      render: (val) => <span className="font-mono text-[var(--color-app-text)]">${val.toFixed(2)}</span>,
+      render: (val) => <span className="font-mono text-[var(--color-app-text)]">{formatCurrency(val)}</span>,
     },
     {
       key: "total_price",
       label: "Total",
       align: "right",
-      render: (val) => <span className="font-mono font-semibold text-[var(--color-app-text)]">${val.toFixed(2)}</span>,
+      render: (val) => <span className="font-mono font-semibold text-[var(--color-app-text)]">{formatCurrency(val)}</span>,
     },
     {
       key: "profit",
@@ -141,7 +142,7 @@ export default function SalesHistory() {
       align: "right",
       render: (val, row) => (
         <div className="flex flex-col items-end gap-0.5">
-          <span className="font-mono font-bold text-[var(--color-app-success)]">+${val.toFixed(2)}</span>
+          <span className="font-mono font-bold text-[var(--color-app-success)]">+{formatCurrency(val)}</span>
           <span className="text-[10px] font-mono font-medium text-[var(--color-app-success)] bg-[var(--color-app-success)]/10 px-1.5 rounded-full leading-tight">
             {row.marginPct}%
           </span>
@@ -207,10 +208,10 @@ export default function SalesHistory() {
               Showing <span className="font-semibold text-[var(--color-app-text)]">{tableRows.length}</span> transactions
             </span>
             <span className="ml-auto text-[var(--color-app-text-muted)]">
-              Revenue: <span className="font-mono font-semibold text-[var(--color-app-text)]">${footerRevenue.toFixed(2)}</span>
+              Revenue: <span className="font-mono font-semibold text-[var(--color-app-text)]">{formatCurrency(footerRevenue)}</span>
             </span>
             <span className="text-[var(--color-app-text-muted)]">
-              Profit: <span className="font-mono font-bold text-[var(--color-app-success)]">+${footerProfit.toFixed(2)}</span>
+              Profit: <span className="font-mono font-bold text-[var(--color-app-success)]">+{formatCurrency(footerProfit)}</span>
             </span>
           </div>
         )}

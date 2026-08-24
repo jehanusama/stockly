@@ -4,6 +4,7 @@ import { mockProducts } from "@/data/mockProducts";
 import { mockCustomers } from "@/data/mockCustomers";
 import { mockSales } from "@/data/mockSales";
 import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { formatCurrency } from "@/utils/currency";
 
 
 const CustomTooltip = ({ active, payload, label }) => {
@@ -12,7 +13,7 @@ const CustomTooltip = ({ active, payload, label }) => {
       <div className="bg-[var(--color-app-elevated)] border border-[var(--color-app-border)] p-3 rounded-lg shadow-xl shadow-black/20 backdrop-blur-sm">
         <p className="text-[var(--color-app-text-muted)] text-xs mb-1 font-medium">{label}</p>
         <p className="text-[var(--color-app-accent)] font-mono font-semibold text-sm">
-          ${payload[0].value.toFixed(2)}
+          {formatCurrency(payload[0].value)}
         </p>
       </div>
     );
@@ -48,7 +49,8 @@ export default function Dashboard() {
     { key: "customerName", label: "Customer", render: (val) => <span className="font-medium text-[var(--color-app-text)]">{val}</span> },
     { key: "productName", label: "Product", render: (val) => <span className="text-[var(--color-app-text-subtle)]">{val}</span> },
     { key: "quantity", label: "Qty", align: "right", render: (val) => <span className="font-mono text-[var(--color-app-text)]">{val}</span> },
-    { key: "total_price", label: "Total", align: "right", render: (val) => <span className="font-mono font-medium text-[var(--color-app-text)]">${val.toFixed(2)}</span> }
+    { key: "total_price", label: "Total", align: "right", render: (val) => <span className="font-mono font-medium text-[var(--color-app-text)]">{formatCurrency(val)}</span> }
+
   ];
 
   // 3. Profit Per Month Chart (AreaChart)
@@ -86,7 +88,7 @@ export default function Dashboard() {
                 <h2 className="text-sm font-medium text-[var(--color-app-text-muted)] uppercase tracking-wider mb-2">Net Profit</h2>
                 <div className="flex items-baseline gap-3">
                   <span className="text-4xl sm:text-5xl font-mono font-semibold text-[var(--color-app-text)] tracking-tight">
-                    ${totalProfit.toFixed(2)}
+                    {formatCurrency(totalProfit)}
                   </span>
                   <span className="text-sm font-mono font-medium text-[var(--color-app-success)] bg-[var(--color-app-success-muted)] px-2 py-0.5 rounded">
                     {profitTrend}
@@ -131,7 +133,7 @@ export default function Dashboard() {
           <div className="lg:col-span-4 flex flex-col gap-4">
             <Card padding="lg" className="flex-1 flex flex-col justify-center">
               <p className="text-xs text-[var(--color-app-text-muted)] uppercase tracking-wider mb-2">Gross Revenue</p>
-              <p className="text-2xl font-mono font-medium text-[var(--color-app-text)]">${totalRevenue.toFixed(2)}</p>
+              <p className="text-2xl font-mono font-medium text-[var(--color-app-text)]">{formatCurrency(totalRevenue)}</p>
             </Card>
             <div className="flex gap-4 flex-1">
               <Card padding="lg" className="flex-1 flex flex-col justify-center">

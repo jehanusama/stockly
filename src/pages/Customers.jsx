@@ -4,6 +4,7 @@ import { Button, Card, Input, Modal } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { mockCustomers as initialCustomers } from "@/data/mockCustomers";
 import { mockSales } from "@/data/mockSales";
+import { formatCurrency } from "@/utils/currency";
 
 // Helper to generate a 2-letter avatar from a name
 function getInitials(name) {
@@ -76,14 +77,14 @@ export default function Customers() {
       <div className="flex flex-col gap-4">
         <h4 className="text-xs font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider border-b border-[var(--color-app-border)] pb-2">Identity & Contact</h4>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input label="Full Name" placeholder="e.g. Jane Doe" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required />
+          <Input label="Full Name" placeholder="e.g. أحمد محمد" dir="auto" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required />
           <Input label="Phone Number" placeholder="e.g. 555-0199" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
         </div>
       </div>
 
       <div className="flex flex-col gap-4">
         <h4 className="text-xs font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider border-b border-[var(--color-app-border)] pb-2">Additional Information</h4>
-        <Input label="Notes" placeholder="Preferences, special requests, etc." value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} />
+        <Input label="Notes" placeholder="Preferences, special requests, etc." dir="auto" value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} />
       </div>
 
       <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-[var(--color-app-border)]">
@@ -153,7 +154,7 @@ export default function Customers() {
                       <div className="flex flex-col items-end text-right">
                         <span className="text-xs font-medium text-[var(--color-app-text-muted)] uppercase tracking-wider mb-0.5">Lifetime Spend</span>
                         <span className="font-mono text-[var(--color-app-text)] font-semibold sm:text-lg leading-tight">
-                          ${customer.lifetimeSpend.toFixed(2)}
+                          {formatCurrency(customer.lifetimeSpend)}
                         </span>
                         <span className="text-xs text-[var(--color-app-text-subtle)] mt-1 font-medium bg-[var(--color-app-elevated)] px-2 py-0.5 rounded-full border border-[var(--color-app-border)]">
                           {customer.totalOrders} {customer.totalOrders === 1 ? 'Order' : 'Orders'}

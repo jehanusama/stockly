@@ -5,6 +5,7 @@ import { PageContainer } from "@/components/layout/PageContainer";
 import { mockSales } from "@/data/mockSales";
 import { mockProducts } from "@/data/mockProducts";
 import { mockCustomers } from "@/data/mockCustomers";
+import { formatCurrency } from "@/utils/currency";
 
 // ── Helpers ──────────────────────────────────────────────────────
 function toISO(d) { return d.toISOString().slice(0, 10); }
@@ -51,7 +52,7 @@ function ProfitBar({ label, value, maxValue, rank }) {
       <div className="flex-1 min-w-0">
         <div className="flex justify-between items-center mb-1">
           <span className="text-sm font-medium text-[var(--color-app-text)] truncate pr-2">{label}</span>
-          <span className="font-mono text-sm font-bold text-[var(--color-app-success)] shrink-0">+${value.toFixed(2)}</span>
+          <span className="font-mono text-sm font-bold text-[var(--color-app-success)] shrink-0">+{formatCurrency(value)}</span>
         </div>
         <div className="h-1.5 bg-[var(--color-app-elevated)] rounded-full overflow-hidden">
           <div
@@ -85,12 +86,12 @@ function CustomerRow({ rank, name, orders, spend, profit, marginPct }) {
       {/* Name + orders */}
       <div className="flex-1 min-w-0">
         <span className="text-sm font-semibold text-[var(--color-app-text)] block truncate">{name}</span>
-        <span className="text-xs text-[var(--color-app-text-muted)]">{orders} order{orders !== 1 ? "s" : ""} · ${spend.toFixed(2)} spent</span>
+        <span className="text-xs text-[var(--color-app-text-muted)]">{orders} order{orders !== 1 ? "s" : ""} · {formatCurrency(spend)} spent</span>
       </div>
 
       {/* Profit */}
       <div className="flex flex-col items-end shrink-0">
-        <span className="font-mono font-bold text-[var(--color-app-success)]">+${profit.toFixed(2)}</span>
+        <span className="font-mono font-bold text-[var(--color-app-success)]">+{formatCurrency(profit)}</span>
         <span className="text-[10px] font-mono font-medium text-[var(--color-app-success)] bg-[var(--color-app-success)]/10 px-1.5 rounded-full">{marginPct}% mgn</span>
       </div>
     </div>
@@ -202,7 +203,7 @@ export default function ProfitReport() {
                 )}
               </div>
               <span className="text-5xl sm:text-6xl font-mono font-black text-[var(--color-app-success)] tracking-tight leading-none">
-                {hasData ? `+$${totalProfit.toFixed(2)}` : "$0.00"}
+                {hasData ? `+${formatCurrency(totalProfit)}` : formatCurrency(0)}
               </span>
 
               {/* Secondary metrics */}
@@ -210,11 +211,11 @@ export default function ProfitReport() {
                 <div className="flex items-center gap-6 mt-1">
                   <div className="flex flex-col">
                     <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-app-text-muted)]">Revenue</span>
-                    <span className="font-mono text-sm font-semibold text-[var(--color-app-text)]">${totalRevenue.toFixed(2)}</span>
+                    <span className="font-mono text-sm font-semibold text-[var(--color-app-text)]">{formatCurrency(totalRevenue)}</span>
                   </div>
                   <div className="flex flex-col">
                     <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-app-text-muted)]">Cost</span>
-                    <span className="font-mono text-sm font-semibold text-[var(--color-app-text-subtle)]">${totalCost.toFixed(2)}</span>
+                    <span className="font-mono text-sm font-semibold text-[var(--color-app-text-subtle)]">{formatCurrency(totalCost)}</span>
                   </div>
                   <div className="flex flex-col">
                     <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-app-text-muted)]">Transactions</span>

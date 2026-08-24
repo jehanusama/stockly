@@ -4,6 +4,7 @@ import { Button, Card, Input, StockBar } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { mockCustomers } from "@/data/mockCustomers";
 import { mockProducts } from "@/data/mockProducts";
+import { formatCurrency } from "@/utils/currency";
 
 function newItem() {
   return { id: crypto.randomUUID(), productId: "", quantity: "1", customPrice: "" };
@@ -124,11 +125,11 @@ export default function NewSale() {
             <div className="w-full bg-[var(--color-app-bg)] rounded-xl p-4 border border-[var(--color-app-border)] flex justify-between items-center my-2">
               <div className="flex flex-col text-left">
                 <span className="text-xs uppercase font-semibold text-[var(--color-app-text-muted)] tracking-wider">Total Revenue</span>
-                <span className="font-mono text-xl font-bold text-[var(--color-app-text)]">${lastSale.totalRevenue.toFixed(2)}</span>
+                <span className="font-mono text-xl font-bold text-[var(--color-app-text)]">{formatCurrency(lastSale.totalRevenue)}</span>
               </div>
               <div className="flex flex-col text-right">
                 <span className="text-xs uppercase font-semibold text-[var(--color-app-text-muted)] tracking-wider">Net Profit</span>
-                <span className="font-mono text-xl font-bold text-[var(--color-app-success)]">+${lastSale.netProfit.toFixed(2)}</span>
+                <span className="font-mono text-xl font-bold text-[var(--color-app-success)]">+{formatCurrency(lastSale.netProfit)}</span>
               </div>
             </div>
 
@@ -204,7 +205,7 @@ export default function NewSale() {
                       <div className="bg-[var(--color-app-elevated)] p-4 rounded-xl border border-[var(--color-app-border)] flex flex-col sm:flex-row justify-between gap-4">
                         <div className="flex flex-col">
                           <span className="text-[10px] uppercase font-bold text-[var(--color-app-text-muted)] tracking-wider">Unit Cost Price</span>
-                          <span className="font-mono text-lg font-semibold text-[var(--color-app-text)]">${item.product.cost_price.toFixed(2)}</span>
+                          <span className="font-mono text-lg font-semibold text-[var(--color-app-text)]">{formatCurrency(item.product.cost_price)}</span>
                         </div>
                         <div className="flex flex-col sm:w-1/2">
                           <div className="flex justify-between items-center mb-1">
@@ -272,12 +273,12 @@ export default function NewSale() {
               
               <div className="flex justify-between items-center pb-4 border-b border-dashed border-[var(--color-app-border)]">
                 <span className="text-sm text-[var(--color-app-text-muted)]">Subtotal ({totalItemsCount} items)</span>
-                <span className="font-mono text-[var(--color-app-text)] font-semibold">${totalRevenue.toFixed(2)}</span>
+                <span className="font-mono text-[var(--color-app-text)] font-semibold">{formatCurrency(totalRevenue)}</span>
               </div>
               
               <div className="flex justify-between items-center pb-4 border-b border-dashed border-[var(--color-app-border)]">
                 <span className="text-sm text-[var(--color-app-text-muted)]">Total Cost</span>
-                <span className="font-mono text-[var(--color-app-text-subtle)]">-${totalCost.toFixed(2)}</span>
+                <span className="font-mono text-[var(--color-app-text-subtle)]">-{formatCurrency(totalCost)}</span>
               </div>
               
               <div className="flex flex-col pt-2 gap-1">
@@ -286,7 +287,7 @@ export default function NewSale() {
                   <span className="text-[10px] font-mono font-medium text-[var(--color-app-success)] bg-[var(--color-app-success)]/10 px-1.5 rounded">{margin}% Margin</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-3xl font-mono font-bold text-[var(--color-app-success)]">+${netProfit.toFixed(2)}</span>
+                  <span className="text-3xl font-mono font-bold text-[var(--color-app-success)]">+{formatCurrency(netProfit)}</span>
                 </div>
               </div>
 

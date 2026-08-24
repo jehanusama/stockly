@@ -5,6 +5,7 @@ import { PageContainer } from "@/components/layout/PageContainer";
 import { mockCustomers } from "@/data/mockCustomers";
 import { mockSales } from "@/data/mockSales";
 import { mockProducts } from "@/data/mockProducts";
+import { formatCurrency } from "@/utils/currency";
 
 // Helper to generate a 2-letter avatar from a name
 function getInitials(name) {
@@ -99,13 +100,13 @@ export default function CustomerDetails() {
             <div className="flex flex-col">
               <span className="text-[10px] font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider mb-1">Lifetime Spend</span>
               <span className="text-2xl sm:text-3xl font-mono font-bold text-[var(--color-app-text)] tracking-tight">
-                ${lifetimeSpend.toFixed(2)}
+                {formatCurrency(lifetimeSpend)}
               </span>
             </div>
             <div className="flex flex-col gap-2 justify-center">
               <div className="flex flex-col">
                 <span className="text-[10px] font-semibold text-[var(--color-app-text-subtle)] uppercase tracking-wider">Net Profit</span>
-                <span className="font-mono text-sm text-[var(--color-app-success)] font-semibold">${totalProfit.toFixed(2)}</span>
+                <span className="font-mono text-sm text-[var(--color-app-success)] font-semibold">{formatCurrency(totalProfit)}</span>
               </div>
               <div className="flex flex-col">
                 <span className="text-[10px] font-semibold text-[var(--color-app-text-subtle)] uppercase tracking-wider">Orders</span>
@@ -161,7 +162,7 @@ export default function CustomerDetails() {
                           {product ? product.name : "Unknown Product"}
                         </span>
                         <span className="text-sm text-[var(--color-app-text-subtle)] mt-0.5">
-                          {sale.quantity} {product?.unit || 'pcs'} @ ${(sale.sale_price).toFixed(2)}/each
+                          {sale.quantity} {product?.unit || 'pcs'} @ {formatCurrency(sale.sale_price)}/each
                         </span>
                       </div>
                     </div>
@@ -172,14 +173,14 @@ export default function CustomerDetails() {
                       <div className="flex flex-col items-end">
                         <span className="text-[10px] font-semibold text-[var(--color-app-text-subtle)] uppercase tracking-wider mb-0.5">Sale Total</span>
                         <span className="font-mono font-bold text-lg text-[var(--color-app-text)]">
-                          ${sale.total_price.toFixed(2)}
+                          {formatCurrency(sale.total_price)}
                         </span>
                       </div>
                       
                       <div className="flex flex-col items-end w-20">
                         <span className="text-[10px] font-semibold text-[var(--color-app-text-subtle)] uppercase tracking-wider mb-0.5">Profit</span>
                         <span className="font-mono text-sm text-[var(--color-app-success)] font-semibold flex items-center gap-1">
-                          +${sale.profit.toFixed(2)}
+                          +{formatCurrency(sale.profit)}
                         </span>
                         <span className="text-[10px] font-mono font-medium text-[var(--color-app-success)] bg-[var(--color-app-success)]/10 px-1.5 rounded mt-0.5">
                           {margin}% mgn

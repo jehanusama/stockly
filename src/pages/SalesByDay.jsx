@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button, Card, Modal } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
+import { formatCurrency } from "@/utils/currency";
 import { mockSales as initialSales } from "@/data/mockSales";
 import { mockCustomers } from "@/data/mockCustomers";
 import { mockProducts } from "@/data/mockProducts";
@@ -155,7 +156,7 @@ function ReassignModal({ isOpen, onClose, targetDate, allSales, onReassign }) {
                   <span className="text-[10px] font-mono text-[var(--color-app-text-muted)]">{toISODate(sale.sale_date)}</span>
                 </div>
                 <div className="flex flex-col items-end gap-2 shrink-0">
-                  <span className="font-mono text-sm font-semibold text-[var(--color-app-text)]">${sale.total_price.toFixed(2)}</span>
+                  <span className="font-mono text-sm font-semibold text-[var(--color-app-text)]">{formatCurrency(sale.total_price)}</span>
                   <Button variant="primary" className="text-xs h-7 px-3" onClick={() => { onReassign(sale.id); onClose(); }}>
                     Move here
                   </Button>
@@ -305,8 +306,8 @@ export default function SalesByDay() {
           {daySalesCount > 0 && (
             <div className="grid grid-cols-3 gap-4">
               {[
-                { label: "Revenue", value: `$${dayRevenue.toFixed(2)}`, highlight: false },
-                { label: "Net Profit", value: `+$${dayProfit.toFixed(2)}`, highlight: true },
+                { label: "Revenue", value: formatCurrency(dayRevenue), highlight: false },
+                { label: "Net Profit", value: `+${formatCurrency(dayProfit)}`, highlight: true },
                 { label: "Sales Made", value: daySalesCount.toString(), highlight: false },
               ].map(({ label, value, highlight }) => (
                 <Card key={label} padding="md" className="flex flex-col bg-[var(--color-app-panel)] border-[var(--color-app-border)]">
@@ -361,8 +362,8 @@ export default function SalesByDay() {
                         </div>
                       </div>
                       <div className="flex flex-col items-end">
-                        <span className="font-mono text-sm font-semibold text-[var(--color-app-text)]">${custRevenue.toFixed(2)}</span>
-                        <span className="font-mono text-xs font-bold text-[var(--color-app-success)]">+${custProfit.toFixed(2)}</span>
+                        <span className="font-mono text-sm font-semibold text-[var(--color-app-text)]">{formatCurrency(custRevenue)}</span>
+                        <span className="font-mono text-xs font-bold text-[var(--color-app-success)]">+{formatCurrency(custProfit)}</span>
                       </div>
                     </div>
 
@@ -378,7 +379,7 @@ export default function SalesByDay() {
                               <div className="min-w-0">
                                 <span className="text-sm font-medium text-[var(--color-app-text)] truncate block">{sale.productName}</span>
                                 <span className="text-xs text-[var(--color-app-text-subtle)]">
-                                  {sale.quantity} × ${sale.sale_price.toFixed(2)}/unit
+                                  {sale.quantity} × {formatCurrency(sale.sale_price)}/unit
                                 </span>
                               </div>
                             </div>
@@ -386,11 +387,11 @@ export default function SalesByDay() {
                             {/* Financials */}
                             <div className="flex items-center gap-6 shrink-0">
                               <div className="flex flex-col items-end">
-                                <span className="font-mono text-sm font-semibold text-[var(--color-app-text)]">${sale.total_price.toFixed(2)}</span>
+                                <span className="font-mono text-sm font-semibold text-[var(--color-app-text)]">{formatCurrency(sale.total_price)}</span>
                                 <span className="text-[10px] text-[var(--color-app-text-muted)]">total</span>
                               </div>
                               <div className="flex flex-col items-end min-w-[60px]">
-                                <span className="font-mono text-sm font-bold text-[var(--color-app-success)]">+${sale.profit.toFixed(2)}</span>
+                                <span className="font-mono text-sm font-bold text-[var(--color-app-success)]">+{formatCurrency(sale.profit)}</span>
                                 <span className="text-[10px] font-mono text-[var(--color-app-success)] bg-[var(--color-app-success)]/10 px-1.5 rounded-full">{marginPct}%</span>
                               </div>
                             </div>

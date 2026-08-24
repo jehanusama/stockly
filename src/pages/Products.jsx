@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { Button, Card, Table, Input, Modal, StockBar } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { mockProducts as initialProducts } from "@/data/mockProducts";
+import { formatCurrency } from "@/utils/currency";
 
 export default function Products() {
   const [products, setProducts] = useState(initialProducts);
@@ -58,7 +59,7 @@ export default function Products() {
 
   const columns = [
     { key: "name", label: "Product Name", render: (val) => <span className="font-medium text-[var(--color-app-text)]">{val}</span> },
-    { key: "cost_price", label: "Cost Price", align: "right", render: (val) => <span className="font-mono text-[var(--color-app-text)]">${val.toFixed(2)}</span> },
+    { key: "cost_price", label: "Cost Price", align: "right", render: (val) => <span className="font-mono text-[var(--color-app-text)]">{formatCurrency(val)}</span> },
     { key: "stock_quantity", label: "Inventory Level", align: "right", render: (val, row) => <span className="font-mono text-[var(--color-app-text)]">{val} <span className="text-[var(--color-app-text-subtle)]">{row.unit}</span></span> },
     { key: "health", label: "Health", render: (_, row) => <StockBar current={row.stock_quantity} threshold={10} /> },
     { key: "actions", label: "", align: "right", render: (_, row) => (
@@ -75,13 +76,13 @@ export default function Products() {
     <form onSubmit={handleSaveProduct} className="flex flex-col gap-6">
       <div className="flex flex-col gap-4">
         <h4 className="text-xs font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider border-b border-[var(--color-app-border)] pb-2">Details</h4>
-        <Input label="Product Name" placeholder="e.g. Vintage Leather Tote" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required />
+        <Input label="Product Name" placeholder="e.g. شنطة جلد أصلي" dir="auto" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required />
       </div>
 
       <div className="flex flex-col gap-4">
         <h4 className="text-xs font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider border-b border-[var(--color-app-border)] pb-2">Pricing & Inventory</h4>
         <div className="grid grid-cols-2 gap-4">
-          <Input label="Cost Price ($)" type="number" step="0.01" placeholder="0.00" value={formData.cost} onChange={e => setFormData({...formData, cost: e.target.value})} required />
+          <Input label="Cost Price (EGP)" type="number" step="0.01" placeholder="0.00" value={formData.cost} onChange={e => setFormData({...formData, cost: e.target.value})} required />
           <Input label="Current Stock" type="number" placeholder="0" value={formData.stock} onChange={e => setFormData({...formData, stock: e.target.value})} required />
         </div>
         
