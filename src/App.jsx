@@ -9,6 +9,7 @@ import Customers       from "@/pages/Customers";
 import CustomerDetails from "@/pages/CustomerDetails";
 import NewSale         from "@/pages/NewSale";
 import SalesHistory    from "@/pages/SalesHistory";
+import SalesByDay      from "@/pages/SalesByDay";
 import ProfitReport    from "@/pages/ProfitReport";
 
 
@@ -48,6 +49,7 @@ function AppLayout() {
           <Route path="/customers/:id"  element={<CustomerDetails />} />
           <Route path="/new-sale"       element={<NewSale />} />
           <Route path="/sales"          element={<SalesHistory />} />
+          <Route path="/sales-by-day"   element={<SalesByDay />} />
           <Route path="/profit"         element={<ProfitReport />} />
         </Routes>
       </div>
