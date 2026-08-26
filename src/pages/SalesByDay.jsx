@@ -344,7 +344,7 @@ export default function SalesByDay() {
               </p>
               <div className="flex gap-3">
                 <Button variant="secondary" onClick={() => setIsReassignOpen(true)}>Move an Order Here</Button>
-                <Button variant="primary" onClick={() => navigate("/new-sale")}>Record New Order</Button>
+                <Button variant="primary" onClick={() => navigate(`/new-sale?date=${selectedDate}`)}>Record New Order</Button>
               </div>
             </Card>
           ) : (

@@ -28,7 +28,45 @@ export default function Dashboard() {
   const productCount = mockProducts.length;
   const customerCount = mockCustomers.length;
 
-  const profitTrend = "+12.5%";
+  // 3. Profit Per Month Chart & Trend (AreaChart)
+  const monthlyProfitMap = {};
+  mockOrders.forEach(order => {
+    const date = new Date(order.order_date);
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    if (!monthlyProfitMap[key]) {
+      monthlyProfitMap[key] = { name: date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }), profit: 0 };
+    }
+    monthlyProfitMap[key].profit += order.final_profit;
+  });
+
+  const sortedMonthKeys = Object.keys(monthlyProfitMap).sort();
+  
+  let profitTrendNode = null;
+  if (sortedMonthKeys.length >= 2) {
+    const currentMonthProfit = monthlyProfitMap[sortedMonthKeys[sortedMonthKeys.length - 1]].profit;
+    const previousMonthProfit = monthlyProfitMap[sortedMonthKeys[sortedMonthKeys.length - 2]].profit;
+    
+    if (previousMonthProfit === 0) {
+      profitTrendNode = <span className="text-sm font-mono font-medium text-[var(--color-app-text-muted)] bg-[var(--color-app-elevated)] px-2 py-0.5 rounded">N/A</span>;
+    } else {
+      const pctChange = ((currentMonthProfit - previousMonthProfit) / previousMonthProfit) * 100;
+      const isPositive = pctChange >= 0;
+      profitTrendNode = (
+        <span className={`text-sm font-mono font-medium px-2 py-0.5 rounded ${isPositive ? "text-[var(--color-app-success)] bg-[var(--color-app-success-muted)]" : "text-[var(--color-app-danger)] bg-[var(--color-app-danger-muted)]"}`}>
+          {isPositive ? "+" : ""}{pctChange.toFixed(1)}%
+        </span>
+      );
+    }
+  } else {
+    profitTrendNode = <span className="text-sm font-mono font-medium text-[var(--color-app-text-muted)] bg-[var(--color-app-elevated)] px-2 py-0.5 rounded">New</span>;
+  }
+
+  const profitPerMonth = sortedMonthKeys.map(key => monthlyProfitMap[key]);
+  if (profitPerMonth.length === 1) {
+    // Pad so a single point AreaChart doesn't just look empty
+    profitPerMonth.unshift({ name: "", profit: profitPerMonth[0].profit });
+    profitPerMonth.push({ name: " ", profit: profitPerMonth[0].profit });
+  }
 
   const lastOrders = [...mockOrders]
     .sort((a, b) => new Date(b.order_date).getTime() - new Date(a.order_date).getTime())
@@ -54,25 +92,7 @@ export default function Dashboard() {
     { key: "final_profit", label: "Profit", align: "right", render: (val) => <span className="font-mono font-semibold text-[var(--color-app-success)]">+{formatCurrency(val)}</span> }
   ];
 
-  // 3. Profit Per Month Chart (AreaChart)
-  const months = {};
-  mockOrders.forEach(order => {
-    const date = new Date(order.order_date);
-    const monthYear = date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-    if (!months[monthYear]) months[monthYear] = 0;
-    months[monthYear] += order.final_profit;
-  });
-  // Add dummy data for a more interesting curve
-  const dummyData = [
-    { name: "Jul 23", profit: 120.00 },
-    { name: "Aug 23", profit: 280.00 },
-    { name: "Sep 23", profit: 195.00 }
-  ];
-  const actualData = Object.keys(months).map(key => ({
-    name: key,
-    profit: months[key]
-  }));
-  const profitPerMonth = [...dummyData, ...actualData];
+
 
   // 4. Low Stock Products
   const lowStockProducts = mockProducts.filter(p => p.stock_quantity < 10);
@@ -91,9 +111,7 @@ export default function Dashboard() {
                   <span className="text-4xl sm:text-5xl font-mono font-semibold text-[var(--color-app-text)] tracking-tight">
                     {formatCurrency(totalProfit)}
                   </span>
-                  <span className="text-sm font-mono font-medium text-[var(--color-app-success)] bg-[var(--color-app-success-muted)] px-2 py-0.5 rounded">
-                    {profitTrend}
-                  </span>
+                  {profitTrendNode}
                 </div>
               </div>
             </div>

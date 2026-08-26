@@ -13,9 +13,10 @@ export default function Products() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   // Form State
-  const [formData, setFormData] = useState({ id: "", name: "", cost: "", stock: "" });
+  const [formData, setFormData] = useState({ id: "", name: "", cost: "", stock: "", unit: "pcs" });
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
-  const resetForm = () => setFormData({ id: "", name: "", cost: "", stock: "" });
+  const resetForm = () => setFormData({ id: "", name: "", cost: "", stock: "", unit: "pcs" });
 
   // Filtered Products
   const filteredProducts = useMemo(() => {
@@ -32,14 +33,14 @@ export default function Products() {
         name: formData.name,
         cost_price: parseFloat(formData.cost),
         stock_quantity: parseInt(formData.stock, 10),
-        unit: "pcs"
+        unit: formData.unit || "pcs"
       };
       setProducts([newProduct, ...products]);
       setIsAddModalOpen(false);
     } else if (isEditModalOpen) {
       setProducts(products.map(p => 
         p.id === formData.id 
-          ? { ...p, name: formData.name, cost_price: parseFloat(formData.cost), stock_quantity: parseInt(formData.stock, 10) }
+          ? { ...p, name: formData.name, cost_price: parseFloat(formData.cost), stock_quantity: parseInt(formData.stock, 10), unit: formData.unit || "pcs" }
           : p
       ));
       setIsEditModalOpen(false);
@@ -47,12 +48,19 @@ export default function Products() {
     resetForm();
   };
 
+  const handleDeleteConfirm = () => {
+    if (!deleteTarget) return;
+    setProducts(prev => prev.filter(p => p.id !== deleteTarget.id));
+    setDeleteTarget(null);
+  };
+
   const openEditModal = (product) => {
     setFormData({
       id: product.id,
       name: product.name,
       cost: product.cost_price.toString(),
-      stock: product.stock_quantity.toString()
+      stock: product.stock_quantity.toString(),
+      unit: product.unit || "pcs"
     });
     setIsEditModalOpen(true);
   };
@@ -63,7 +71,19 @@ export default function Products() {
     { key: "stock_quantity", label: "Inventory Level", align: "right", render: (val, row) => <span className="font-mono text-[var(--color-app-text)]">{val} <span className="text-[var(--color-app-text-subtle)]">{row.unit}</span></span> },
     { key: "health", label: "Health", render: (_, row) => <StockBar current={row.stock_quantity} threshold={10} /> },
     { key: "actions", label: "", align: "right", render: (_, row) => (
-      <Button variant="secondary" className="px-2 py-1 text-xs" onClick={() => openEditModal(row)}>Edit</Button>
+      <div className="flex items-center justify-end gap-2">
+        <Button variant="secondary" className="px-2 py-1 text-xs" onClick={() => openEditModal(row)}>Edit</Button>
+        <button
+          onClick={() => setDeleteTarget(row)}
+          className="text-[var(--color-app-text-subtle)] hover:text-[var(--color-app-danger)] transition-colors p-1 rounded"
+          aria-label="Delete product"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+          </svg>
+        </button>
+      </div>
     )}
   ];
 
@@ -81,9 +101,15 @@ export default function Products() {
 
       <div className="flex flex-col gap-4">
         <h4 className="text-xs font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider border-b border-[var(--color-app-border)] pb-2">Pricing & Inventory</h4>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Input label="Cost Price (EGP)" type="number" step="0.01" placeholder="0.00" value={formData.cost} onChange={e => setFormData({...formData, cost: e.target.value})} required />
           <Input label="Current Stock" type="number" placeholder="0" value={formData.stock} onChange={e => setFormData({...formData, stock: e.target.value})} required />
+          <div className="flex flex-col gap-1.5 relative">
+            <Input label="Unit" placeholder="e.g. pcs, box, kg" value={formData.unit} onChange={e => setFormData({...formData, unit: e.target.value})} required />
+            <div className="absolute top-[2.4rem] right-2 text-xs flex gap-1 items-center">
+               {/* Quick select hints if they want */}
+            </div>
+          </div>
         </div>
         
         {formData.stock !== "" && (
@@ -149,6 +175,37 @@ export default function Products() {
       {/* Edit Modal */}
       <Modal isOpen={isEditModalOpen} onClose={() => { setIsEditModalOpen(false); resetForm(); }} title="Edit Product">
         {productForm}
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        title="Delete Product"
+      >
+        {deleteTarget && (
+          <div className="flex flex-col gap-6">
+            <div className="bg-[var(--color-app-danger)]/5 border border-[var(--color-app-danger)]/20 rounded-xl p-4 flex flex-col gap-2">
+              <p className="text-sm font-semibold text-[var(--color-app-danger)]">This action cannot be undone.</p>
+              <p className="text-sm text-[var(--color-app-text-muted)]">
+                Deleting this product will permanently remove <strong className="text-[var(--color-app-text)]">{deleteTarget.name}</strong> from your inventory.
+              </p>
+            </div>
+            <p className="text-sm text-[var(--color-app-text-muted)]">
+              Since there is no backend yet, this will only remove the product from your current session.
+            </p>
+            <div className="flex justify-end gap-3 pt-2 border-t border-[var(--color-app-border)]">
+              <Button variant="secondary" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+              <Button
+                variant="primary"
+                className="bg-[var(--color-app-danger)] hover:opacity-90 border-0 text-white"
+                onClick={handleDeleteConfirm}
+              >
+                Yes, Delete Product
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
     </PageContainer>
   );

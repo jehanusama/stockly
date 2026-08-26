@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Button, Card, Input, StockBar } from "@/components/ui";
+import { Button, Card, Input, StockBar, Select } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { mockCustomers } from "@/data/mockCustomers";
 import { mockProducts } from "@/data/mockProducts";
@@ -19,7 +19,12 @@ export default function NewSale() {
     const urlId = searchParams.get("customer_id") ?? "";
     return mockCustomers.some(c => c.id === urlId) ? urlId : "";
   });
-
+  const [orderDate, setOrderDate] = useState(() => {
+    const urlDate = searchParams.get("date");
+    if (urlDate && /^\d{4}-\d{2}-\d{2}$/.test(urlDate)) return urlDate;
+    return new Date().toISOString().slice(0, 10);
+  });
+  
   const [cart, setCart] = useState(() => [newItem()]);
   const [discountType, setDiscountType] = useState("none");
   const [discountValue, setDiscountValue] = useState("");
@@ -100,6 +105,7 @@ export default function NewSale() {
     if (!isFormValid) return;
 
     setLastSale({
+      orderDate,
       customer: selectedCustomer,
       items: processedCart,
       totalItemsCount,
@@ -113,6 +119,7 @@ export default function NewSale() {
 
   const resetForm = () => {
     setCustomerId("");
+    setOrderDate(new Date().toISOString().slice(0, 10));
     setCart([newItem()]);
     setDiscountType("none");
     setDiscountValue("");
@@ -136,7 +143,7 @@ export default function NewSale() {
             <div className="flex flex-col gap-2">
               <h2 className="text-2xl font-bold text-[var(--color-app-text)]">Success!</h2>
               <p className="text-[var(--color-app-text-muted)]">
-                You sold <span className="font-semibold text-[var(--color-app-text)]">{lastSale.totalItemsCount} items</span> to <span className="font-semibold text-[var(--color-app-text)]">{lastSale.customer.name}</span>.
+                You sold <span className="font-semibold text-[var(--color-app-text)]">{lastSale.totalItemsCount} items</span> to <span className="font-semibold text-[var(--color-app-text)]">{lastSale.customer.name}</span> on <span className="font-semibold text-[var(--color-app-text)]">{lastSale.orderDate}</span>.
               </p>
             </div>
 
@@ -181,17 +188,25 @@ export default function NewSale() {
           <form id="new-sale-form" onSubmit={handleSubmit} className="flex flex-col gap-6">
             
             <Card padding="lg" className="flex flex-col gap-6 bg-[var(--color-app-panel)] border-[var(--color-app-border)]">
-              <h3 className="text-sm font-semibold text-[var(--color-app-text)] uppercase tracking-wider border-b border-[var(--color-app-border)] pb-3">1. Select Customer</h3>
-              <div className="flex flex-col gap-1.5">
-                <select 
-                  value={customerId} 
+              <h3 className="text-sm font-semibold text-[var(--color-app-text)] uppercase tracking-wider border-b border-[var(--color-app-border)] pb-3">1. Order Details</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Select
+                  label="Customer"
+                  value={customerId}
                   onChange={e => setCustomerId(e.target.value)}
-                  className="h-11 w-full bg-[var(--color-app-bg)] border border-[var(--color-app-border)] rounded-lg px-3 text-sm text-[var(--color-app-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-app-border-focus)] appearance-none"
+                  options={mockCustomers.map(c => ({ value: c.id, label: `${c.name} (${c.phone})` }))}
+                  placeholder="Select a customer..."
                   required
-                >
-                  <option value="" disabled>Select a customer...</option>
-                  {mockCustomers.map(c => <option key={c.id} value={c.id}>{c.name} ({c.phone})</option>)}
-                </select>
+                  selectClassName="h-11"
+                />
+                <Input
+                  label="Order Date"
+                  type="date"
+                  value={orderDate}
+                  onChange={e => setOrderDate(e.target.value)}
+                  required
+                  inputClassName="h-11"
+                />
               </div>
             </Card>
 
@@ -216,18 +231,16 @@ export default function NewSale() {
                   <h4 className="text-xs font-semibold text-[var(--color-app-text-muted)] tracking-wider">Item {index + 1}</h4>
 
                   <div className="flex flex-col gap-4">
-                    <div className="flex flex-col gap-1.5 pr-8">
-                      <label className="text-sm font-medium text-[var(--color-app-text-subtle)]">Product</label>
-                      <select 
-                        value={item.productId} 
-                        onChange={e => updateCartItem(item.id, "productId", e.target.value)}
-                        className="h-11 w-full bg-[var(--color-app-bg)] border border-[var(--color-app-border)] rounded-lg px-3 text-sm text-[var(--color-app-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-app-border-focus)] appearance-none"
-                        required
-                      >
-                        <option value="" disabled>Select a product...</option>
-                        {mockProducts.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                      </select>
-                    </div>
+                    <Select
+                      label="Product"
+                      value={item.productId}
+                      onChange={e => updateCartItem(item.id, "productId", e.target.value)}
+                      options={mockProducts.map(p => ({ value: p.id, label: p.name }))}
+                      placeholder="Select a product..."
+                      required
+                      className="pr-8"
+                      selectClassName="h-11"
+                    />
 
                     {item.product && (
                       <div className="bg-[var(--color-app-elevated)] p-4 rounded-xl border border-[var(--color-app-border)] flex flex-col sm:flex-row justify-between gap-4">
@@ -294,18 +307,18 @@ export default function NewSale() {
             <Card padding="lg" className="flex flex-col gap-4 bg-[var(--color-app-panel)] border-[var(--color-app-border)]">
               <h3 className="text-sm font-semibold text-[var(--color-app-text)] uppercase tracking-wider border-b border-[var(--color-app-border)] pb-3">3. Apply Discount (Optional)</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-[var(--color-app-text-subtle)]">Discount Type</label>
-                  <select 
-                    value={discountType} 
-                    onChange={e => { setDiscountType(e.target.value); setDiscountValue(""); }}
-                    className="h-11 w-full bg-[var(--color-app-bg)] border border-[var(--color-app-border)] rounded-lg px-3 text-sm text-[var(--color-app-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-app-border-focus)] appearance-none"
-                  >
-                    <option value="none">No Discount</option>
-                    <option value="fixed">Fixed Amount</option>
-                    <option value="percentage">Percentage (%)</option>
-                  </select>
-                </div>
+                <Select
+                  label="Discount Type"
+                  value={discountType}
+                  onChange={e => { setDiscountType(e.target.value); setDiscountValue(""); }}
+                  options={[
+                    { value: "none", label: "No Discount" },
+                    { value: "fixed", label: "Fixed Amount" },
+                    { value: "percentage", label: "Percentage (%)" }
+                  ]}
+                  placeholder=""
+                  selectClassName="h-11"
+                />
                 {discountType !== "none" && (
                   <div className="flex flex-col gap-1.5">
                     <Input 

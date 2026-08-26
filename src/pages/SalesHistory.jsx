@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, Modal } from "@/components/ui";
+import { Button, Modal, Select } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { formatCurrency } from "@/utils/currency";
 import { mockOrders as initialOrders } from "@/data/mockOrders";
@@ -17,15 +17,23 @@ function FilterToolbar({ filters, onChange, onClear, hasActiveFilters }) {
         <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
       </svg>
 
-      <select className={selectClass} value={filters.customerId} onChange={e => onChange("customerId", e.target.value)}>
-        <option value="">All Customers</option>
-        {mockCustomers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-      </select>
+      <Select
+        value={filters.customerId}
+        onChange={e => onChange("customerId", e.target.value)}
+        options={[{ value: "", label: "All Customers" }, ...mockCustomers.map(c => ({ value: c.id, label: c.name }))]}
+        placeholder=""
+        className="min-w-[140px]"
+        selectClassName="h-9"
+      />
 
-      <select className={selectClass} value={filters.productId} onChange={e => onChange("productId", e.target.value)}>
-        <option value="">All Products</option>
-        {mockProducts.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-      </select>
+      <Select
+        value={filters.productId}
+        onChange={e => onChange("productId", e.target.value)}
+        options={[{ value: "", label: "All Products" }, ...mockProducts.map(p => ({ value: p.id, label: p.name }))]}
+        placeholder=""
+        className="min-w-[140px]"
+        selectClassName="h-9"
+      />
 
       <div className="flex items-center gap-2">
         <input
