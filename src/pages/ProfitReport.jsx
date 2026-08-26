@@ -1,10 +1,8 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Card } from "@/components/ui";
+import { Button, Card, DatePicker } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
-import { mockOrders } from "@/data/mockOrders";
-import { mockProducts } from "@/data/mockProducts";
-import { mockCustomers } from "@/data/mockCustomers";
+import { useAppData } from "@/context/AppContext";
 import { formatCurrency } from "@/utils/currency";
 
 // ── Helpers ──────────────────────────────────────────────────────
@@ -101,6 +99,7 @@ function CustomerRow({ rank, name, orders, spend, profit, marginPct }) {
 // ── Main Component ───────────────────────────────────────────────
 export default function ProfitReport() {
   const navigate = useNavigate();
+  const { orders: mockOrders, products: mockProducts, customers: mockCustomers } = useAppData();
 
   const [preset, setPreset] = useState("all");
   const [customFrom, setCustomFrom] = useState("");
@@ -276,11 +275,19 @@ export default function ProfitReport() {
               {/* Custom date inputs */}
               {isCustom && (
                 <div className="flex items-center gap-2">
-                  <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)}
-                    className="h-8 bg-[var(--color-app-bg)] border border-[var(--color-app-border)] rounded-lg px-2 text-xs text-[var(--color-app-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-app-border-focus)]" />
+                  <DatePicker
+                    value={customFrom}
+                    onChange={(iso) => setCustomFrom(iso)}
+                    placeholder="From date"
+                    maxDate={customTo || undefined}
+                  />
                   <span className="text-xs text-[var(--color-app-text-muted)]">to</span>
-                  <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)}
-                    className="h-8 bg-[var(--color-app-bg)] border border-[var(--color-app-border)] rounded-lg px-2 text-xs text-[var(--color-app-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-app-border-focus)]" />
+                  <DatePicker
+                    value={customTo}
+                    onChange={(iso) => setCustomTo(iso)}
+                    placeholder="To date"
+                    minDate={customFrom || undefined}
+                  />
                 </div>
               )}
 

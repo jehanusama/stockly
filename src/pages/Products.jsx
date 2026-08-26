@@ -1,11 +1,11 @@
 import { useState, useMemo } from "react";
 import { Button, Card, Table, Input, Modal, StockBar } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
-import { mockProducts as initialProducts } from "@/data/mockProducts";
+import { useAppData } from "@/context/AppContext";
 import { formatCurrency } from "@/utils/currency";
 
 export default function Products() {
-  const [products, setProducts] = useState(initialProducts);
+  const { products, addProduct, updateProduct, deleteProduct } = useAppData();
   const [search, setSearch] = useState("");
   
   // Modals state
@@ -35,14 +35,16 @@ export default function Products() {
         stock_quantity: parseInt(formData.stock, 10),
         unit: formData.unit || "pcs"
       };
-      setProducts([newProduct, ...products]);
+      addProduct(newProduct);
       setIsAddModalOpen(false);
     } else if (isEditModalOpen) {
-      setProducts(products.map(p => 
-        p.id === formData.id 
-          ? { ...p, name: formData.name, cost_price: parseFloat(formData.cost), stock_quantity: parseInt(formData.stock, 10), unit: formData.unit || "pcs" }
-          : p
-      ));
+      updateProduct({
+        id: formData.id,
+        name: formData.name,
+        cost_price: parseFloat(formData.cost),
+        stock_quantity: parseInt(formData.stock, 10),
+        unit: formData.unit || "pcs"
+      });
       setIsEditModalOpen(false);
     }
     resetForm();
@@ -50,7 +52,7 @@ export default function Products() {
 
   const handleDeleteConfirm = () => {
     if (!deleteTarget) return;
-    setProducts(prev => prev.filter(p => p.id !== deleteTarget.id));
+    deleteProduct(deleteTarget.id);
     setDeleteTarget(null);
   };
 

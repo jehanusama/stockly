@@ -2,8 +2,7 @@ import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button, Card, Input, Modal } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
-import { mockCustomers as initialCustomers } from "@/data/mockCustomers";
-import { mockSales } from "@/data/mockSales";
+import { useAppData } from "@/context/AppContext";
 import { formatCurrency } from "@/utils/currency";
 
 // Helper to generate a 2-letter avatar from a name
@@ -17,7 +16,7 @@ function getInitials(name) {
 
 export default function Customers() {
   const navigate = useNavigate();
-  const [customers, setCustomers] = useState(initialCustomers);
+  const { customers, orders, addCustomer } = useAppData();
   const [search, setSearch] = useState("");
   
   // Modals state
@@ -32,12 +31,12 @@ export default function Customers() {
   const processedCustomers = useMemo(() => {
     // 1. Aggregate Sales by Customer ID
     const salesByCustomer = {};
-    mockSales.forEach(sale => {
-      if (!salesByCustomer[sale.customer_id]) {
-        salesByCustomer[sale.customer_id] = { orders: 0, spend: 0 };
+    orders.forEach(order => {
+      if (!salesByCustomer[order.customer_id]) {
+        salesByCustomer[order.customer_id] = { orders: 0, spend: 0 };
       }
-      salesByCustomer[sale.customer_id].orders += 1;
-      salesByCustomer[sale.customer_id].spend += sale.total_price;
+      salesByCustomer[order.customer_id].orders += 1;
+      salesByCustomer[order.customer_id].spend += order.final_total;
     });
 
     // 2. Join data and apply search
@@ -62,11 +61,11 @@ export default function Customers() {
     if (isAddModalOpen) {
       const newCustomer = {
         id: `c${Date.now()}`,
-        name: formData.name,
-        phone: formData.phone || "No phone provided",
-        notes: formData.notes
+        name: formData.name.trim(),
+        phone: formData.phone.trim(),
+        notes: formData.notes.trim()
       };
-      setCustomers([newCustomer, ...customers]);
+      addCustomer(newCustomer);
       setIsAddModalOpen(false);
     }
     resetForm();

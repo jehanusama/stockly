@@ -2,9 +2,7 @@ import { useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button, Card } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
-import { mockCustomers } from "@/data/mockCustomers";
-import { mockOrders } from "@/data/mockOrders";
-import { mockProducts } from "@/data/mockProducts";
+import { useAppData } from "@/context/AppContext";
 import { formatCurrency } from "@/utils/currency";
 
 // Helper to generate a 2-letter avatar from a name
@@ -20,6 +18,7 @@ function getInitials(name) {
 export default function CustomerDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { customers: mockCustomers, orders: mockOrders, products: mockProducts } = useAppData();
 
   const customer = useMemo(() => mockCustomers.find(c => c.id === id), [id]);
 

@@ -1,15 +1,12 @@
 import { useState } from "react";
-import { Button, Modal, Select } from "@/components/ui";
+import { Button, Modal, Select, DatePicker } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { formatCurrency } from "@/utils/currency";
-import { mockOrders as initialOrders } from "@/data/mockOrders";
-import { mockCustomers } from "@/data/mockCustomers";
-import { mockProducts } from "@/data/mockProducts";
+import { useAppData } from "@/context/AppContext";
 
-// ── Filter Toolbar ──────────────────────────────────────────────
-function FilterToolbar({ filters, onChange, onClear, hasActiveFilters }) {
-  const selectClass =
-    "h-9 bg-[var(--color-app-bg)] border border-[var(--color-app-border)] rounded-lg px-3 text-sm text-[var(--color-app-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-app-border-focus)] appearance-none min-w-[140px]";
+//  Filter Toolbar 
+function FilterToolbar({ filters, onChange, onClear, hasActiveFilters, customers, products }) {
+
 
   return (
     <div className="flex flex-wrap items-center gap-2 p-4 bg-[var(--color-app-elevated)] border border-[var(--color-app-border)] rounded-xl">
@@ -20,7 +17,7 @@ function FilterToolbar({ filters, onChange, onClear, hasActiveFilters }) {
       <Select
         value={filters.customerId}
         onChange={e => onChange("customerId", e.target.value)}
-        options={[{ value: "", label: "All Customers" }, ...mockCustomers.map(c => ({ value: c.id, label: c.name }))]}
+        options={[{ value: "", label: "All Customers" }, ...customers.map(c => ({ value: c.id, label: c.name }))]}
         placeholder=""
         className="min-w-[140px]"
         selectClassName="h-9"
@@ -29,27 +26,25 @@ function FilterToolbar({ filters, onChange, onClear, hasActiveFilters }) {
       <Select
         value={filters.productId}
         onChange={e => onChange("productId", e.target.value)}
-        options={[{ value: "", label: "All Products" }, ...mockProducts.map(p => ({ value: p.id, label: p.name }))]}
+        options={[{ value: "", label: "All Products" }, ...products.map(p => ({ value: p.id, label: p.name }))]}
         placeholder=""
         className="min-w-[140px]"
         selectClassName="h-9"
       />
 
       <div className="flex items-center gap-2">
-        <input
-          type="date"
-          className={selectClass}
+        <DatePicker
           value={filters.dateFrom}
-          onChange={e => onChange("dateFrom", e.target.value)}
-          title="From date"
+          onChange={(iso) => onChange("dateFrom", iso)}
+          placeholder="From date"
+          maxDate={filters.dateTo || undefined}
         />
         <span className="text-[var(--color-app-text-muted)] text-xs font-semibold">to</span>
-        <input
-          type="date"
-          className={selectClass}
+        <DatePicker
           value={filters.dateTo}
-          onChange={e => onChange("dateTo", e.target.value)}
-          title="To date"
+          onChange={(iso) => onChange("dateTo", iso)}
+          placeholder="To date"
+          minDate={filters.dateFrom || undefined}
         />
       </div>
 
@@ -68,9 +63,9 @@ function FilterToolbar({ filters, onChange, onClear, hasActiveFilters }) {
   );
 }
 
-// ── Main Component ──────────────────────────────────────────────
+//  Main Component 
 export default function SalesHistory() {
-  const [orders, setOrders] = useState(initialOrders);
+  const { orders, customers: mockCustomers, products: mockProducts, deleteOrder } = useAppData();
   const [filters, setFilters] = useState({ customer: "", product: "", dateFrom: "", dateTo: "" });
   const [deleteTarget, setDeleteTarget] = useState(null); // order to confirm-delete
 
@@ -124,7 +119,7 @@ export default function SalesHistory() {
 
   const handleDeleteConfirm = () => {
     if (!deleteTarget) return;
-    setOrders(prev => prev.filter(o => o.id !== deleteTarget.id));
+    deleteOrder(deleteTarget.id);
     setDeleteTarget(null);
   };
 
@@ -236,6 +231,8 @@ export default function SalesHistory() {
           onChange={updateFilter}
           onClear={clearFilters}
           hasActiveFilters={hasActiveFilters}
+          customers={mockCustomers}
+          products={mockProducts}
         />
 
         {/* Summary Footer Strip */}

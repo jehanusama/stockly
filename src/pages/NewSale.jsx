@@ -1,9 +1,8 @@
 import { useState, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Button, Card, Input, StockBar, Select } from "@/components/ui";
+import { Button, Card, Input, StockBar, Select, DatePicker } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
-import { mockCustomers } from "@/data/mockCustomers";
-import { mockProducts } from "@/data/mockProducts";
+import { useAppData } from "@/context/AppContext";
 import { formatCurrency } from "@/utils/currency";
 
 function newItem() {
@@ -14,6 +13,8 @@ export default function NewSale() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
+  const { customers: mockCustomers, products: mockProducts } = useAppData();
+  
   // Lazy-initialize customerId from URL param so we avoid setState inside useEffect
   const [customerId, setCustomerId] = useState(() => {
     const urlId = searchParams.get("customer_id") ?? "";
@@ -199,13 +200,12 @@ export default function NewSale() {
                   required
                   selectClassName="h-11"
                 />
-                <Input
+                <DatePicker
                   label="Order Date"
-                  type="date"
                   value={orderDate}
-                  onChange={e => setOrderDate(e.target.value)}
+                  onChange={(iso) => setOrderDate(iso)}
                   required
-                  inputClassName="h-11"
+                  className="h-11"
                 />
               </div>
             </Card>

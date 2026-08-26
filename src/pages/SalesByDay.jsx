@@ -3,9 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Button, Card, Modal } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { formatCurrency } from "@/utils/currency";
-import { mockOrders as initialOrders } from "@/data/mockOrders";
-import { mockCustomers } from "@/data/mockCustomers";
-import { mockProducts } from "@/data/mockProducts";
+import { useAppData } from "@/context/AppContext";
 
 // ── Helpers ──────────────────────────────────────────────────────
 function toISODate(dateString) {
@@ -112,17 +110,17 @@ function MiniCalendar({ selectedDate, activeDates, onSelect }) {
   );
 }
 
-// ── Reassign Modal ───────────────────────────────────────────────
-function ReassignModal({ isOpen, onClose, targetDate, allOrders, onReassign }) {
+//  Reassign Modal 
+function ReassignModal({ isOpen, onClose, targetDate, allOrders, onReassign, customers, products }) {
   const [query, setQuery] = useState("");
 
   const enriched = allOrders
     .filter(o => toISODate(o.order_date) !== targetDate)
     .map(o => {
-      const customer = mockCustomers.find(c => c.id === o.customer_id);
+      const customer = customers.find(c => c.id === o.customer_id);
       let itemsSummary = "—";
       if (o.items.length > 0) {
-        const firstProduct = mockProducts.find(p => p.id === o.items[0].product_id);
+        const firstProduct = products.find(p => p.id === o.items[0].product_id);
         itemsSummary = firstProduct?.name ?? "Unknown";
         if (o.items.length > 1) {
           itemsSummary += ` (+${o.items.length - 1} more)`;
@@ -181,18 +179,18 @@ function ReassignModal({ isOpen, onClose, targetDate, allOrders, onReassign }) {
   );
 }
 
-// ── Main Component ───────────────────────────────────────────────
+//  Main Component 
 export default function SalesByDay() {
   const navigate = useNavigate();
   const today = new Date().toISOString().slice(0, 10);
+  const { orders, customers: mockCustomers, products: mockProducts, updateOrderDate } = useAppData();
 
   // Default to most recent order date if available
-  const latestOrderDate = initialOrders.length > 0
-    ? toISODate(initialOrders.reduce((a, b) => new Date(a.order_date) > new Date(b.order_date) ? a : b).order_date)
+  const latestOrderDate = orders.length > 0
+    ? toISODate(orders.reduce((a, b) => new Date(a.order_date) > new Date(b.order_date) ? a : b).order_date)
     : today;
 
   const [selectedDate, setSelectedDate] = useState(latestOrderDate);
-  const [orders, setOrders] = useState(initialOrders);
   const [isReassignOpen, setIsReassignOpen] = useState(false);
 
   // Build the set of active (order-having) dates for the calendar dots
@@ -222,11 +220,7 @@ export default function SalesByDay() {
   const dayOrdersCount = dayOrders.length;
 
   const handleReassign = (orderId) => {
-    setOrders(prev => prev.map(o =>
-      o.id === orderId
-        ? { ...o, order_date: selectedDate + "T12:00:00Z" }
-        : o
-    ));
+    updateOrderDate(orderId, selectedDate + "T12:00:00Z");
   };
 
   return (
@@ -437,6 +431,8 @@ export default function SalesByDay() {
         targetDate={selectedDate}
         allOrders={orders}
         onReassign={handleReassign}
+        customers={mockCustomers}
+        products={mockProducts}
       />
     </PageContainer>
   );

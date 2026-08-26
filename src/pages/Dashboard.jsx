@@ -1,8 +1,6 @@
 import { Card, Table, StockBar } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
-import { mockProducts } from "@/data/mockProducts";
-import { mockCustomers } from "@/data/mockCustomers";
-import { mockOrders } from "@/data/mockOrders";
+import { useAppData } from "@/context/AppContext";
 import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { formatCurrency } from "@/utils/currency";
 
@@ -22,6 +20,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 export default function Dashboard() {
+  const { products: mockProducts, customers: mockCustomers, orders: mockOrders } = useAppData();
 
   const totalRevenue = mockOrders.reduce((sum, o) => sum + o.final_total, 0);
   const totalProfit = mockOrders.reduce((sum, o) => sum + o.final_profit, 0);
@@ -41,7 +40,7 @@ export default function Dashboard() {
 
   const sortedMonthKeys = Object.keys(monthlyProfitMap).sort();
   
-  let profitTrendNode = null;
+  let profitTrendNode;
   if (sortedMonthKeys.length >= 2) {
     const currentMonthProfit = monthlyProfitMap[sortedMonthKeys[sortedMonthKeys.length - 1]].profit;
     const previousMonthProfit = monthlyProfitMap[sortedMonthKeys[sortedMonthKeys.length - 2]].profit;
