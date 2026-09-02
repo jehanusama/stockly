@@ -5,7 +5,6 @@ import { PageContainer } from "@/components/layout/PageContainer";
 import { useAppData } from "@/context/AppContext";
 import { formatCurrency } from "@/utils/currency";
 
-// Helper to generate a 2-letter avatar from a name
 function getInitials(name) {
   const parts = name.trim().split(" ");
   if (parts.length >= 2) {
@@ -27,9 +26,8 @@ export default function Customers() {
 
   const resetForm = () => setFormData({ id: "", name: "", phone: "", notes: "" });
 
-  // Compute LTV and Order Count, then apply search filter
   const processedCustomers = useMemo(() => {
-    // 1. Aggregate Sales by Customer ID
+
     const salesByCustomer = {};
     orders.forEach(order => {
       if (!salesByCustomer[order.customer_id]) {
@@ -51,7 +49,7 @@ export default function Customers() {
         c.name.toLowerCase().includes(lowerSearch) || 
         c.phone.toLowerCase().includes(lowerSearch)
       )
-      .sort((a, b) => b.lifetimeSpend - a.lifetimeSpend); // Sort by highest spend
+      .sort((a, b) => b.lifetimeSpend - a.lifetimeSpend); 
   }, [customers, search]);
 
   const handleSaveCustomer = (e) => {

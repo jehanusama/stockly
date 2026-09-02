@@ -5,7 +5,7 @@ import { PageContainer } from "@/components/layout/PageContainer";
 import { useAppData } from "@/context/AppContext";
 import { formatCurrency } from "@/utils/currency";
 
-// ── Stock Badge — contextual pill, no hardcoded threshold ─────────────
+
 function StockBadge({ quantity, unit }) {
   const isOut = quantity <= 0;
   const isLow = quantity > 0 && quantity < 10;
@@ -28,10 +28,7 @@ function StockBadge({ quantity, unit }) {
   );
 }
 
-// ── Batch Picker Panel ────────────────────────────────────────────────
-// Step 1: pick category. Step 2: checkbox list of products in that category.
-// Checking a product reveals inline qty + price inputs.
-// "Add to cart" flushes all checked items as separate line items and resets.
+
 function BatchPicker({ categories, products, onAddToCart }) {
   const [pickedCategoryId, setPickedCategoryId] = useState("");
   // { [productId]: { checked, quantity, customPrice } }
@@ -226,12 +223,12 @@ function BatchPicker({ categories, products, onAddToCart }) {
   );
 }
 
-// ── Main Component ────────────────────────────────────────────────────
+
 export default function NewSale() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  const { customers: mockCustomers, products: mockProducts, categories } = useAppData();
+  const { customers: mockCustomers, products: mockProducts, categories, addOrder } = useAppData();
 
   const [customerId, setCustomerId] = useState(() => {
     const urlId = searchParams.get("customer_id") ?? "";
@@ -251,7 +248,7 @@ export default function NewSale() {
 
   const selectedCustomer = mockCustomers.find(c => c.id === customerId);
 
-  // ── Cart mutations ──────────────────────────────────────────────
+ 
   const addBatchToCart = (newItems) => {
     setCart(prev => [...prev, ...newItems]);
   };
@@ -267,12 +264,12 @@ export default function NewSale() {
     }));
   };
 
-  // ── Derived cart state ──────────────────────────────────────────
+
   const processedCart = cart.map(item => {
     const product = mockProducts.find(p => p.id === item.productId);
     const qty = parseFloat(item.quantity) || 0;
     const price = parseFloat(item.customPrice) || 0;
-    const hasEnoughStock = product ? qty <= product.stock_quantity : true;
+    const hasEnoughStock = product ? qty <= product.stock_quantity : false;
     return { ...item, product, qty, price, hasEnoughStock };
   });
 
@@ -310,6 +307,29 @@ export default function NewSale() {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!isFormValid) return;
+
+    const newOrder = {
+      id: `o_${crypto.randomUUID()}`,
+      customer_id: customerId,
+      order_date: orderDate.includes("T") ? orderDate : `${orderDate}T12:00:00Z`,
+      discount_type: discountType,
+      discount_value: parseFloat(discountValue) || 0,
+      subtotal: totalRevenue,
+      total_cost: totalCost,
+      final_total: finalTotal,
+      final_profit: finalProfit,
+      items: processedCart.map(item => ({
+        product_id: item.productId,
+        quantity: item.qty,
+        sale_price: item.price,
+        cost_price: item.product.cost_price,
+        line_total: item.qty * item.price,
+        line_profit: (item.qty * item.price) - (item.qty * item.product.cost_price),
+      })),
+    };
+
+    addOrder(newOrder);
+
     setLastSale({
       orderDate,
       customer: selectedCustomer,
@@ -333,7 +353,7 @@ export default function NewSale() {
     setLastSale(null);
   };
 
-  // ── Success State ───────────────────────────────────────────────
+
   if (isSuccess && lastSale) {
     return (
       <PageContainer title="Sale Recorded" subtitle="Transaction completed successfully.">
@@ -386,7 +406,7 @@ export default function NewSale() {
     );
   }
 
-  // ── Main Form ───────────────────────────────────────────────────
+
   return (
     <PageContainer title="New Sale" subtitle="Record a transaction and calculate live profit.">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 pb-12">

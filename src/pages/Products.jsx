@@ -4,7 +4,6 @@ import { PageContainer } from "@/components/layout/PageContainer";
 import { useAppData } from "@/context/AppContext";
 import { formatCurrency } from "@/utils/currency";
 
-// ── Manage Categories Modal ───────────────────────────────────────
 function ManageCategoriesModal({ isOpen, onClose }) {
   const { categories, addCategory, updateCategory, deleteCategory } = useAppData();
   const [newCatName, setNewCatName] = useState("");
@@ -111,7 +110,7 @@ function ManageCategoriesModal({ isOpen, onClose }) {
   );
 }
 
-// ── Main Products Component ────────────────────────────────────────
+
 export default function Products() {
   const { products, categories, addProduct, updateProduct, deleteProduct } = useAppData();
   const [search, setSearch] = useState("");

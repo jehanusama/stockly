@@ -166,10 +166,10 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* ── Lower Section: Sales & Operational Alerts ── */}
+        {/*  Sales & Operational Alerts */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
           
-          {/* Recent Sales (Spans 2 cols) */}
+          {/* Recent Sales */}
           <div className="xl:col-span-2">
             <h3 className="text-sm font-semibold text-[var(--color-app-text)] uppercase tracking-wider mb-4 px-1">Recent Transactions</h3>
             <Card padding="sm">
@@ -177,7 +177,7 @@ export default function Dashboard() {
             </Card>
           </div>
 
-          {/* Operational Alerts (Low Stock) */}
+          {/* Operational Alerts  */}
           <div className="flex flex-col">
             <h3 className="text-sm font-semibold text-[var(--color-app-text)] uppercase tracking-wider mb-4 px-1">Operational Alerts</h3>
             <Card padding="lg" className="flex-1 bg-[var(--color-app-bg)] border-dashed border-[var(--color-app-border)]">

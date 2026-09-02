@@ -5,7 +5,6 @@ import { PageContainer } from "@/components/layout/PageContainer";
 import { useAppData } from "@/context/AppContext";
 import { formatCurrency } from "@/utils/currency";
 
-// Helper to generate a 2-letter avatar from a name
 function getInitials(name) {
   if (!name) return "?";
   const parts = name.trim().split(" ");
@@ -28,7 +27,6 @@ export default function CustomerDetails() {
       .sort((a, b) => new Date(b.order_date).getTime() - new Date(a.order_date).getTime());
   }, [id]);
 
-  // If customer doesn't exist, handle it gracefully
   if (!customer) {
     return (
       <PageContainer title="Customer Not Found" actions={<Button variant="secondary" onClick={() => navigate('/customers')}>Back to Customers</Button>}>

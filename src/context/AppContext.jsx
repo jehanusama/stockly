@@ -51,9 +51,10 @@ export function AppProvider({ children }) {
       order.items.forEach(item => {
         const pIndex = nextProducts.findIndex(p => p.id === item.product_id);
         if (pIndex !== -1) {
+          const newQty = Math.max(0, nextProducts[pIndex].stock_quantity - item.quantity);
           nextProducts[pIndex] = {
             ...nextProducts[pIndex],
-            stock_quantity: nextProducts[pIndex].stock_quantity - item.quantity
+            stock_quantity: Math.round(newQty * 100) / 100
           };
         }
       });
@@ -73,9 +74,10 @@ export function AppProvider({ children }) {
       orderToDelete.items.forEach(item => {
         const pIndex = nextProducts.findIndex(p => p.id === item.product_id);
         if (pIndex !== -1) {
+          const newQty = nextProducts[pIndex].stock_quantity + item.quantity;
           nextProducts[pIndex] = {
             ...nextProducts[pIndex],
-            stock_quantity: nextProducts[pIndex].stock_quantity + item.quantity
+            stock_quantity: Math.round(newQty * 100) / 100
           };
         }
       });

@@ -5,7 +5,7 @@ import { PageContainer } from "@/components/layout/PageContainer";
 import { useAppData } from "@/context/AppContext";
 import { formatCurrency } from "@/utils/currency";
 
-// ── Helpers ──────────────────────────────────────────────────────
+// Helpers 
 function toISO(d) { return d.toISOString().slice(0, 10); }
 
 function getPresetRange(preset) {
@@ -29,7 +29,7 @@ function getInitials(name = "") {
     : (parts[0]?.[0] ?? "?").toUpperCase();
 }
 
-// ── CSV export ───────────────────────────────────────────────────
+// CSV export 
 function exportCSV(rows, filename) {
   const header = "Date,Customer,Product,Qty,Sale Price,Total,Profit\n";
   const body = rows.map(r =>
@@ -41,7 +41,7 @@ function exportCSV(rows, filename) {
   URL.revokeObjectURL(url);
 }
 
-// ── Proportional Bar ─────────────────────────────────────────────
+// Proportional Bar 
 function ProfitBar({ label, value, maxValue, rank }) {
   const pct = maxValue > 0 ? (value / maxValue) * 100 : 0;
   return (
@@ -63,7 +63,7 @@ function ProfitBar({ label, value, maxValue, rank }) {
   );
 }
 
-// ── Customer Leaderboard Row ─────────────────────────────────────
+// Customer Leaderboard Row 
 function CustomerRow({ rank, name, orders, spend, profit, marginPct }) {
   const medal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : null;
   return (
@@ -96,7 +96,7 @@ function CustomerRow({ rank, name, orders, spend, profit, marginPct }) {
   );
 }
 
-// ── Main Component ───────────────────────────────────────────────
+//  Main Component  
 export default function ProfitReport() {
   const navigate = useNavigate();
   const { orders: mockOrders, products: mockProducts, customers: mockCustomers, categories } = useAppData();
