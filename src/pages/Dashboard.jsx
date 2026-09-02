@@ -192,7 +192,7 @@ export default function Dashboard() {
                           <p className="font-medium text-sm text-[var(--color-app-text)] leading-tight truncate">{p.name}</p>
                           {(() => { const cat = categories.find(c => c.id === p.category_id); return cat ? <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-app-text-muted)]">{cat.name}</span> : null; })()}
                         </div>
-                        <StockBar current={p.stock_quantity} threshold={10} />
+                        <StockBar current={p.stock_quantity} unit={p.unit} threshold={10} />
                       </div>
                     </li>
                   ))}
