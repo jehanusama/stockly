@@ -8,8 +8,8 @@ import { useAppData } from "@/context/AppContext";
 function FilterToolbar({ filters, onChange, onClear, hasActiveFilters, customers, products, categories }) {
 
   return (
-    <div className="flex flex-wrap items-center gap-2 p-4 bg-[var(--color-app-elevated)] border border-[var(--color-app-border)] rounded-xl">
-      <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--color-app-text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mr-1">
+    <div className="flex flex-wrap items-center gap-2.5 p-3.5 sm:p-4 bg-[var(--color-app-elevated)] border border-[var(--color-app-border)] rounded-xl">
+      <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--color-app-text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mr-1 hidden sm:block">
         <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
       </svg>
 
@@ -18,16 +18,16 @@ function FilterToolbar({ filters, onChange, onClear, hasActiveFilters, customers
         onChange={e => onChange("customerId", e.target.value)}
         options={[{ value: "", label: "All Customers" }, ...customers.map(c => ({ value: c.id, label: c.name }))]}
         placeholder=""
-        className="min-w-[140px]"
-        selectClassName="h-9"
+        className="flex-1 min-w-[130px]"
+        selectClassName="h-9 text-xs"
       />
 
       {/* Product filter — grouped by category */}
-      <div className="relative">
+      <div className="relative flex-1 min-w-[130px]">
         <select
           value={filters.productId}
           onChange={e => onChange("productId", e.target.value)}
-          className="h-9 pl-3 pr-9 rounded-lg text-sm appearance-none bg-[var(--color-app-bg)] text-[var(--color-app-text)] border border-[var(--color-app-border)] focus:ring-2 focus:ring-[var(--color-app-border-focus)] outline-none transition-colors cursor-pointer min-w-[140px]"
+          className="w-full h-9 pl-3 pr-9 rounded-lg text-xs appearance-none bg-[var(--color-app-bg)] text-[var(--color-app-text)] border border-[var(--color-app-border)] focus:ring-2 focus:ring-[var(--color-app-border-focus)] outline-none transition-colors cursor-pointer"
         >
           <option value="">All Products</option>
           {categories.map(cat => {
@@ -53,16 +53,17 @@ function FilterToolbar({ filters, onChange, onClear, hasActiveFilters, customers
         onChange={e => onChange("categoryId", e.target.value)}
         options={[{ value: "", label: "All Categories" }, ...categories.map(c => ({ value: c.id, label: c.name }))]}
         placeholder=""
-        className="min-w-[140px]"
-        selectClassName="h-9"
+        className="flex-1 min-w-[130px]"
+        selectClassName="h-9 text-xs"
       />
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5 w-full sm:w-auto">
         <DatePicker
           value={filters.dateFrom}
           onChange={(iso) => onChange("dateFrom", iso)}
           placeholder="From date"
           maxDate={filters.dateTo || undefined}
+          className="flex-1 sm:flex-initial"
         />
         <span className="text-[var(--color-app-text-muted)] text-xs font-semibold">to</span>
         <DatePicker
@@ -70,13 +71,14 @@ function FilterToolbar({ filters, onChange, onClear, hasActiveFilters, customers
           onChange={(iso) => onChange("dateTo", iso)}
           placeholder="To date"
           minDate={filters.dateFrom || undefined}
+          className="flex-1 sm:flex-initial"
         />
       </div>
 
       {hasActiveFilters && (
         <button
           onClick={onClear}
-          className="ml-auto flex items-center gap-1.5 text-xs font-semibold text-[var(--color-app-accent)] hover:opacity-70 transition-opacity"
+          className="ml-auto flex items-center gap-1.5 text-xs font-semibold text-[var(--color-app-accent)] hover:opacity-70 transition-opacity py-1"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line>
@@ -309,8 +311,8 @@ export default function SalesHistory() {
           </div>
         )}
 
-        {/* Table */}
-        <div className="w-full overflow-x-auto rounded-xl border border-[var(--color-app-border)]">
+        {/* Desktop Table View */}
+        <div className="hidden sm:block w-full overflow-x-auto rounded-xl border border-[var(--color-app-border)]">
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="border-b border-[var(--color-app-border)] bg-[var(--color-app-elevated)]">
@@ -352,6 +354,45 @@ export default function SalesHistory() {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Stacked Card View */}
+        <div className="sm:hidden flex flex-col gap-3">
+          {tableRows.length === 0 ? (
+            <div className="p-8 text-center bg-[var(--color-app-panel)] border border-[var(--color-app-border)] rounded-xl text-sm text-[var(--color-app-text-muted)]">
+              No sales match your filters
+            </div>
+          ) : (
+            tableRows.map((row, idx) => (
+              <div key={row.id ?? idx} className="bg-[var(--color-app-panel)] border border-[var(--color-app-border)] rounded-xl p-4 flex flex-col gap-2.5 shadow-sm">
+                <div className="flex justify-between items-start">
+                  <div className="flex flex-col">
+                    <span className="font-semibold text-sm text-[var(--color-app-text)]">{row.customerName}</span>
+                    <span className="text-xs text-[var(--color-app-text-subtle)] font-mono">
+                      {new Date(row.order_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono font-bold text-sm text-[var(--color-app-text)]">{formatCurrency(row.final_total)}</span>
+                    <button
+                      onClick={() => setDeleteTarget(row)}
+                      className="text-[var(--color-app-text-subtle)] hover:text-[var(--color-app-error)] p-1.5 rounded"
+                      aria-label="Delete sale"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <div className="text-xs text-[var(--color-app-text-muted)] pt-1 border-t border-[var(--color-app-border)] flex justify-between items-center">
+                  <span>{row.itemsSummary} ({row.totalItemsCount} items)</span>
+                  <span className="font-mono text-[var(--color-app-success)] font-semibold">+{formatCurrency(row.final_profit)}</span>
+                </div>
+              </div>
+            ))
+          )}
         </div>
 
       </div>

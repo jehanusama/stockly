@@ -54,12 +54,12 @@ function MiniCalendar({ selectedDate, activeDates, onSelect }) {
     <div className="flex flex-col gap-3 select-none">
       {/* Month Nav */}
       <div className="flex items-center justify-between">
-        <button onClick={prevMonth} className="p-1.5 rounded hover:bg-[var(--color-app-elevated)] text-[var(--color-app-text-muted)] transition-colors">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+        <button onClick={prevMonth} aria-label="Previous month" className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-[var(--color-app-elevated)] text-[var(--color-app-text-muted)] hover:text-[var(--color-app-text)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-app-border-focus)]">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
         </button>
         <span className="text-sm font-semibold text-[var(--color-app-text)]">{monthName}</span>
-        <button onClick={nextMonth} className="p-1.5 rounded hover:bg-[var(--color-app-elevated)] text-[var(--color-app-text-muted)] transition-colors">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        <button onClick={nextMonth} aria-label="Next month" className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-[var(--color-app-elevated)] text-[var(--color-app-text-muted)] hover:text-[var(--color-app-text)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-app-border-focus)]">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
         </button>
       </div>
 

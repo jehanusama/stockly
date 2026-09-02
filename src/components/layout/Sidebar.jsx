@@ -106,8 +106,11 @@ function NavItem({ item, collapsed }) {
 }
 
 /* ── Sidebar component ──────────────────────────────────────── */
-export function Sidebar({ mobileOpen, onMobileClose }) {
-  const [collapsed, setCollapsed] = useState(false);
+export function Sidebar({ mobileOpen, onMobileClose, collapsed: controlledCollapsed, onToggleCollapse }) {
+  const [internalCollapsed, setInternalCollapsed] = useState(false);
+  const collapsed = controlledCollapsed ?? internalCollapsed;
+  const handleToggle = onToggleCollapse ?? (() => setInternalCollapsed(c => !c));
+
   const location = useLocation();
   const { user, signOut } = useAuth();
 
@@ -131,7 +134,7 @@ export function Sidebar({ mobileOpen, onMobileClose }) {
     >
       {/* Desktop collapse toggle (Floating on border) */}
       <button
-        onClick={() => setCollapsed((c) => !c)}
+        onClick={handleToggle}
         aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         className={[
           "hidden lg:flex items-center justify-center w-6 h-6 rounded-full",
@@ -251,16 +254,16 @@ export function Sidebar({ mobileOpen, onMobileClose }) {
             onClick={onMobileClose}
           />
           {/* Drawer panel — always expanded on mobile */}
-          <div className="relative flex flex-col h-full w-60 bg-[var(--color-app-panel)] border-r border-[var(--color-app-border)] z-10 animate-[slideInLeft_220ms_ease-out]">
+          <div className="relative flex flex-col h-full w-[280px] max-w-[85vw] bg-[var(--color-app-panel)] border-r border-[var(--color-app-border)] z-10 animate-[slideInLeft_220ms_ease-out]">
             {/* Mobile header */}
             <div className="flex items-center justify-between h-16 px-4 border-b border-[var(--color-app-border)]">
               <Logo size={30} showText={true} />
               <button
                 onClick={onMobileClose}
                 aria-label="Close menu"
-                className="flex items-center justify-center w-7 h-7 rounded-md text-[var(--color-app-text-muted)] hover:text-[var(--color-app-text)] hover:bg-[var(--color-app-elevated)] transition-colors"
+                className="flex items-center justify-center w-9 h-9 rounded-lg text-[var(--color-app-text-muted)] hover:text-[var(--color-app-text)] hover:bg-[var(--color-app-elevated)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-app-border-focus)]"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
                 </svg>
               </button>

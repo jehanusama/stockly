@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 
 
 const sizeMap = {
@@ -46,7 +46,7 @@ export function Modal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="modal-title"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4"
       onClick={(e) => {
         if (!panelRef.current?.contains(e.target)) onClose?.();
       }}
@@ -58,7 +58,7 @@ export function Modal({
       <div
         ref={panelRef}
         className={[
-          "relative w-full rounded-2xl",
+          "relative w-full max-h-[90vh] flex flex-col rounded-2xl overflow-hidden",
           "bg-[var(--color-app-elevated)] border border-[var(--color-app-border)]",
           "shadow-2xl",
           "animate-[fadeInScale_180ms_ease-out]",
@@ -67,10 +67,10 @@ export function Modal({
         style={{ animationFillMode: "both" }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-app-border)]">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-[var(--color-app-border)] shrink-0">
           <h2
             id="modal-title"
-            className="text-base font-semibold text-[var(--color-app-text)]"
+            className="text-base font-semibold text-[var(--color-app-text)] truncate pr-2"
           >
             {title}
           </h2>
@@ -78,7 +78,7 @@ export function Modal({
             type="button"
             onClick={onClose}
             aria-label="Close modal"
-            className="flex items-center justify-center w-7 h-7 rounded-md text-[var(--color-app-text-muted)] hover:text-[var(--color-app-text)] hover:bg-[var(--color-app-border)] transition-colors duration-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-app-border-focus)]"
+            className="flex items-center justify-center w-8 h-8 rounded-md text-[var(--color-app-text-muted)] hover:text-[var(--color-app-text)] hover:bg-[var(--color-app-border)] transition-colors duration-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-app-border-focus)] shrink-0"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <line x1="18" y1="6" x2="6" y2="18" />
@@ -88,13 +88,13 @@ export function Modal({
         </div>
 
         {/* Body */}
-        <div className="px-6 py-5 text-sm text-[var(--color-app-text)]">
+        <div className="px-4 sm:px-6 py-4 sm:py-5 text-sm text-[var(--color-app-text)] overflow-y-auto flex-1">
           {children}
         </div>
 
         {/* Footer */}
         {footer && (
-          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[var(--color-app-border)]">
+          <div className="flex items-center justify-end gap-3 px-4 sm:px-6 py-3.5 sm:py-4 border-t border-[var(--color-app-border)] shrink-0 bg-[var(--color-app-panel)]">
             {footer}
           </div>
         )}

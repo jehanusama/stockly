@@ -216,29 +216,29 @@ export default function Customers() {
               <ul className="flex flex-col divide-y divide-[var(--color-app-border)]">
                 {processedCustomers.map(customer => (
                   <li key={customer.id} className="relative group">
-                    <div className="w-full flex items-center justify-between p-4 sm:p-5 bg-[var(--color-app-panel)] hover:bg-[var(--color-app-panel-hover)] transition-colors duration-150">
+                    <div className="w-full flex items-center justify-between p-3.5 sm:p-5 gap-3 bg-[var(--color-app-panel)] hover:bg-[var(--color-app-panel-hover)] transition-colors duration-150">
                       {/* Left: Identity & Click area */}
                       <button
                         onClick={() => navigate(`/customers/${customer.id}`)}
-                        className="flex items-center gap-4 flex-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-app-border-focus)] rounded-lg p-1"
+                        className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-app-border-focus)] rounded-lg p-1"
                       >
                         <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-[var(--color-app-accent)] flex items-center justify-center text-white font-semibold text-sm sm:text-base shadow-sm shrink-0">
                           {getInitials(customer.name)}
                         </div>
                         <div className="flex flex-col min-w-0">
-                          <span className="font-semibold text-[var(--color-app-text)] group-hover:text-[var(--color-app-accent)] transition-colors truncate">{customer.name}</span>
-                          <span className="text-sm text-[var(--color-app-text-muted)] truncate">{customer.phone}</span>
+                          <span className="font-semibold text-sm sm:text-base text-[var(--color-app-text)] group-hover:text-[var(--color-app-accent)] transition-colors truncate">{customer.name}</span>
+                          <span className="text-xs sm:text-sm text-[var(--color-app-text-muted)] truncate">{customer.phone}</span>
                         </div>
                       </button>
 
                       {/* Right: Metrics & Actions */}
-                      <div className="flex items-center gap-4 sm:gap-6 shrink-0">
+                      <div className="flex items-center gap-2 sm:gap-6 shrink-0">
                         <div className="flex flex-col items-end text-right">
-                          <span className="text-xs font-medium text-[var(--color-app-text-muted)] uppercase tracking-wider mb-0.5">Lifetime Spend</span>
-                          <span className="font-mono text-[var(--color-app-text)] font-semibold sm:text-lg leading-tight">
+                          <span className="text-[10px] sm:text-xs font-medium text-[var(--color-app-text-muted)] uppercase tracking-wider mb-0.5">Spend</span>
+                          <span className="font-mono text-sm sm:text-lg text-[var(--color-app-text)] font-semibold leading-tight">
                             {formatCurrency(customer.lifetimeSpend)}
                           </span>
-                          <span className="text-xs text-[var(--color-app-text-subtle)] mt-1 font-medium bg-[var(--color-app-elevated)] px-2 py-0.5 rounded-full border border-[var(--color-app-border)]">
+                          <span className="text-[10px] sm:text-xs text-[var(--color-app-text-subtle)] mt-1 font-medium bg-[var(--color-app-elevated)] px-2 py-0.5 rounded-full border border-[var(--color-app-border)]">
                             {customer.totalOrders} {customer.totalOrders === 1 ? 'Order' : 'Orders'}
                           </span>
                         </div>
@@ -255,7 +255,7 @@ export default function Customers() {
                             title="Edit Customer"
                             aria-label="Edit Customer"
                           >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                               <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
                             </svg>
                           </button>
@@ -271,7 +271,7 @@ export default function Customers() {
                             title="Delete Customer"
                             aria-label="Delete Customer"
                           >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                               <polyline points="3 6 5 6 21 6"></polyline>
                               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
                             </svg>

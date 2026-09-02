@@ -188,9 +188,30 @@ export default function Dashboard() {
           {/* Recent Sales */}
           <div className="xl:col-span-2">
             <h3 className="text-sm font-semibold text-[var(--color-app-text)] uppercase tracking-wider mb-4 px-1">Recent Transactions</h3>
-            <Card padding="sm">
-              <Table columns={salesColumns} rows={lastOrders} />
-            </Card>
+            {/* Desktop Table View */}
+            <div className="hidden sm:block">
+              <Card padding="sm">
+                <Table columns={salesColumns} rows={lastOrders} />
+              </Card>
+            </div>
+            {/* Mobile Stacked Card View */}
+            <div className="sm:hidden flex flex-col gap-3">
+              {lastOrders.map(order => (
+                <div key={order.id} className="bg-[var(--color-app-panel)] border border-[var(--color-app-border)] rounded-xl p-4 flex flex-col gap-2 shadow-sm">
+                  <div className="flex justify-between items-start">
+                    <span className="font-semibold text-sm text-[var(--color-app-text)]">{order.customerName}</span>
+                    <span className="font-mono font-bold text-sm text-[var(--color-app-text)]">{formatCurrency(order.final_total)}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs text-[var(--color-app-text-muted)]">
+                    <span>{order.itemsSummary}</span>
+                    <span className="font-mono text-[var(--color-app-success)] font-semibold">+{formatCurrency(order.final_profit)}</span>
+                  </div>
+                  <div className="text-[11px] font-mono text-[var(--color-app-text-subtle)] pt-1 border-t border-[var(--color-app-border)]">
+                    {new Date(order.order_date).toLocaleDateString()}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* Operational Alerts  */}

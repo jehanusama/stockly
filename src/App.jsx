@@ -41,15 +41,18 @@ function ProtectedRoute() {
 
 function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
 
   return (
     <div className="flex min-h-screen bg-[var(--color-app-bg)]">
       <Sidebar
         mobileOpen={mobileOpen}
         onMobileClose={() => setMobileOpen(false)}
+        collapsed={collapsed}
+        onToggleCollapse={() => setCollapsed(c => !c)}
       />
 
-      <div className="flex flex-col flex-1 lg:pl-60 transition-all duration-300">
+      <div className={["flex flex-col flex-1 transition-all duration-300", collapsed ? "lg:pl-16" : "lg:pl-64"].join(" ")}>
         <header className="lg:hidden sticky top-0 z-20 flex items-center gap-3 h-14 px-4 border-b border-[var(--color-app-border)] bg-[var(--color-app-panel)]">
           <button
             onClick={() => setMobileOpen(true)}

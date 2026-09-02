@@ -258,7 +258,7 @@ export default function ProfitReport() {
                   <span className="text-xs font-mono text-[var(--color-app-success)] bg-[var(--color-app-success)]/10 px-2 py-0.5 rounded-full">{overallMargin}% margin</span>
                 )}
               </div>
-              <span className="text-5xl sm:text-6xl font-mono font-black text-[var(--color-app-success)] tracking-tight leading-none">
+              <span className="text-4xl sm:text-6xl font-mono font-black text-[var(--color-app-success)] tracking-tight leading-none">
                 {hasData ? `+${formatCurrency(totalProfit)}` : formatCurrency(0)}
               </span>
 

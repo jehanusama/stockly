@@ -158,8 +158,8 @@ export default function CustomerDetails() {
                   <Card key={order.id} padding="none" className="overflow-hidden bg-[var(--color-app-panel)] border-[var(--color-app-border)] hover:bg-[var(--color-app-panel-hover)] transition-colors shadow-sm">
 
                     {/* Order Header — Date & Totals */}
-                    <div className="flex items-center justify-between gap-4 px-4 py-3 border-b border-[var(--color-app-border)] bg-[var(--color-app-elevated)]">
-                      <div className="flex items-center gap-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 px-4 py-3 border-b border-[var(--color-app-border)] bg-[var(--color-app-elevated)]">
+                      <div className="flex items-center gap-3 min-w-0">
                         <div className="flex flex-col items-center justify-center w-12 h-12 bg-[var(--color-app-bg)] border border-[var(--color-app-border)] rounded-xl shrink-0">
                           <span className="text-[9px] uppercase font-bold text-[var(--color-app-text-muted)] tracking-wider leading-none mb-0.5">
                             {new Date(order.order_date).toLocaleString('default', { month: 'short' })}
@@ -168,19 +168,19 @@ export default function CustomerDetails() {
                             {new Date(order.order_date).getDate()}
                           </span>
                         </div>
-                        <div>
-                          <span className="text-xs font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider">Order #{order.id}</span>
+                        <div className="min-w-0 flex-1">
+                          <span className="text-xs font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider block truncate">Order #{order.id}</span>
                           <p className="text-xs text-[var(--color-app-text-subtle)]">{order.items.length} product type{order.items.length !== 1 ? 's' : ''}</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-6 border-l border-[var(--color-app-border)] pl-4">
-                        <div className="flex flex-col items-end">
+                      <div className="flex items-center justify-between sm:justify-end gap-4 sm:gap-6 border-t sm:border-t-0 sm:border-l border-[var(--color-app-border)] pt-2 sm:pt-0 sm:pl-4">
+                        <div className="flex flex-col items-start sm:items-end">
                           <span className="text-[10px] font-semibold text-[var(--color-app-text-subtle)] uppercase tracking-wider mb-0.5">Total</span>
-                          <span className="font-mono font-bold text-lg text-[var(--color-app-text)]">{formatCurrency(order.final_total)}</span>
+                          <span className="font-mono font-bold text-base sm:text-lg text-[var(--color-app-text)]">{formatCurrency(order.final_total)}</span>
                         </div>
-                        <div className="flex flex-col items-end w-20">
+                        <div className="flex flex-col items-end min-w-[70px]">
                           <span className="text-[10px] font-semibold text-[var(--color-app-text-subtle)] uppercase tracking-wider mb-0.5">Profit</span>
-                          <span className="font-mono text-sm text-[var(--color-app-success)] font-semibold">+{formatCurrency(order.final_profit)}</span>
+                          <span className="font-mono text-xs sm:text-sm text-[var(--color-app-success)] font-semibold">+{formatCurrency(order.final_profit)}</span>
                           <span className="text-[10px] font-mono font-medium text-[var(--color-app-success)] bg-[var(--color-app-success)]/10 px-1.5 rounded mt-0.5">{margin}% mgn</span>
                         </div>
                       </div>

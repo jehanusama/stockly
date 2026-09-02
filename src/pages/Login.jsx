@@ -46,8 +46,8 @@ export function Login() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[var(--color-app-bg)] px-4 py-12">
-      <div className="w-full max-w-md space-y-8 rounded-2xl border border-[var(--color-app-border)] bg-[var(--color-app-panel)] p-8 shadow-xl">
+    <div className="flex min-h-screen items-center justify-center bg-[var(--color-app-bg)] px-4 py-8 sm:py-12">
+      <div className="w-full max-w-md space-y-6 sm:space-y-8 rounded-2xl border border-[var(--color-app-border)] bg-[var(--color-app-panel)] p-6 sm:p-8 shadow-xl">
         <div className="flex flex-col items-center text-center">
           <Logo size={44} showText={true} />
           <h1 className="mt-6 text-xl font-bold tracking-tight text-[var(--color-app-text)]">
