@@ -1,4 +1,4 @@
-﻿/**
+/**
  * PageContainer — consistent wrapper for every page.
  *
  * Props:
@@ -19,7 +19,6 @@ const maxWidthMap = {
 
 export function PageContainer({
   title,
-  subtitle,
   actions,
   maxWidth = "6xl",
   children,
@@ -29,7 +28,7 @@ export function PageContainer({
     <div className="flex-1 min-h-screen bg-[var(--color-app-bg)] overflow-y-auto">
       <div
         className={[
-          "mx-auto w-full px-4 sm:px-6 py-6",
+          "mx-auto w-full px-4 sm:px-6 py-6 sm:py-8",
           maxWidthMap[maxWidth] ?? maxWidthMap["6xl"],
           className,
         ]
@@ -38,21 +37,26 @@ export function PageContainer({
       >
         {/* Page header */}
         {(title || actions) && (
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
-            <div>
-              {title && (
-                <h1 className="text-xl font-semibold text-[var(--color-app-text)] tracking-tight">
-                  {title}
-                </h1>
-              )}
-              {subtitle && (
-                <p className="mt-0.5 text-sm text-[var(--color-app-text-muted)]">
-                  {subtitle}
-                </p>
-              )}
-            </div>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 sm:mb-8">
+            {title && (
+              typeof title === "string" ? (
+                <div className="flex items-center gap-3">
+                  <span className="w-1.5 h-6 sm:h-7 rounded-full bg-[var(--color-app-accent)] shadow-[0_0_10px_var(--color-app-accent)] shrink-0" />
+                  <h1 className="text-2xl sm:text-3xl font-extrabold text-[var(--color-app-text)] tracking-tight">
+                    {title}
+                  </h1>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <span className="w-1.5 h-6 sm:h-7 rounded-full bg-[var(--color-app-accent)] shadow-[0_0_10px_var(--color-app-accent)] shrink-0" />
+                  <div className="text-2xl sm:text-3xl font-extrabold text-[var(--color-app-text)] tracking-tight">
+                    {title}
+                  </div>
+                </div>
+              )
+            )}
             {actions && (
-              <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="flex items-center gap-2 sm:gap-3 shrink-0 sm:ml-auto">
                 {actions}
               </div>
             )}
