@@ -183,7 +183,7 @@ export default function CustomerDetails() {
                               <div>
                                 <span className="text-sm font-medium text-[var(--color-app-text)]">{product ? product.name : "Unknown Product"}</span>
                                 <span className="block text-xs text-[var(--color-app-text-subtle)]">
-                                  {item.quantity} {product?.unit || 'pcs'} @ {formatCurrency(item.sale_price)}/each
+                                  {item.quantity} {product?.unit || 'kilo'} @ {formatCurrency(item.sale_price)}/each
                                 </span>
                               </div>
                             </div>

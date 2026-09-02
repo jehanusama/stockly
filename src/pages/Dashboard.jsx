@@ -20,7 +20,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 export default function Dashboard() {
-  const { products: mockProducts, customers: mockCustomers, orders: mockOrders } = useAppData();
+  const { products: mockProducts, customers: mockCustomers, orders: mockOrders, categories } = useAppData();
 
   const totalRevenue = mockOrders.reduce((sum, o) => sum + o.final_total, 0);
   const totalProfit = mockOrders.reduce((sum, o) => sum + o.final_profit, 0);
@@ -188,7 +188,10 @@ export default function Dashboard() {
                   {lowStockProducts.map(p => (
                     <li key={p.id} className="flex flex-col gap-3 pb-4 border-b border-[var(--color-app-border)] last:border-0 last:pb-0">
                       <div className="flex justify-between items-start gap-4">
-                        <p className="font-medium text-sm text-[var(--color-app-text)] leading-tight">{p.name}</p>
+                        <div className="flex flex-col gap-0.5 min-w-0">
+                          <p className="font-medium text-sm text-[var(--color-app-text)] leading-tight truncate">{p.name}</p>
+                          {(() => { const cat = categories.find(c => c.id === p.category_id); return cat ? <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-app-text-muted)]">{cat.name}</span> : null; })()}
+                        </div>
                         <StockBar current={p.stock_quantity} threshold={10} />
                       </div>
                     </li>

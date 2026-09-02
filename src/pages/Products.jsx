@@ -1,49 +1,191 @@
 import { useState, useMemo } from "react";
-import { Button, Card, Table, Input, Modal, StockBar } from "@/components/ui";
+import { Button, Card, Table, Input, Modal, StockBar, Select } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { useAppData } from "@/context/AppContext";
 import { formatCurrency } from "@/utils/currency";
 
+// ── Manage Categories Modal ───────────────────────────────────────
+function ManageCategoriesModal({ isOpen, onClose }) {
+  const { categories, addCategory, updateCategory, deleteCategory } = useAppData();
+  const [newCatName, setNewCatName] = useState("");
+  const [editingId, setEditingId] = useState(null);
+  const [editName, setEditName] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
+
+  const handleAdd = (e) => {
+    e.preventDefault();
+    if (!newCatName.trim()) return;
+    addCategory({ id: `c${Date.now()}`, name: newCatName.trim() });
+    setNewCatName("");
+    setErrorMsg("");
+  };
+
+  const handleUpdate = (e) => {
+    e.preventDefault();
+    if (!editName.trim()) return;
+    updateCategory({ id: editingId, name: editName.trim() });
+    setEditingId(null);
+    setEditName("");
+    setErrorMsg("");
+  };
+
+  const handleDelete = (id) => {
+    try {
+      setErrorMsg("");
+      deleteCategory(id);
+    } catch (err) {
+      setErrorMsg(err.message);
+    }
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Manage Categories">
+      <div className="flex flex-col gap-6">
+        {errorMsg && (
+          <div className="px-4 py-3 rounded-lg bg-[var(--color-app-danger-muted)] text-[var(--color-app-danger)] text-sm font-medium border border-[var(--color-app-danger)]">
+            {errorMsg}
+          </div>
+        )}
+
+        <form onSubmit={handleAdd} className="flex items-end gap-2">
+          <div className="flex-1">
+            <Input
+              label="New Category"
+              value={newCatName}
+              onChange={(e) => setNewCatName(e.target.value)}
+              placeholder="e.g. Paper Bags"
+            />
+          </div>
+          <Button type="submit" disabled={!newCatName.trim()}>Add</Button>
+        </form>
+
+        <div className="flex flex-col gap-2">
+          <h3 className="text-sm font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider">Existing Categories</h3>
+          {categories.length === 0 ? (
+            <p className="text-sm text-[var(--color-app-text-muted)] italic py-4 text-center">No categories exist.</p>
+          ) : (
+            <div className="flex flex-col rounded-lg border border-[var(--color-app-border)] overflow-hidden">
+              {categories.map(c => (
+                <div key={c.id} className="flex items-center justify-between p-3 border-b border-[var(--color-app-border)] last:border-0 bg-[var(--color-app-panel)] hover:bg-[var(--color-app-elevated)] transition-colors">
+                  {editingId === c.id ? (
+                    <form onSubmit={handleUpdate} className="flex items-center gap-2 flex-1 mr-2">
+                      <Input
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        className="flex-1"
+                        autoFocus
+                      />
+                      <Button type="submit" variant="primary" size="sm">Save</Button>
+                      <Button type="button" variant="secondary" size="sm" onClick={() => setEditingId(null)}>Cancel</Button>
+                    </form>
+                  ) : (
+                    <>
+                      <span className="text-sm font-medium text-[var(--color-app-text)]">{c.name}</span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => { setEditingId(c.id); setEditName(c.name); setErrorMsg(""); }}
+                          className="p-1.5 text-[var(--color-app-text-muted)] hover:text-[var(--color-app-text)] transition-colors rounded"
+                          title="Edit"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(c.id)}
+                          className="p-1.5 text-[var(--color-app-text-muted)] hover:text-[var(--color-app-danger)] transition-colors rounded"
+                          title="Delete"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ── Main Products Component ────────────────────────────────────────
 export default function Products() {
-  const { products, addProduct, updateProduct, deleteProduct } = useAppData();
+  const { products, categories, addProduct, updateProduct, deleteProduct } = useAppData();
   const [search, setSearch] = useState("");
   
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isManageCatsOpen, setIsManageCatsOpen] = useState(false);
 
   // Form State
-  const [formData, setFormData] = useState({ id: "", name: "", cost: "", stock: "", unit: "pcs" });
+  const [formData, setFormData] = useState({ id: "", category_id: "", name: "", cost: "", stock: "", unit: "kilo" });
   const [deleteTarget, setDeleteTarget] = useState(null);
 
-  const resetForm = () => setFormData({ id: "", name: "", cost: "", stock: "", unit: "pcs" });
+  const resetForm = () => setFormData({ id: "", category_id: "", name: "", cost: "", stock: "", unit: "kilo" });
 
-  // Filtered Products
-  const filteredProducts = useMemo(() => {
-    return products.filter(p => p.name.toLowerCase().includes(search.toLowerCase()));
-  }, [products, search]);
+  const openAddModalWithCat = (catId = "") => {
+    resetForm();
+    if (catId) setFormData(prev => ({ ...prev, category_id: catId }));
+    else if (categories.length > 0) setFormData(prev => ({ ...prev, category_id: categories[0].id }));
+    setIsAddModalOpen(true);
+  };
+
+  // Group and Filter Products
+  const filteredGroups = useMemo(() => {
+    const q = search.toLowerCase();
+    
+    // Group products by category
+    let groups = categories.map(c => ({
+      ...c,
+      products: products.filter(p => p.category_id === c.id)
+    }));
+
+    if (q) {
+      groups = groups.reduce((acc, g) => {
+        const catMatches = g.name.toLowerCase().includes(q);
+        const prodMatches = g.products.filter(p => p.name.toLowerCase().includes(q));
+        
+        if (catMatches || prodMatches.length > 0) {
+          acc.push({
+            ...g,
+            products: catMatches ? g.products : prodMatches
+          });
+        }
+        return acc;
+      }, []);
+    }
+
+    // Sort categories alphabetically
+    return groups.sort((a, b) => a.name.localeCompare(b.name));
+  }, [products, categories, search]);
 
   const handleSaveProduct = (e) => {
     e.preventDefault();
-    if (!formData.name || !formData.cost || !formData.stock) return;
+    if (!formData.name || !formData.cost || !formData.stock || !formData.category_id) return;
     
     if (isAddModalOpen) {
       const newProduct = {
         id: `p${Date.now()}`,
-        name: formData.name,
+        category_id: formData.category_id,
+        name: formData.name.trim(),
         cost_price: parseFloat(formData.cost),
         stock_quantity: parseInt(formData.stock, 10),
-        unit: formData.unit || "pcs"
+        unit: formData.unit || "kilo"
       };
       addProduct(newProduct);
       setIsAddModalOpen(false);
     } else if (isEditModalOpen) {
       updateProduct({
         id: formData.id,
-        name: formData.name,
+        category_id: formData.category_id,
+        name: formData.name.trim(),
         cost_price: parseFloat(formData.cost),
         stock_quantity: parseInt(formData.stock, 10),
-        unit: formData.unit || "pcs"
+        unit: formData.unit || "kilo"
       });
       setIsEditModalOpen(false);
     }
@@ -59,156 +201,236 @@ export default function Products() {
   const openEditModal = (product) => {
     setFormData({
       id: product.id,
+      category_id: product.category_id,
       name: product.name,
       cost: product.cost_price.toString(),
       stock: product.stock_quantity.toString(),
-      unit: product.unit || "pcs"
+      unit: product.unit || "kilo"
     });
     setIsEditModalOpen(true);
   };
 
   const columns = [
-    { key: "name", label: "Product Name", render: (val) => <span className="font-medium text-[var(--color-app-text)]">{val}</span> },
-    { key: "cost_price", label: "Cost Price", align: "right", render: (val) => <span className="font-mono text-[var(--color-app-text)]">{formatCurrency(val)}</span> },
-    { key: "stock_quantity", label: "Inventory Level", align: "right", render: (val, row) => <span className="font-mono text-[var(--color-app-text)]">{val} <span className="text-[var(--color-app-text-subtle)]">{row.unit}</span></span> },
-    { key: "health", label: "Health", render: (_, row) => <StockBar current={row.stock_quantity} threshold={10} /> },
-    { key: "actions", label: "", align: "right", render: (_, row) => (
-      <div className="flex items-center justify-end gap-2">
-        <Button variant="secondary" className="px-2 py-1 text-xs" onClick={() => openEditModal(row)}>Edit</Button>
-        <button
-          onClick={() => setDeleteTarget(row)}
-          className="text-[var(--color-app-text-subtle)] hover:text-[var(--color-app-danger)] transition-colors p-1 rounded"
-          aria-label="Delete product"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="3 6 5 6 21 6"></polyline>
-            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-          </svg>
-        </button>
-      </div>
-    )}
+    {
+      key: "name",
+      label: "Product Name",
+      render: (val) => <span className="font-semibold text-[var(--color-app-text)]">{val}</span>,
+    },
+    {
+      key: "cost_price",
+      label: "Cost Price",
+      render: (val) => <span className="font-mono text-[var(--color-app-text-muted)]">{formatCurrency(val)}</span>,
+    },
+    {
+      key: "stock_quantity",
+      label: "Stock Level",
+      render: (val, row) => <StockBar quantity={val} unit={row.unit} />,
+    },
+    {
+      key: "actions",
+      label: "",
+      align: "right",
+      render: (_, row) => (
+        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+          <Button variant="secondary" size="sm" onClick={() => openEditModal(row)}>Edit</Button>
+          <button
+            type="button"
+            className="p-1.5 rounded text-[var(--color-app-text-muted)] hover:text-[var(--color-app-danger)] hover:bg-[var(--color-app-danger-muted)] transition-colors"
+            onClick={() => setDeleteTarget(row)}
+            title="Delete product"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+          </button>
+        </div>
+      ),
+    },
   ];
 
-  const tableRows = filteredProducts.map(p => ({
-    ...p,
-    className: p.stock_quantity < 10 ? "bg-[var(--color-app-danger)]/5 border-l-2 border-l-[var(--color-app-danger)]" : "border-l-2 border-l-transparent"
-  }));
+  return (
+    <PageContainer
+      title="Products"
+      subtitle="Manage your inventory catalog, grouped by category."
+      actions={
+        <div className="flex items-center gap-3">
+          <Button variant="secondary" onClick={() => setIsManageCatsOpen(true)}>
+            Manage Categories
+          </Button>
+          <Button variant="primary" onClick={() => openAddModalWithCat()}>
+            + Add Product
+          </Button>
+        </div>
+      }
+    >
+      <div className="flex flex-col gap-6">
+        {/* Search Bar */}
+        <div className="relative max-w-md">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[var(--color-app-text-muted)]">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+          </div>
+          <input
+            type="text"
+            className="w-full h-10 pl-10 pr-4 rounded-lg bg-[var(--color-app-bg)] border border-[var(--color-app-border)] text-sm text-[var(--color-app-text)] placeholder-[var(--color-app-text-muted)] focus:outline-none focus:border-[var(--color-app-border-focus)] focus:ring-1 focus:ring-[var(--color-app-border-focus)] transition-colors"
+            placeholder="Search categories or products..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
 
-  const productForm = (
-    <form onSubmit={handleSaveProduct} className="flex flex-col gap-6">
-      <div className="flex flex-col gap-4">
-        <h4 className="text-xs font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider border-b border-[var(--color-app-border)] pb-2">Details</h4>
-        <Input label="Product Name" placeholder="e.g. شنطة جلد أصلي" dir="auto" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required />
+        {/* Grouped Product Lists */}
+        <div className="flex flex-col gap-4">
+          {filteredGroups.length === 0 ? (
+            <Card padding="xl" className="text-center">
+              <p className="text-[var(--color-app-text-muted)] mb-4">No categories or products found.</p>
+              {search ? (
+                <Button variant="secondary" onClick={() => setSearch("")}>Clear Search</Button>
+              ) : (
+                <Button variant="primary" onClick={() => setIsManageCatsOpen(true)}>Create a Category</Button>
+              )}
+            </Card>
+          ) : (
+            filteredGroups.map(group => (
+              <details 
+                key={group.id} 
+                open={!!search || group.products.length > 0}
+                className="group bg-[var(--color-app-bg)] rounded-xl border border-[var(--color-app-border)] overflow-hidden"
+              >
+                <summary className="flex items-center justify-between p-4 cursor-pointer select-none bg-[var(--color-app-panel)] hover:bg-[var(--color-app-elevated)] transition-colors border-b border-transparent group-open:border-[var(--color-app-border)]">
+                  <div className="flex items-center gap-3">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--color-app-text-muted)] transition-transform group-open:rotate-90">
+                      <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                    <h3 className="text-base font-semibold text-[var(--color-app-text)]">{group.name}</h3>
+                    <span className="text-xs font-mono font-medium text-[var(--color-app-text-muted)] px-2 py-0.5 rounded bg-[var(--color-app-elevated)] border border-[var(--color-app-border)]">
+                      {group.products.length}
+                    </span>
+                  </div>
+                  {group.products.length === 0 && !search && (
+                    <span className="text-xs text-[var(--color-app-accent)] font-medium">Empty — Click to expand</span>
+                  )}
+                </summary>
+                
+                <div className="bg-[var(--color-app-bg)]">
+                  {group.products.length > 0 ? (
+                    <Table 
+                      columns={columns} 
+                      rows={group.products} 
+                      className="!border-0 !rounded-none" 
+                    />
+                  ) : (
+                    <div className="px-4 py-8 text-center border-t border-[var(--color-app-border)]">
+                      <p className="text-[var(--color-app-text-muted)] text-sm mb-4">No products in this category.</p>
+                      <Button variant="secondary" onClick={() => openAddModalWithCat(group.id)}>+ Add Product Here</Button>
+                    </div>
+                  )}
+                </div>
+              </details>
+            ))
+          )}
+        </div>
       </div>
 
-      <div className="flex flex-col gap-4">
-        <h4 className="text-xs font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider border-b border-[var(--color-app-border)] pb-2">Pricing & Inventory</h4>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Input label="Cost Price (EGP)" type="number" step="0.01" placeholder="0.00" value={formData.cost} onChange={e => setFormData({...formData, cost: e.target.value})} required />
-          <Input label="Current Stock" type="number" placeholder="0" value={formData.stock} onChange={e => setFormData({...formData, stock: e.target.value})} required />
-          <div className="flex flex-col gap-1.5 relative">
-            <Input label="Unit" placeholder="e.g. pcs, box, kg" value={formData.unit} onChange={e => setFormData({...formData, unit: e.target.value})} required />
-            <div className="absolute top-[2.4rem] right-2 text-xs flex gap-1 items-center">
-               {/* Quick select hints if they want */}
+      {/* ── Product Add/Edit Modal ── */}
+      <Modal 
+        isOpen={isAddModalOpen || isEditModalOpen} 
+        onClose={() => { setIsAddModalOpen(false); setIsEditModalOpen(false); resetForm(); }}
+        title={isAddModalOpen ? "Add New Product" : "Edit Product"}
+      >
+        <form onSubmit={handleSaveProduct} className="flex flex-col gap-5">
+          {categories.length === 0 && (
+            <div className="p-3 rounded-lg bg-[var(--color-app-danger-muted)] text-[var(--color-app-danger)] text-sm border border-[var(--color-app-danger)]">
+              You must create a category first before adding products.
+            </div>
+          )}
+          
+          <Select
+            label="Category"
+            value={formData.category_id}
+            onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
+            options={categories.map(c => ({ value: c.id, label: c.name }))}
+            required
+            disabled={categories.length === 0}
+          />
+
+          <Input
+            label="Product Name"
+            value={formData.name}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            placeholder="e.g. Medium Paper Bag"
+            required
+            autoFocus
+          />
+
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Cost Price (EGP)"
+              type="number"
+              min="0"
+              step="0.01"
+              value={formData.cost}
+              onChange={(e) => setFormData({ ...formData, cost: e.target.value })}
+              placeholder="0.00"
+              required
+            />
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <Input
+                  label="Initial Stock"
+                  type="number"
+                  min="0"
+                  value={formData.stock}
+                  onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
+                  placeholder="0"
+                  required
+                />
+              </div>
+              <div className="w-24">
+                <Input
+                  label="Unit"
+                  value={formData.unit}
+                  onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
+                  placeholder="kilo"
+                />
+              </div>
             </div>
           </div>
-        </div>
-        
-        {formData.stock !== "" && (
-          <div className="mt-2 p-4 bg-[var(--color-app-bg)] rounded-lg border border-[var(--color-app-border)] flex items-center justify-between">
-            <span className="text-sm text-[var(--color-app-text-muted)]">Predicted Health:</span>
-            <StockBar current={parseInt(formData.stock, 10) || 0} threshold={10} />
+
+          <div className="flex justify-end gap-3 mt-4">
+            <Button type="button" variant="secondary" onClick={() => { setIsAddModalOpen(false); setIsEditModalOpen(false); }}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" disabled={categories.length === 0}>
+              {isAddModalOpen ? "Add Product" : "Save Changes"}
+            </Button>
           </div>
-        )}
-      </div>
-
-      <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-[var(--color-app-border)]">
-        <Button variant="secondary" type="button" onClick={() => { setIsAddModalOpen(false); setIsEditModalOpen(false); resetForm(); }}>Cancel</Button>
-        <Button variant="primary" type="submit">{isAddModalOpen ? "Save Product" : "Save Changes"}</Button>
-      </div>
-    </form>
-  );
-
-  return (
-    <PageContainer 
-      title="Products" 
-      subtitle="Manage your inventory and track stock levels."
-      actions={<Button variant="primary" onClick={() => { resetForm(); setIsAddModalOpen(true); }}>+ Add Product</Button>}
-    >
-      <div className="flex flex-col h-[calc(100vh-180px)] pb-8">
-        <Card className="flex flex-col flex-1 min-h-0 relative border-[var(--color-app-border)] p-0 overflow-hidden">
-          <div className="sticky top-0 z-10 p-4 border-b border-[var(--color-app-border)] bg-[var(--color-app-panel)] rounded-t-xl">
-            <Input 
-              placeholder="Search products by name..." 
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="max-w-md bg-[var(--color-app-bg)] border-[var(--color-app-border)] shadow-sm"
-            />
-          </div>
-
-          <div className="flex-1 overflow-auto">
-            {filteredProducts.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-24 text-center">
-                <div className="w-16 h-16 rounded-full bg-[var(--color-app-elevated)] flex items-center justify-center mb-4 border border-[var(--color-app-border)] shadow-sm">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--color-app-text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
-                    <line x1="3" y1="6" x2="21" y2="6"></line>
-                    <path d="M16 10a4 4 0 0 1-8 0"></path>
-                  </svg>
-                </div>
-                <h3 className="text-lg font-medium text-[var(--color-app-text)] mb-2">No products found</h3>
-                <p className="text-sm text-[var(--color-app-text-muted)] mb-6 max-w-sm">
-                  {search ? "We couldn't find anything matching your search." : "Your inventory is currently empty. Add your first product to start tracking."}
-                </p>
-                {!search && <Button variant="primary" onClick={() => { resetForm(); setIsAddModalOpen(true); }}>Add your first product</Button>}
-              </div>
-            ) : (
-              <Table columns={columns} rows={tableRows} className="border-0 rounded-none rounded-b-xl" />
-            )}
-          </div>
-        </Card>
-      </div>
-
-      {/* Add Modal */}
-      <Modal isOpen={isAddModalOpen} onClose={() => { setIsAddModalOpen(false); resetForm(); }} title="Add New Product">
-        {productForm}
+        </form>
       </Modal>
 
-      {/* Edit Modal */}
-      <Modal isOpen={isEditModalOpen} onClose={() => { setIsEditModalOpen(false); resetForm(); }} title="Edit Product">
-        {productForm}
-      </Modal>
-
-      {/* Delete Confirmation Modal */}
+      {/* ── Delete Confirmation Modal ── */}
       <Modal
         isOpen={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
         title="Delete Product"
       >
-        {deleteTarget && (
-          <div className="flex flex-col gap-6">
-            <div className="bg-[var(--color-app-danger)]/5 border border-[var(--color-app-danger)]/20 rounded-xl p-4 flex flex-col gap-2">
-              <p className="text-sm font-semibold text-[var(--color-app-danger)]">This action cannot be undone.</p>
-              <p className="text-sm text-[var(--color-app-text-muted)]">
-                Deleting this product will permanently remove <strong className="text-[var(--color-app-text)]">{deleteTarget.name}</strong> from your inventory.
-              </p>
-            </div>
-            <p className="text-sm text-[var(--color-app-text-muted)]">
-              Since there is no backend yet, this will only remove the product from your current session.
-            </p>
-            <div className="flex justify-end gap-3 pt-2 border-t border-[var(--color-app-border)]">
-              <Button variant="secondary" onClick={() => setDeleteTarget(null)}>Cancel</Button>
-              <Button
-                variant="primary"
-                className="bg-[var(--color-app-danger)] hover:opacity-90 border-0 text-white"
-                onClick={handleDeleteConfirm}
-              >
-                Yes, Delete Product
-              </Button>
-            </div>
+        <div className="flex flex-col gap-5">
+          <p className="text-[var(--color-app-text-muted)] text-sm leading-relaxed">
+            Are you sure you want to delete <strong className="text-[var(--color-app-text)]">{deleteTarget?.name}</strong>? 
+          </p>
+          <div className="flex justify-end gap-3 mt-2">
+            <Button variant="secondary" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+            <Button variant="danger" onClick={handleDeleteConfirm}>Delete</Button>
           </div>
-        )}
+        </div>
       </Modal>
+
+      {/* ── Manage Categories Modal ── */}
+      <ManageCategoriesModal 
+        isOpen={isManageCatsOpen} 
+        onClose={() => setIsManageCatsOpen(false)} 
+      />
     </PageContainer>
   );
 }

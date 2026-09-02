@@ -99,7 +99,7 @@ function CustomerRow({ rank, name, orders, spend, profit, marginPct }) {
 // ── Main Component ───────────────────────────────────────────────
 export default function ProfitReport() {
   const navigate = useNavigate();
-  const { orders: mockOrders, products: mockProducts, customers: mockCustomers } = useAppData();
+  const { orders: mockOrders, products: mockProducts, customers: mockCustomers, categories } = useAppData();
 
   const [preset, setPreset] = useState("all");
   const [customFrom, setCustomFrom] = useState("");
@@ -176,6 +176,32 @@ export default function ProfitReport() {
       })
       .sort((a, b) => b.profit - a.profit);
   }, [filteredOrders]);
+
+  // By-Category aggregation
+  const byCategory = useMemo(() => {
+    const map = {};
+    filteredOrders.forEach(order => {
+      const orderDiscount = order.discount_type !== "none" ? order.subtotal - order.final_total : 0;
+      order.items.forEach(item => {
+        const product = mockProducts.find(p => p.id === item.product_id);
+        const catId = product?.category_id ?? "__uncategorised__";
+        if (!map[catId]) map[catId] = { profit: 0, revenue: 0, qty: 0 };
+        const proportion = order.subtotal > 0 ? (item.line_total / order.subtotal) : 0;
+        const itemDiscount = orderDiscount * proportion;
+        map[catId].profit += item.line_profit - itemDiscount;
+        map[catId].revenue += item.line_total - itemDiscount;
+        map[catId].qty += item.quantity;
+      });
+    });
+    return Object.entries(map)
+      .map(([id, v]) => {
+        const cat = id === "__uncategorised__" ? { name: "Uncategorised" } : categories.find(c => c.id === id);
+        return { id, name: cat?.name ?? "Unknown", ...v };
+      })
+      .sort((a, b) => b.profit - a.profit);
+  }, [filteredOrders, categories]);
+
+  const maxCategoryProfit = byCategory[0]?.profit ?? 0;
 
   // CSV rows (flatten items)
   const csvRows = useMemo(() => filteredOrders.flatMap(o => 
@@ -328,58 +354,83 @@ export default function ProfitReport() {
 
         {/* ── Analytics Grid ── */}
         {hasData && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          <div className="flex flex-col gap-8">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
 
-            {/* By-Product: Ranked Bar List */}
-            <div className="lg:col-span-7 flex flex-col gap-4">
+              {/* By-Product: Ranked Bar List */}
+              <div className="lg:col-span-7 flex flex-col gap-4">
+                <div className="flex items-end justify-between px-1">
+                  <div>
+                    <h2 className="text-base font-bold text-[var(--color-app-text)] tracking-tight">What Sells</h2>
+                    <p className="text-xs text-[var(--color-app-text-muted)] mt-0.5">Profit contribution by product</p>
+                  </div>
+                  <span className="text-xs font-mono text-[var(--color-app-text-muted)]">{byProduct.length} products</span>
+                </div>
+                <Card padding="lg" className="bg-[var(--color-app-panel)] border-[var(--color-app-border)] flex flex-col gap-5">
+                  {byProduct.map((item, i) => (
+                    <ProfitBar
+                      key={item.id}
+                      rank={i + 1}
+                      label={item.name}
+                      value={item.profit}
+                      maxValue={maxProductProfit}
+                    />
+                  ))}
+                </Card>
+              </div>
+
+              {/* By-Customer: Leaderboard */}
+              <div className="lg:col-span-5 flex flex-col gap-4">
+                <div className="flex items-end justify-between px-1">
+                  <div>
+                    <h2 className="text-base font-bold text-[var(--color-app-text)] tracking-tight">Who Buys</h2>
+                    <p className="text-xs text-[var(--color-app-text-muted)] mt-0.5">Customer ranking by profit generated</p>
+                  </div>
+                  <span className="text-xs font-mono text-[var(--color-app-text-muted)]">{byCustomer.length} customers</span>
+                </div>
+                <Card padding="none" className="bg-[var(--color-app-panel)] border-[var(--color-app-border)] overflow-hidden">
+                  {/* Podium header for top customer */}
+                  <div className="px-5 py-4 bg-gradient-to-r from-[var(--color-app-success)]/[0.07] to-transparent border-b border-[var(--color-app-border)]">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-app-success)]">Top Customer</span>
+                    <p className="font-semibold text-[var(--color-app-text)] mt-0.5">{byCustomer[0]?.name ?? "—"}</p>
+                  </div>
+                  <div className="px-5 divide-y divide-[var(--color-app-border)]">
+                    {byCustomer.map((c, i) => (
+                      <CustomerRow
+                        key={c.id}
+                        rank={i + 1}
+                        name={c.name}
+                        orders={c.orders}
+                        spend={c.spend}
+                        profit={c.profit}
+                        marginPct={c.marginPct}
+                      />
+                    ))}
+                  </div>
+                </Card>
+              </div>
+
+            </div>
+
+            {/* By-Category: Bar List — full width */}
+            <div className="flex flex-col gap-4">
               <div className="flex items-end justify-between px-1">
                 <div>
-                  <h2 className="text-base font-bold text-[var(--color-app-text)] tracking-tight">What Sells</h2>
-                  <p className="text-xs text-[var(--color-app-text-muted)] mt-0.5">Profit contribution by product</p>
+                  <h2 className="text-base font-bold text-[var(--color-app-text)] tracking-tight">By Category</h2>
+                  <p className="text-xs text-[var(--color-app-text-muted)] mt-0.5">Which product categories generate the most profit</p>
                 </div>
-                <span className="text-xs font-mono text-[var(--color-app-text-muted)]">{byProduct.length} products</span>
+                <span className="text-xs font-mono text-[var(--color-app-text-muted)]">{byCategory.length} categories</span>
               </div>
               <Card padding="lg" className="bg-[var(--color-app-panel)] border-[var(--color-app-border)] flex flex-col gap-5">
-                {byProduct.map((item, i) => (
+                {byCategory.map((item, i) => (
                   <ProfitBar
                     key={item.id}
                     rank={i + 1}
                     label={item.name}
                     value={item.profit}
-                    maxValue={maxProductProfit}
+                    maxValue={maxCategoryProfit}
                   />
                 ))}
-              </Card>
-            </div>
-
-            {/* By-Customer: Leaderboard */}
-            <div className="lg:col-span-5 flex flex-col gap-4">
-              <div className="flex items-end justify-between px-1">
-                <div>
-                  <h2 className="text-base font-bold text-[var(--color-app-text)] tracking-tight">Who Buys</h2>
-                  <p className="text-xs text-[var(--color-app-text-muted)] mt-0.5">Customer ranking by profit generated</p>
-                </div>
-                <span className="text-xs font-mono text-[var(--color-app-text-muted)]">{byCustomer.length} customers</span>
-              </div>
-              <Card padding="none" className="bg-[var(--color-app-panel)] border-[var(--color-app-border)] overflow-hidden">
-                {/* Podium header for top customer */}
-                <div className="px-5 py-4 bg-gradient-to-r from-[var(--color-app-success)]/[0.07] to-transparent border-b border-[var(--color-app-border)]">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-app-success)]">Top Customer</span>
-                  <p className="font-semibold text-[var(--color-app-text)] mt-0.5">{byCustomer[0]?.name ?? "—"}</p>
-                </div>
-                <div className="px-5 divide-y divide-[var(--color-app-border)]">
-                  {byCustomer.map((c, i) => (
-                    <CustomerRow
-                      key={c.id}
-                      rank={i + 1}
-                      name={c.name}
-                      orders={c.orders}
-                      spend={c.spend}
-                      profit={c.profit}
-                      marginPct={c.marginPct}
-                    />
-                  ))}
-                </div>
               </Card>
             </div>
 

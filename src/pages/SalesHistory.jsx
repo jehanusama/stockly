@@ -5,8 +5,7 @@ import { formatCurrency } from "@/utils/currency";
 import { useAppData } from "@/context/AppContext";
 
 //  Filter Toolbar 
-function FilterToolbar({ filters, onChange, onClear, hasActiveFilters, customers, products }) {
-
+function FilterToolbar({ filters, onChange, onClear, hasActiveFilters, customers, products, categories }) {
 
   return (
     <div className="flex flex-wrap items-center gap-2 p-4 bg-[var(--color-app-elevated)] border border-[var(--color-app-border)] rounded-xl">
@@ -23,10 +22,36 @@ function FilterToolbar({ filters, onChange, onClear, hasActiveFilters, customers
         selectClassName="h-9"
       />
 
+      {/* Product filter — grouped by category */}
+      <div className="relative">
+        <select
+          value={filters.productId}
+          onChange={e => onChange("productId", e.target.value)}
+          className="h-9 pl-3 pr-9 rounded-lg text-sm appearance-none bg-[var(--color-app-bg)] text-[var(--color-app-text)] border border-[var(--color-app-border)] focus:ring-2 focus:ring-[var(--color-app-border-focus)] outline-none transition-colors cursor-pointer min-w-[140px]"
+        >
+          <option value="">All Products</option>
+          {categories.map(cat => {
+            const catProducts = products.filter(p => p.category_id === cat.id);
+            if (catProducts.length === 0) return null;
+            return (
+              <optgroup key={cat.id} label={cat.name} className="bg-[#1f2937]">
+                {catProducts.map(p => (
+                  <option key={p.id} value={p.id} className="bg-[#1f2937] text-[#f3f4f6]">{p.name}</option>
+                ))}
+              </optgroup>
+            );
+          })}
+        </select>
+        <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-[var(--color-app-text-muted)]">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+        </span>
+      </div>
+
+      {/* Category filter */}
       <Select
-        value={filters.productId}
-        onChange={e => onChange("productId", e.target.value)}
-        options={[{ value: "", label: "All Products" }, ...products.map(p => ({ value: p.id, label: p.name }))]}
+        value={filters.categoryId}
+        onChange={e => onChange("categoryId", e.target.value)}
+        options={[{ value: "", label: "All Categories" }, ...categories.map(c => ({ value: c.id, label: c.name }))]}
         placeholder=""
         className="min-w-[140px]"
         selectClassName="h-9"
@@ -65,23 +90,31 @@ function FilterToolbar({ filters, onChange, onClear, hasActiveFilters, customers
 
 //  Main Component 
 export default function SalesHistory() {
-  const { orders, customers: mockCustomers, products: mockProducts, deleteOrder } = useAppData();
-  const [filters, setFilters] = useState({ customer: "", product: "", dateFrom: "", dateTo: "" });
-  const [deleteTarget, setDeleteTarget] = useState(null); // order to confirm-delete
+  const { orders, customers: mockCustomers, products: mockProducts, categories, deleteOrder } = useAppData();
+  const [filters, setFilters] = useState({ customerId: "", productId: "", categoryId: "", dateFrom: "", dateTo: "" });
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const hasActiveFilters = Object.values(filters).some(v => v !== "");
 
   const updateFilter = (key, value) => setFilters(prev => ({ ...prev, [key]: value }));
-  const clearFilters = () => setFilters({ customer: "", product: "", dateFrom: "", dateTo: "" });
+  const clearFilters = () => setFilters({ customerId: "", productId: "", categoryId: "", dateFrom: "", dateTo: "" });
 
   // Process and filter orders
   const tableRows = orders
     .filter(order => {
-      if (filters.customer && order.customer_id !== filters.customer) return false;
+      if (filters.customerId && order.customer_id !== filters.customerId) return false;
       
-      if (filters.product) {
-        const hasProduct = order.items.some(item => item.product_id === filters.product);
+      if (filters.productId) {
+        const hasProduct = order.items.some(item => item.product_id === filters.productId);
         if (!hasProduct) return false;
+      }
+
+      if (filters.categoryId) {
+        const hasCategoryProduct = order.items.some(item => {
+          const p = mockProducts.find(p => p.id === item.product_id);
+          return p?.category_id === filters.categoryId;
+        });
+        if (!hasCategoryProduct) return false;
       }
       
       if (filters.dateFrom && new Date(order.order_date) < new Date(filters.dateFrom + "T00:00:00Z")) return false;
@@ -233,6 +266,7 @@ export default function SalesHistory() {
           hasActiveFilters={hasActiveFilters}
           customers={mockCustomers}
           products={mockProducts}
+          categories={categories}
         />
 
         {/* Summary Footer Strip */}

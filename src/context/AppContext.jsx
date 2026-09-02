@@ -2,6 +2,7 @@ import { createContext, useContext, useState } from "react";
 import { mockProducts as initialProducts } from "@/data/mockProducts";
 import { mockCustomers as initialCustomers } from "@/data/mockCustomers";
 import { mockOrders as initialOrders } from "@/data/mockOrders";
+import { mockCategories as initialCategories } from "@/data/mockCategories";
 
 const AppContext = createContext();
 
@@ -9,6 +10,21 @@ export function AppProvider({ children }) {
   const [products, setProducts] = useState(initialProducts);
   const [customers, setCustomers] = useState(initialCustomers);
   const [orders, setOrders] = useState(initialOrders);
+  const [categories, setCategories] = useState(initialCategories);
+
+  // -- Categories --
+  const addCategory = (category) => setCategories((prev) => [category, ...prev]);
+
+  const updateCategory = (updatedCategory) =>
+    setCategories((prev) => prev.map(c => c.id === updatedCategory.id ? updatedCategory : c));
+
+  const deleteCategory = (id) => {
+    const isReferenced = products.some(p => p.category_id === id);
+    if (isReferenced) {
+      throw new Error("Cannot delete category because it is still referenced by one or more products.");
+    }
+    setCategories((prev) => prev.filter(c => c.id !== id));
+  };
 
   // -- Products --
   const addProduct = (product) => setProducts((prev) => [product, ...prev]);
@@ -77,6 +93,7 @@ export function AppProvider({ children }) {
     products,
     customers,
     orders,
+    categories,
     addProduct,
     updateProduct,
     deleteProduct,
@@ -84,7 +101,10 @@ export function AppProvider({ children }) {
     updateCustomer,
     addOrder,
     deleteOrder,
-    updateOrderDate
+    updateOrderDate,
+    addCategory,
+    updateCategory,
+    deleteCategory
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
