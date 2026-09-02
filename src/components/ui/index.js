@@ -9,3 +9,4 @@ export { Badge }      from "./Badge";
 export { Logo }       from "./Logo";
 export { StockBar }   from "./StockBar";
 export { DatePicker } from "./DatePicker";
+export { LoadingState, ErrorState } from "./LoadingState";

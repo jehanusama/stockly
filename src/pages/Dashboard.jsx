@@ -1,4 +1,4 @@
-import { Card, Table, StockBar } from "@/components/ui";
+import { Card, Table, StockBar, LoadingState, ErrorState } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { useAppData } from "@/context/AppContext";
 import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from "recharts";
@@ -20,7 +20,23 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 export default function Dashboard() {
-  const { products: mockProducts, customers: mockCustomers, orders: mockOrders, categories } = useAppData();
+  const { products: mockProducts, customers: mockCustomers, orders: mockOrders, categories, isLoading, error, refreshData } = useAppData();
+
+  if (isLoading) {
+    return (
+      <PageContainer title="Dashboard" subtitle="Your business at a glance">
+        <LoadingState message="Loading dashboard metrics..." />
+      </PageContainer>
+    );
+  }
+
+  if (error) {
+    return (
+      <PageContainer title="Dashboard" subtitle="Your business at a glance">
+        <ErrorState error={error} onRetry={refreshData} />
+      </PageContainer>
+    );
+  }
 
   const totalRevenue = mockOrders.reduce((sum, o) => sum + o.final_total, 0);
   const totalProfit = mockOrders.reduce((sum, o) => sum + o.final_profit, 0);

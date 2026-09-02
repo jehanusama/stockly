@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Card, Modal } from "@/components/ui";
+import { Button, Card, Modal, LoadingState, ErrorState } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { formatCurrency } from "@/utils/currency";
 import { useAppData } from "@/context/AppContext";
@@ -183,7 +183,7 @@ function ReassignModal({ isOpen, onClose, targetDate, allOrders, onReassign, cus
 export default function SalesByDay() {
   const navigate = useNavigate();
   const today = new Date().toISOString().slice(0, 10);
-  const { orders, customers: mockCustomers, products: mockProducts, updateOrderDate } = useAppData();
+  const { orders, customers: mockCustomers, products: mockProducts, updateOrderDate, isLoading, error, refreshData } = useAppData();
 
   // Default to most recent order date if available
   const latestOrderDate = orders.length > 0
@@ -203,7 +203,7 @@ export default function SalesByDay() {
       const customer = mockCustomers.find(c => c.id === o.customer_id);
       return { ...o, customerName: customer?.name ?? "—" };
     })
-    .sort((a, b) => a.customer_id.localeCompare(b.customer_id));
+    .sort((a, b) => (a.customer_id || "").localeCompare(b.customer_id || ""));
 
   // Group by customer
   const byCustomer = dayOrders.reduce((acc, order) => {
@@ -219,9 +219,25 @@ export default function SalesByDay() {
   const dayProfit = dayOrders.reduce((s, r) => s + r.final_profit, 0);
   const dayOrdersCount = dayOrders.length;
 
-  const handleReassign = (orderId) => {
-    updateOrderDate(orderId, selectedDate + "T12:00:00Z");
+  const handleReassign = async (orderId) => {
+    await updateOrderDate(orderId, selectedDate + "T12:00:00Z");
   };
+
+  if (isLoading) {
+    return (
+      <PageContainer title="Sales by Day" subtitle="Review and manage all transactions for a specific day.">
+        <LoadingState message="Loading daily transactions..." />
+      </PageContainer>
+    );
+  }
+
+  if (error) {
+    return (
+      <PageContainer title="Sales by Day" subtitle="Review and manage all transactions for a specific day.">
+        <ErrorState error={error} onRetry={refreshData} />
+      </PageContainer>
+    );
+  }
 
   return (
     <PageContainer

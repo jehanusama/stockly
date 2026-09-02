@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Card, Input, Modal } from "@/components/ui";
+import { Button, Card, Input, Modal, LoadingState, ErrorState } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { useAppData } from "@/context/AppContext";
 import { formatCurrency } from "@/utils/currency";
@@ -15,13 +15,14 @@ function getInitials(name) {
 
 export default function Customers() {
   const navigate = useNavigate();
-  const { customers, orders, addCustomer, updateCustomer, deleteCustomer } = useAppData();
+  const { customers, orders, addCustomer, updateCustomer, deleteCustomer, isLoading, error, refreshData } = useAppData();
   const [search, setSearch] = useState("");
   
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [formError, setFormError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteError, setDeleteError] = useState(null);
@@ -85,12 +86,14 @@ export default function Customers() {
     if (!formData.name.trim() || !formData.phone.trim()) return;
 
     setFormError("");
+    setIsSubmitting(true);
     if (isAddModalOpen) {
       const res = await addCustomer({
         name: formData.name.trim(),
         phone: formData.phone.trim(),
         notes: formData.notes.trim()
       });
+      setIsSubmitting(false);
       if (res && !res.success) {
         setFormError(res.error || "Failed to add customer.");
         return;
@@ -103,6 +106,7 @@ export default function Customers() {
         phone: formData.phone.trim(),
         notes: formData.notes.trim()
       });
+      setIsSubmitting(false);
       if (res && !res.success) {
         setFormError(res.error || "Failed to update customer.");
         return;
@@ -149,11 +153,27 @@ export default function Customers() {
       </div>
 
       <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-[var(--color-app-border)]">
-        <Button variant="secondary" type="button" onClick={closeModal}>Cancel</Button>
-        <Button variant="primary" type="submit">{isEditModalOpen ? "Save Changes" : "Save Customer"}</Button>
+        <Button variant="secondary" type="button" onClick={closeModal} disabled={isSubmitting}>Cancel</Button>
+        <Button variant="primary" type="submit" loading={isSubmitting}>{isEditModalOpen ? "Save Changes" : "Save Customer"}</Button>
       </div>
     </form>
   );
+
+  if (isLoading) {
+    return (
+      <PageContainer title="Customers" subtitle="View and manage your client relationships.">
+        <LoadingState message="Loading customer directory..." />
+      </PageContainer>
+    );
+  }
+
+  if (error) {
+    return (
+      <PageContainer title="Customers" subtitle="View and manage your client relationships.">
+        <ErrorState error={error} onRetry={refreshData} />
+      </PageContainer>
+    );
+  }
 
   return (
     <PageContainer 

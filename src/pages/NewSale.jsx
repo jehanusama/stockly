@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Button, Card, Input, StockBar, Select, DatePicker } from "@/components/ui";
+import { Button, Card, Input, StockBar, Select, DatePicker, LoadingState, ErrorState } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { useAppData } from "@/context/AppContext";
 import { formatCurrency } from "@/utils/currency";
@@ -224,11 +224,13 @@ function BatchPicker({ categories, products, onAddToCart }) {
 }
 
 
+
+
 export default function NewSale() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  const { customers: mockCustomers, products: mockProducts, categories, addOrder } = useAppData();
+  const { customers: mockCustomers, products: mockProducts, categories, addOrder, isLoading, error, refreshData } = useAppData();
 
   const [customerId, setCustomerId] = useState(() => {
     const urlId = searchParams.get("customer_id") ?? "";
@@ -245,6 +247,9 @@ export default function NewSale() {
   const [discountValue, setDiscountValue] = useState("");
   const [isSuccess, setIsSuccess] = useState(false);
   const [lastSale, setLastSale] = useState(null);
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   const selectedCustomer = mockCustomers.find(c => c.id === customerId);
 
@@ -304,31 +309,37 @@ export default function NewSale() {
   const finalProfit = finalTotal - totalCost;
   const finalMargin = finalTotal > 0 ? ((finalProfit / finalTotal) * 100).toFixed(0) : 0;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!isFormValid) return;
 
+    setIsSubmitting(true);
+    setSubmitError("");
+
     const newOrder = {
-      id: `o_${crypto.randomUUID()}`,
       customer_id: customerId,
       order_date: orderDate.includes("T") ? orderDate : `${orderDate}T12:00:00Z`,
       discount_type: discountType,
       discount_value: parseFloat(discountValue) || 0,
       subtotal: totalRevenue,
-      total_cost: totalCost,
       final_total: finalTotal,
       final_profit: finalProfit,
       items: processedCart.map(item => ({
         product_id: item.productId,
         quantity: item.qty,
         sale_price: item.price,
-        cost_price: item.product.cost_price,
         line_total: item.qty * item.price,
         line_profit: (item.qty * item.price) - (item.qty * item.product.cost_price),
       })),
     };
 
-    addOrder(newOrder);
+    const res = await addOrder(newOrder);
+    setIsSubmitting(false);
+
+    if (res && !res.success) {
+      setSubmitError(res.error || "Failed to record sale.");
+      return;
+    }
 
     setLastSale({
       orderDate,
@@ -351,7 +362,24 @@ export default function NewSale() {
     setDiscountValue("");
     setIsSuccess(false);
     setLastSale(null);
+    setSubmitError("");
   };
+
+  if (isLoading) {
+    return (
+      <PageContainer title="New Sale" subtitle="Record a new transaction for a client.">
+        <LoadingState message="Loading catalog & customers..." />
+      </PageContainer>
+    );
+  }
+
+  if (error) {
+    return (
+      <PageContainer title="New Sale" subtitle="Record a new transaction for a client.">
+        <ErrorState error={error} onRetry={refreshData} />
+      </PageContainer>
+    );
+  }
 
 
   if (isSuccess && lastSale) {
@@ -641,6 +669,12 @@ export default function NewSale() {
                 </>
               )}
 
+              {submitError && (
+                <div className="p-3 rounded-lg bg-[var(--color-app-danger-muted)] text-[var(--color-app-danger)] text-sm border border-[var(--color-app-danger)] font-medium mb-4">
+                  {submitError}
+                </div>
+              )}
+
               <div className="mt-4 pt-6 border-t border-[var(--color-app-border)]">
                 <Button
                   type="submit"
@@ -648,6 +682,7 @@ export default function NewSale() {
                   variant="primary"
                   className="w-full h-12 text-base font-semibold"
                   disabled={!isFormValid}
+                  loading={isSubmitting}
                 >
                   Record Sale
                 </Button>

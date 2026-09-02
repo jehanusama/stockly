@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, Modal, Select, DatePicker } from "@/components/ui";
+import { Button, Modal, Select, DatePicker, LoadingState, ErrorState } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { formatCurrency } from "@/utils/currency";
 import { useAppData } from "@/context/AppContext";
@@ -90,9 +90,11 @@ function FilterToolbar({ filters, onChange, onClear, hasActiveFilters, customers
 
 //  Main Component 
 export default function SalesHistory() {
-  const { orders, customers: mockCustomers, products: mockProducts, categories, deleteOrder } = useAppData();
+  const { orders, customers: mockCustomers, products: mockProducts, categories, deleteOrder, isLoading, error, refreshData } = useAppData();
   const [filters, setFilters] = useState({ customerId: "", productId: "", categoryId: "", dateFrom: "", dateTo: "" });
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   const hasActiveFilters = Object.values(filters).some(v => v !== "");
 
@@ -149,12 +151,6 @@ export default function SalesHistory() {
   // Totals for the footer
   const footerRevenue = tableRows.reduce((s, r) => s + r.final_total, 0);
   const footerProfit = tableRows.reduce((s, r) => s + r.final_profit, 0);
-
-  const handleDeleteConfirm = () => {
-    if (!deleteTarget) return;
-    deleteOrder(deleteTarget.id);
-    setDeleteTarget(null);
-  };
 
   const columns = [
     {
@@ -254,6 +250,35 @@ export default function SalesHistory() {
     </tr>
   );
 
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    setDeleteError("");
+    const res = await deleteOrder(deleteTarget.id);
+    setIsDeleting(false);
+    if (res && !res.success) {
+      setDeleteError(res.error || "Failed to delete sale.");
+    } else {
+      setDeleteTarget(null);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <PageContainer title="Sales History" subtitle="Full record of all transactions.">
+        <LoadingState message="Loading transaction records..." />
+      </PageContainer>
+    );
+  }
+
+  if (error) {
+    return (
+      <PageContainer title="Sales History" subtitle="Full record of all transactions.">
+        <ErrorState error={error} onRetry={refreshData} />
+      </PageContainer>
+    );
+  }
+
   return (
     <PageContainer title="Sales History" subtitle="Full record of all transactions.">
       <div className="flex flex-col gap-6 pb-8">
@@ -334,11 +359,17 @@ export default function SalesHistory() {
       {/* Delete Confirmation Modal */}
       <Modal
         isOpen={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
+        onClose={() => { setDeleteTarget(null); setDeleteError(""); }}
         title="Delete Sale Record"
       >
         {deleteTarget && (
           <div className="flex flex-col gap-6">
+            {deleteError && (
+              <div className="p-3 rounded-lg bg-[var(--color-app-danger-muted)] text-[var(--color-app-danger)] text-sm border border-[var(--color-app-danger)] font-medium">
+                {deleteError}
+              </div>
+            )}
+
             <div className="bg-[var(--color-app-error)]/5 border border-[var(--color-app-error)]/20 rounded-xl p-4 flex flex-col gap-2">
               <p className="text-sm font-semibold text-[var(--color-app-error)]">This action cannot be undone.</p>
               <p className="text-sm text-[var(--color-app-text-muted)]">
@@ -346,14 +377,15 @@ export default function SalesHistory() {
               </p>
             </div>
             <p className="text-sm text-[var(--color-app-text-muted)]">
-              In a live system, <strong className="text-[var(--color-app-text)]">{deleteTarget.quantity} unit{deleteTarget.quantity !== 1 ? "s" : ""}</strong> of <strong className="text-[var(--color-app-text)]">{deleteTarget.productName}</strong> would be restored to inventory.
+              Restoring stock for <strong className="text-[var(--color-app-text)]">{deleteTarget.quantity} unit{deleteTarget.quantity !== 1 ? "s" : ""}</strong> of <strong className="text-[var(--color-app-text)]">{deleteTarget.productName}</strong> to inventory.
             </p>
             <div className="flex justify-end gap-3 pt-2 border-t border-[var(--color-app-border)]">
-              <Button variant="secondary" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+              <Button variant="secondary" onClick={() => { setDeleteTarget(null); setDeleteError(""); }} disabled={isDeleting}>Cancel</Button>
               <Button
                 variant="primary"
                 className="bg-[var(--color-app-error)] hover:opacity-90"
                 onClick={handleDeleteConfirm}
+                loading={isDeleting}
               >
                 Yes, Delete Sale
               </Button>

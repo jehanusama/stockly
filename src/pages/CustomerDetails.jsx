@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Button, Card } from "@/components/ui";
+import { Button, Card, LoadingState, ErrorState } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { useAppData } from "@/context/AppContext";
 import { formatCurrency } from "@/utils/currency";
@@ -17,15 +17,31 @@ function getInitials(name) {
 export default function CustomerDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { customers: mockCustomers, orders: mockOrders, products: mockProducts } = useAppData();
+  const { customers: mockCustomers, orders: mockOrders, products: mockProducts, isLoading, error, refreshData } = useAppData();
 
-  const customer = useMemo(() => mockCustomers.find(c => c.id === id), [id]);
+  const customer = useMemo(() => mockCustomers.find(c => c.id === id), [mockCustomers, id]);
 
   const customerOrders = useMemo(() => {
     return mockOrders
       .filter(o => o.customer_id === id)
       .sort((a, b) => new Date(b.order_date).getTime() - new Date(a.order_date).getTime());
-  }, [id]);
+  }, [mockOrders, id]);
+
+  if (isLoading) {
+    return (
+      <PageContainer title="Customer Profile">
+        <LoadingState message="Loading customer details..." />
+      </PageContainer>
+    );
+  }
+
+  if (error) {
+    return (
+      <PageContainer title="Customer Profile">
+        <ErrorState error={error} onRetry={refreshData} />
+      </PageContainer>
+    );
+  }
 
   if (!customer) {
     return (

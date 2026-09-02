@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Button, Card, Table, Input, Modal, StockBar, Select } from "@/components/ui";
+import { Button, Card, Table, Input, Modal, StockBar, Select, LoadingState, ErrorState } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { useAppData } from "@/context/AppContext";
 import { formatCurrency } from "@/utils/currency";
@@ -10,37 +10,46 @@ function ManageCategoriesModal({ isOpen, onClose }) {
   const [editingId, setEditingId] = useState(null);
   const [editName, setEditName] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+  const [isAdding, setIsAdding] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
 
   const handleAdd = async (e) => {
     e.preventDefault();
     if (!newCatName.trim()) return;
+    setIsAdding(true);
+    setErrorMsg("");
     const res = await addCategory({ name: newCatName.trim() });
+    setIsAdding(false);
     if (res && !res.success) {
-      setErrorMsg(res.error);
+      setErrorMsg(res.error || "Failed to add category");
       return;
     }
     setNewCatName("");
-    setErrorMsg("");
   };
 
   const handleUpdate = async (e) => {
     e.preventDefault();
     if (!editName.trim()) return;
+    setIsUpdating(true);
+    setErrorMsg("");
     const res = await updateCategory({ id: editingId, name: editName.trim() });
+    setIsUpdating(false);
     if (res && !res.success) {
-      setErrorMsg(res.error);
+      setErrorMsg(res.error || "Failed to update category");
       return;
     }
     setEditingId(null);
     setEditName("");
-    setErrorMsg("");
   };
 
   const handleDelete = async (id) => {
     setErrorMsg("");
+    setDeletingId(id);
     const res = await deleteCategory(id);
+    setDeletingId(null);
     if (res && !res.success) {
-      setErrorMsg(res.error);
+      setErrorMsg(res.error || "Failed to delete category");
     }
   };
 
@@ -62,7 +71,7 @@ function ManageCategoriesModal({ isOpen, onClose }) {
               placeholder="e.g. Paper Bags"
             />
           </div>
-          <Button type="submit" disabled={!newCatName.trim()}>Add</Button>
+          <Button type="submit" disabled={!newCatName.trim()} loading={isAdding}>Add</Button>
         </form>
 
         <div className="flex flex-col gap-2">
@@ -81,7 +90,7 @@ function ManageCategoriesModal({ isOpen, onClose }) {
                         className="flex-1"
                         autoFocus
                       />
-                      <Button type="submit" variant="primary" size="sm">Save</Button>
+                      <Button type="submit" variant="primary" size="sm" loading={isUpdating}>Save</Button>
                       <Button type="button" variant="secondary" size="sm" onClick={() => setEditingId(null)}>Cancel</Button>
                     </form>
                   ) : (
@@ -98,8 +107,9 @@ function ManageCategoriesModal({ isOpen, onClose }) {
                         </button>
                         <button
                           type="button"
+                          disabled={deletingId === c.id}
                           onClick={() => handleDelete(c.id)}
-                          className="p-1.5 text-[var(--color-app-text-muted)] hover:text-[var(--color-app-danger)] transition-colors rounded"
+                          className="p-1.5 text-[var(--color-app-text-muted)] hover:text-[var(--color-app-danger)] transition-colors rounded disabled:opacity-50"
                           title="Delete"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
@@ -119,7 +129,7 @@ function ManageCategoriesModal({ isOpen, onClose }) {
 
 
 export default function Products() {
-  const { products, categories, addProduct, updateProduct, deleteProduct } = useAppData();
+  const { products, categories, addProduct, updateProduct, deleteProduct, isLoading, error, refreshData } = useAppData();
   const [search, setSearch] = useState("");
   
   // Modals state
@@ -127,11 +137,20 @@ export default function Products() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isManageCatsOpen, setIsManageCatsOpen] = useState(false);
 
+  // Action states
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formError, setFormError] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+
   // Form State
   const [formData, setFormData] = useState({ id: "", category_id: "", name: "", cost: "", stock: "", unit: "kilo" });
   const [deleteTarget, setDeleteTarget] = useState(null);
 
-  const resetForm = () => setFormData({ id: "", category_id: "", name: "", cost: "", stock: "", unit: "kilo" });
+  const resetForm = () => {
+    setFormData({ id: "", category_id: "", name: "", cost: "", stock: "", unit: "kilo" });
+    setFormError("");
+  };
 
   const openAddModalWithCat = (catId = "") => {
     resetForm();
@@ -169,23 +188,30 @@ export default function Products() {
     return groups.sort((a, b) => a.name.localeCompare(b.name));
   }, [products, categories, search]);
 
-  const handleSaveProduct = (e) => {
+  const handleSaveProduct = async (e) => {
     e.preventDefault();
     if (!formData.name || !formData.cost || !formData.stock || !formData.category_id) return;
     
+    setIsSubmitting(true);
+    setFormError("");
+
     if (isAddModalOpen) {
       const newProduct = {
-        id: `p${Date.now()}`,
         category_id: formData.category_id,
         name: formData.name.trim(),
         cost_price: parseFloat(formData.cost),
         stock_quantity: parseInt(formData.stock, 10),
         unit: formData.unit || "kilo"
       };
-      addProduct(newProduct);
+      const res = await addProduct(newProduct);
+      setIsSubmitting(false);
+      if (res && !res.success) {
+        setFormError(res.error || "Failed to add product.");
+        return;
+      }
       setIsAddModalOpen(false);
     } else if (isEditModalOpen) {
-      updateProduct({
+      const res = await updateProduct({
         id: formData.id,
         category_id: formData.category_id,
         name: formData.name.trim(),
@@ -193,15 +219,27 @@ export default function Products() {
         stock_quantity: parseInt(formData.stock, 10),
         unit: formData.unit || "kilo"
       });
+      setIsSubmitting(false);
+      if (res && !res.success) {
+        setFormError(res.error || "Failed to update product.");
+        return;
+      }
       setIsEditModalOpen(false);
     }
     resetForm();
   };
 
-  const handleDeleteConfirm = () => {
+  const handleDeleteConfirm = async () => {
     if (!deleteTarget) return;
-    deleteProduct(deleteTarget.id);
-    setDeleteTarget(null);
+    setIsDeleting(true);
+    setDeleteError("");
+    const res = await deleteProduct(deleteTarget.id);
+    setIsDeleting(false);
+    if (res && !res.success) {
+      setDeleteError(res.error || "Failed to delete product.");
+    } else {
+      setDeleteTarget(null);
+    }
   };
 
   const openEditModal = (product) => {
@@ -213,6 +251,7 @@ export default function Products() {
       stock: product.stock_quantity.toString(),
       unit: product.unit || "kilo"
     });
+    setFormError("");
     setIsEditModalOpen(true);
   };
 
@@ -253,6 +292,22 @@ export default function Products() {
       ),
     },
   ];
+
+  if (isLoading) {
+    return (
+      <PageContainer title="Products" subtitle="Manage your inventory catalog, grouped by category.">
+        <LoadingState message="Loading inventory catalog..." />
+      </PageContainer>
+    );
+  }
+
+  if (error) {
+    return (
+      <PageContainer title="Products" subtitle="Manage your inventory catalog, grouped by category.">
+        <ErrorState error={error} onRetry={refreshData} />
+      </PageContainer>
+    );
+  }
 
   return (
     <PageContainer
@@ -346,6 +401,12 @@ export default function Products() {
         title={isAddModalOpen ? "Add New Product" : "Edit Product"}
       >
         <form onSubmit={handleSaveProduct} className="flex flex-col gap-5">
+          {formError && (
+            <div className="p-3 rounded-lg bg-[var(--color-app-danger-muted)] text-[var(--color-app-danger)] text-sm border border-[var(--color-app-danger)] font-medium">
+              {formError}
+            </div>
+          )}
+
           {categories.length === 0 && (
             <div className="p-3 rounded-lg bg-[var(--color-app-danger-muted)] text-[var(--color-app-danger)] text-sm border border-[var(--color-app-danger)]">
               You must create a category first before adding products.
@@ -405,10 +466,10 @@ export default function Products() {
           </div>
 
           <div className="flex justify-end gap-3 mt-4">
-            <Button type="button" variant="secondary" onClick={() => { setIsAddModalOpen(false); setIsEditModalOpen(false); }}>
+            <Button type="button" variant="secondary" onClick={() => { setIsAddModalOpen(false); setIsEditModalOpen(false); resetForm(); }} disabled={isSubmitting}>
               Cancel
             </Button>
-            <Button type="submit" variant="primary" disabled={categories.length === 0}>
+            <Button type="submit" variant="primary" disabled={categories.length === 0} loading={isSubmitting}>
               {isAddModalOpen ? "Add Product" : "Save Changes"}
             </Button>
           </div>
@@ -422,12 +483,18 @@ export default function Products() {
         title="Delete Product"
       >
         <div className="flex flex-col gap-5">
+          {deleteError && (
+            <div className="p-3 rounded-lg bg-[var(--color-app-danger-muted)] text-[var(--color-app-danger)] text-sm border border-[var(--color-app-danger)] font-medium">
+              {deleteError}
+            </div>
+          )}
+
           <p className="text-[var(--color-app-text-muted)] text-sm leading-relaxed">
             Are you sure you want to delete <strong className="text-[var(--color-app-text)]">{deleteTarget?.name}</strong>? 
           </p>
           <div className="flex justify-end gap-3 mt-2">
-            <Button variant="secondary" onClick={() => setDeleteTarget(null)}>Cancel</Button>
-            <Button variant="danger" onClick={handleDeleteConfirm}>Delete</Button>
+            <Button variant="secondary" onClick={() => setDeleteTarget(null)} disabled={isDeleting}>Cancel</Button>
+            <Button variant="danger" onClick={handleDeleteConfirm} loading={isDeleting}>Delete</Button>
           </div>
         </div>
       </Modal>

@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Card, DatePicker } from "@/components/ui";
+import { Button, Card, DatePicker, LoadingState, ErrorState } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { useAppData } from "@/context/AppContext";
 import { formatCurrency } from "@/utils/currency";
@@ -99,7 +99,7 @@ function CustomerRow({ rank, name, orders, spend, profit, marginPct }) {
 //  Main Component  
 export default function ProfitReport() {
   const navigate = useNavigate();
-  const { orders: mockOrders, products: mockProducts, customers: mockCustomers, categories } = useAppData();
+  const { orders: mockOrders, products: mockProducts, customers: mockCustomers, categories, isLoading, error, refreshData } = useAppData();
 
   const [preset, setPreset] = useState("all");
   const [customFrom, setCustomFrom] = useState("");
@@ -118,15 +118,7 @@ export default function ProfitReport() {
       if (to && d > new Date(to + "T23:59:59Z")) return false;
       return true;
     });
-  }, [from, to]);
-
-  const hasData = filteredOrders.length > 0;
-
-  // Hero metrics
-  const totalRevenue = filteredOrders.reduce((s, o) => s + o.final_total, 0);
-  const totalProfit = filteredOrders.reduce((s, o) => s + o.final_profit, 0);
-  const totalCost = totalRevenue - totalProfit;
-  const overallMargin = totalRevenue > 0 ? ((totalProfit / totalRevenue) * 100).toFixed(1) : "0.0";
+  }, [mockOrders, from, to]);
 
   // By-Product aggregation (proportional profit tracking)
   const byProduct = useMemo(() => {
@@ -137,7 +129,6 @@ export default function ProfitReport() {
       order.items.forEach(item => {
         if (!map[item.product_id]) map[item.product_id] = { profit: 0, revenue: 0, qty: 0 };
         
-        // Calculate proportional discount for this item to ensure totals add up
         const proportion = order.subtotal > 0 ? (item.line_total / order.subtotal) : 0;
         const itemDiscount = orderDiscount * proportion;
         
@@ -155,9 +146,7 @@ export default function ProfitReport() {
         return { id, name: product?.name ?? "Unknown", ...v };
       })
       .sort((a, b) => b.profit - a.profit);
-  }, [filteredOrders]);
-
-  const maxProductProfit = byProduct[0]?.profit ?? 0;
+  }, [filteredOrders, mockProducts]);
 
   // By-Customer aggregation
   const byCustomer = useMemo(() => {
@@ -175,7 +164,7 @@ export default function ProfitReport() {
         return { id, name: customer?.name ?? "Unknown", marginPct, ...v };
       })
       .sort((a, b) => b.profit - a.profit);
-  }, [filteredOrders]);
+  }, [filteredOrders, mockCustomers]);
 
   // By-Category aggregation
   const byCategory = useMemo(() => {
@@ -199,9 +188,7 @@ export default function ProfitReport() {
         return { id, name: cat?.name ?? "Unknown", ...v };
       })
       .sort((a, b) => b.profit - a.profit);
-  }, [filteredOrders, categories]);
-
-  const maxCategoryProfit = byCategory[0]?.profit ?? 0;
+  }, [filteredOrders, mockProducts, categories]);
 
   // CSV rows (flatten items)
   const csvRows = useMemo(() => filteredOrders.flatMap(o => 
@@ -217,7 +204,34 @@ export default function ProfitReport() {
       order_discount_type: o.discount_type,
       order_discount_value: o.discount_value
     }))
-  ), [filteredOrders]);
+  ), [filteredOrders, mockCustomers, mockProducts]);
+
+  if (isLoading) {
+    return (
+      <PageContainer title="Profit Report" subtitle="Financial analytics and profit breakdown across products, categories, and customers.">
+        <LoadingState message="Calculating profit metrics..." />
+      </PageContainer>
+    );
+  }
+
+  if (error) {
+    return (
+      <PageContainer title="Profit Report" subtitle="Financial analytics and profit breakdown across products, categories, and customers.">
+        <ErrorState error={error} onRetry={refreshData} />
+      </PageContainer>
+    );
+  }
+
+  const hasData = filteredOrders.length > 0;
+
+  // Hero metrics
+  const totalRevenue = filteredOrders.reduce((s, o) => s + o.final_total, 0);
+  const totalProfit = filteredOrders.reduce((s, o) => s + o.final_profit, 0);
+  const totalCost = totalRevenue - totalProfit;
+  const overallMargin = totalRevenue > 0 ? ((totalProfit / totalRevenue) * 100).toFixed(1) : "0.0";
+
+  const maxProductProfit = byProduct[0]?.profit ?? 0;
+  const maxCategoryProfit = byCategory[0]?.profit ?? 0;
 
   const presetOptions = [
     { key: "all", label: "All Time" },
