@@ -1,16 +1,79 @@
-import { createContext, useContext, useState } from "react";
-import { mockProducts as initialProducts } from "@/data/mockProducts";
-import { mockCustomers as initialCustomers } from "@/data/mockCustomers";
-import { mockOrders as initialOrders } from "@/data/mockOrders";
-import { mockCategories as initialCategories } from "@/data/mockCategories";
+import { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/context/AuthContext";
 
 const AppContext = createContext();
 
 export function AppProvider({ children }) {
-  const [products, setProducts] = useState(initialProducts);
-  const [customers, setCustomers] = useState(initialCustomers);
-  const [orders, setOrders] = useState(initialOrders);
-  const [categories, setCategories] = useState(initialCategories);
+  const { session } = useAuth();
+  const [products, setProducts] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [orders, setOrders] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const fetchData = useCallback(async () => {
+    if (!session) {
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    try {
+      const [catRes, prodRes, custRes, ordRes] = await Promise.all([
+        supabase.from("categories").select("*").order("name"),
+        supabase.from("products").select("*, categories(*)").order("name"),
+        supabase.from("customers").select("*").order("name"),
+        supabase.from("orders").select("*, order_items(*)").order("order_date", { ascending: false }),
+      ]);
+
+      if (catRes.error) throw catRes.error;
+      if (prodRes.error) throw prodRes.error;
+      if (custRes.error) throw custRes.error;
+      if (ordRes.error) throw ordRes.error;
+
+      setCategories(catRes.data || []);
+      setProducts(
+        (prodRes.data || []).map((p) => ({
+          ...p,
+          cost_price: Number(p.cost_price ?? 0),
+          stock_quantity: Number(p.stock_quantity ?? 0),
+        }))
+      );
+      setCustomers(custRes.data || []);
+      setOrders(
+        (ordRes.data || []).map((o) => ({
+          ...o,
+          subtotal: Number(o.subtotal ?? 0),
+          discount_value: Number(o.discount_value ?? 0),
+          final_total: Number(o.final_total ?? 0),
+          final_profit: Number(o.final_profit ?? 0),
+          items: (o.order_items || []).map((item) => ({
+            ...item,
+            quantity: Number(item.quantity ?? 0),
+            sale_price: Number(item.sale_price ?? 0),
+            line_total: Number(item.line_total ?? 0),
+            line_profit: Number(item.line_profit ?? 0),
+          })),
+        }))
+      );
+    } catch (err) {
+      console.error("Error fetching data from Supabase:", err);
+      setError(err.message || "Failed to load data from Supabase");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [session]);
+
+  useEffect(() => {
+    if (session) {
+      const timer = setTimeout(() => {
+        fetchData();
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [session, fetchData]);
 
   // -- Categories --
   const addCategory = (category) => setCategories((prev) => [category, ...prev]);
@@ -48,7 +111,7 @@ export function AppProvider({ children }) {
     // Decrement stock for each item in the order
     setProducts((prev) => {
       const nextProducts = [...prev];
-      order.items.forEach(item => {
+      (order.items || []).forEach(item => {
         const pIndex = nextProducts.findIndex(p => p.id === item.product_id);
         if (pIndex !== -1) {
           const newQty = Math.max(0, nextProducts[pIndex].stock_quantity - item.quantity);
@@ -71,7 +134,7 @@ export function AppProvider({ children }) {
     // Restore stock for each item in the deleted order
     setProducts((prev) => {
       const nextProducts = [...prev];
-      orderToDelete.items.forEach(item => {
+      (orderToDelete.items || []).forEach(item => {
         const pIndex = nextProducts.findIndex(p => p.id === item.product_id);
         if (pIndex !== -1) {
           const newQty = nextProducts[pIndex].stock_quantity + item.quantity;
@@ -96,6 +159,9 @@ export function AppProvider({ children }) {
     customers,
     orders,
     categories,
+    isLoading,
+    error,
+    refreshData: fetchData,
     addProduct,
     updateProduct,
     deleteProduct,

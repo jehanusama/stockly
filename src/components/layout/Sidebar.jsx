@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { Logo } from "@/components/ui";
+import { useAuth } from "@/context/AuthContext";
 
 /* ── Nav items ──────────────────────────────────────────────── */
 const NAV_ITEMS = [
@@ -108,6 +109,7 @@ function NavItem({ item, collapsed }) {
 export function Sidebar({ mobileOpen, onMobileClose }) {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
+  const { user, signOut } = useAuth();
 
   // Close mobile drawer on route change
   useEffect(() => {
@@ -115,6 +117,8 @@ export function Sidebar({ mobileOpen, onMobileClose }) {
   }, [location.pathname, onMobileClose]);
 
   const sidebarWidth = collapsed ? "w-16" : "w-64";
+  const userInitial = user?.email ? user.email.charAt(0).toUpperCase() : "A";
+  const userDisplayName = user?.email ? user.email.split("@")[0] : "Admin";
 
   const sidebarContent = (
     <aside
@@ -194,26 +198,39 @@ export function Sidebar({ mobileOpen, onMobileClose }) {
       </div>
 
       {/* Footer */}
-      <div className={["border-t border-[var(--color-app-border)] px-3 py-3 flex-shrink-0", collapsed ? "flex justify-center" : ""].join(" ")}>
+      <div className={["border-t border-[var(--color-app-border)] px-3 py-3 flex-shrink-0 flex items-center justify-between gap-2", collapsed ? "flex-col gap-2" : ""].join(" ")}>
         <div
           className={[
-            "flex items-center gap-2.5 overflow-hidden",
-            collapsed ? "" : "",
+            "flex items-center gap-2.5 overflow-hidden min-w-0 flex-1",
+            collapsed ? "justify-center" : "",
           ].join(" ")}
         >
           <span className="flex-shrink-0 flex items-center justify-center w-7 h-7 rounded-full bg-[var(--color-app-elevated)] text-[var(--color-app-text-muted)] text-xs font-semibold select-none">
-            A
+            {userInitial}
           </span>
           <div
             className={[
               "min-w-0 transition-all duration-300 overflow-hidden",
-              collapsed ? "w-0 opacity-0" : "w-auto opacity-100",
+              collapsed ? "w-0 opacity-0 hidden" : "w-auto opacity-100",
             ].join(" ")}
           >
-            <p className="text-xs font-medium text-[var(--color-app-text)] truncate">Admin</p>
-            <p className="text-[11px] text-[var(--color-app-text-subtle)] truncate">admin@stockly.app</p>
+            <p className="text-xs font-medium text-[var(--color-app-text)] truncate capitalize">{userDisplayName}</p>
+            <p className="text-[11px] text-[var(--color-app-text-subtle)] truncate">{user?.email || "admin@stockly.app"}</p>
           </div>
         </div>
+
+        <button
+          onClick={signOut}
+          title="Sign Out"
+          aria-label="Sign Out"
+          className="flex items-center justify-center w-8 h-8 rounded-lg text-[var(--color-app-text-muted)] hover:text-[var(--color-app-danger)] hover:bg-[var(--color-app-elevated)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-app-border-focus)] shrink-0"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+            <polyline points="16 17 21 12 16 7" />
+            <line x1="21" y1="12" x2="9" y2="12" />
+          </svg>
+        </button>
       </div>
     </aside>
   );
@@ -255,14 +272,26 @@ export function Sidebar({ mobileOpen, onMobileClose }) {
               ))}
             </nav>
             {/* Footer */}
-            <div className="border-t border-[var(--color-app-border)] px-3 py-3">
-              <div className="flex items-center gap-2.5">
-                <span className="flex-shrink-0 flex items-center justify-center w-7 h-7 rounded-full bg-[var(--color-app-elevated)] text-[var(--color-app-text-muted)] text-xs font-semibold">A</span>
+            <div className="border-t border-[var(--color-app-border)] px-3 py-3 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                <span className="flex-shrink-0 flex items-center justify-center w-7 h-7 rounded-full bg-[var(--color-app-elevated)] text-[var(--color-app-text-muted)] text-xs font-semibold">{userInitial}</span>
                 <div className="min-w-0">
-                  <p className="text-xs font-medium text-[var(--color-app-text)] truncate">Admin</p>
-                  <p className="text-[11px] text-[var(--color-app-text-subtle)] truncate">admin@stockly.app</p>
+                  <p className="text-xs font-medium text-[var(--color-app-text)] truncate capitalize">{userDisplayName}</p>
+                  <p className="text-[11px] text-[var(--color-app-text-subtle)] truncate">{user?.email || "admin@stockly.app"}</p>
                 </div>
               </div>
+              <button
+                onClick={signOut}
+                title="Sign Out"
+                aria-label="Sign Out"
+                className="flex items-center justify-center w-8 h-8 rounded-lg text-[var(--color-app-text-muted)] hover:text-[var(--color-app-danger)] hover:bg-[var(--color-app-elevated)] transition-colors shrink-0"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                  <polyline points="16 17 21 12 16 7" />
+                  <line x1="21" y1="12" x2="9" y2="12" />
+                </svg>
+              </button>
             </div>
           </div>
         </div>
@@ -272,3 +301,4 @@ export function Sidebar({ mobileOpen, onMobileClose }) {
 }
 
 export default Sidebar;
+

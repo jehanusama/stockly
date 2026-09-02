@@ -1,33 +1,55 @@
 import { useState } from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
+import { useAuth } from "@/context/AuthContext";
+
 
 import { Sidebar }       from "@/components/layout/Sidebar";
 
-import Dashboard       from "@/pages/Dashboard";
-import Products        from "@/pages/Products";
-import Customers       from "@/pages/Customers";
-import CustomerDetails from "@/pages/CustomerDetails";
-import NewSale         from "@/pages/NewSale";
-import SalesHistory    from "@/pages/SalesHistory";
-import SalesByDay      from "@/pages/SalesByDay";
-import ProfitReport    from "@/pages/ProfitReport";
+import Login             from "@/pages/Login";
+import Dashboard         from "@/pages/Dashboard";
+import Products          from "@/pages/Products";
+import Customers         from "@/pages/Customers";
+import CustomerDetails   from "@/pages/CustomerDetails";
+import NewSale           from "@/pages/NewSale";
+import SalesHistory      from "@/pages/SalesHistory";
+import SalesByDay        from "@/pages/SalesByDay";
+import ProfitReport      from "@/pages/ProfitReport";
 
+function ProtectedRoute() {
+  const { session, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[var(--color-app-bg)] text-[var(--color-app-text-muted)]">
+        <div className="flex items-center gap-3">
+          <svg className="animate-spin h-5 w-5 text-[var(--color-app-accent)]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <span className="text-sm font-medium">Loading session...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <Outlet />;
+}
 
 function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
     <div className="flex min-h-screen bg-[var(--color-app-bg)]">
-
       <Sidebar
         mobileOpen={mobileOpen}
         onMobileClose={() => setMobileOpen(false)}
       />
 
-      
       <div className="flex flex-col flex-1 lg:pl-60 transition-all duration-300">
-
-        
         <header className="lg:hidden sticky top-0 z-20 flex items-center gap-3 h-14 px-4 border-b border-[var(--color-app-border)] bg-[var(--color-app-panel)]">
           <button
             onClick={() => setMobileOpen(true)}
@@ -41,7 +63,6 @@ function AppLayout() {
           <span className="font-semibold text-[var(--color-app-text)] text-sm tracking-tight">Stockly</span>
         </header>
 
-        
         <Routes>
           <Route path="/"               element={<Dashboard />} />
           <Route path="/products"       element={<Products />} />
@@ -51,17 +72,22 @@ function AppLayout() {
           <Route path="/sales"          element={<SalesHistory />} />
           <Route path="/sales-by-day"   element={<SalesByDay />} />
           <Route path="/profit"         element={<ProfitReport />} />
+          <Route path="*"               element={<Navigate to="/" replace />} />
         </Routes>
       </div>
     </div>
   );
 }
 
-
 function App() {
   return (
     <BrowserRouter>
-      <AppLayout />
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route element={<ProtectedRoute />}>
+          <Route path="/*" element={<AppLayout />} />
+        </Route>
+      </Routes>
     </BrowserRouter>
   );
 }
