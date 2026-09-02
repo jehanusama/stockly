@@ -15,19 +15,48 @@ function getInitials(name) {
 
 export default function Customers() {
   const navigate = useNavigate();
-  const { customers, orders, addCustomer } = useAppData();
+  const { customers, orders, addCustomer, updateCustomer, deleteCustomer } = useAppData();
   const [search, setSearch] = useState("");
   
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [formError, setFormError] = useState("");
+
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteError, setDeleteError] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Form State
   const [formData, setFormData] = useState({ id: "", name: "", phone: "", notes: "" });
 
   const resetForm = () => setFormData({ id: "", name: "", phone: "", notes: "" });
 
-  const processedCustomers = useMemo(() => {
+  const openAddModal = () => {
+    resetForm();
+    setFormError("");
+    setIsAddModalOpen(true);
+  };
 
+  const openEditModal = (customer) => {
+    setFormData({
+      id: customer.id,
+      name: customer.name || "",
+      phone: customer.phone || "",
+      notes: customer.notes || "",
+    });
+    setFormError("");
+    setIsEditModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setIsAddModalOpen(false);
+    setIsEditModalOpen(false);
+    setFormError("");
+    resetForm();
+  };
+
+  const processedCustomers = useMemo(() => {
     const salesByCustomer = {};
     orders.forEach(order => {
       if (!salesByCustomer[order.customer_id]) {
@@ -37,7 +66,6 @@ export default function Customers() {
       salesByCustomer[order.customer_id].spend += order.final_total;
     });
 
-    // 2. Join data and apply search
     const lowerSearch = search.toLowerCase();
     return customers
       .map(c => ({
@@ -50,32 +78,68 @@ export default function Customers() {
         c.phone.toLowerCase().includes(lowerSearch)
       )
       .sort((a, b) => b.lifetimeSpend - a.lifetimeSpend); 
-  }, [customers, search]);
+  }, [customers, orders, search]);
 
-  const handleSaveCustomer = (e) => {
+  const handleSaveCustomer = async (e) => {
     e.preventDefault();
-    if (!formData.name) return;
-    
+    if (!formData.name.trim() || !formData.phone.trim()) return;
+
+    setFormError("");
     if (isAddModalOpen) {
-      const newCustomer = {
-        id: `c${Date.now()}`,
+      const res = await addCustomer({
         name: formData.name.trim(),
         phone: formData.phone.trim(),
         notes: formData.notes.trim()
-      };
-      addCustomer(newCustomer);
+      });
+      if (res && !res.success) {
+        setFormError(res.error || "Failed to add customer.");
+        return;
+      }
       setIsAddModalOpen(false);
+    } else if (isEditModalOpen) {
+      const res = await updateCustomer({
+        id: formData.id,
+        name: formData.name.trim(),
+        phone: formData.phone.trim(),
+        notes: formData.notes.trim()
+      });
+      if (res && !res.success) {
+        setFormError(res.error || "Failed to update customer.");
+        return;
+      }
+      setIsEditModalOpen(false);
     }
     resetForm();
   };
 
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+
+    const res = await deleteCustomer(deleteTarget.id);
+    setIsDeleting(false);
+
+    if (res && !res.success) {
+      setDeleteError(res.error || "Cannot delete customer because they have existing order history.");
+    } else {
+      setDeleteTarget(null);
+    }
+  };
+
   const customerForm = (
     <form onSubmit={handleSaveCustomer} className="flex flex-col gap-6">
+      {formError && (
+        <div className="px-4 py-3 rounded-lg bg-[var(--color-app-danger-muted)] text-[var(--color-app-danger)] text-sm font-medium border border-[var(--color-app-danger)]">
+          {formError}
+        </div>
+      )}
+
       <div className="flex flex-col gap-4">
         <h4 className="text-xs font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider border-b border-[var(--color-app-border)] pb-2">Identity & Contact</h4>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input label="Full Name" placeholder="e.g. أحمد محمد" dir="auto" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required />
-          <Input label="Phone Number" placeholder="e.g. 555-0199" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
+          <Input label="Phone Number" placeholder="e.g. 555-0199" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} required />
         </div>
       </div>
 
@@ -85,8 +149,8 @@ export default function Customers() {
       </div>
 
       <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-[var(--color-app-border)]">
-        <Button variant="secondary" type="button" onClick={() => { setIsAddModalOpen(false); resetForm(); }}>Cancel</Button>
-        <Button variant="primary" type="submit">Save Customer</Button>
+        <Button variant="secondary" type="button" onClick={closeModal}>Cancel</Button>
+        <Button variant="primary" type="submit">{isEditModalOpen ? "Save Changes" : "Save Customer"}</Button>
       </div>
     </form>
   );
@@ -95,7 +159,7 @@ export default function Customers() {
     <PageContainer 
       title="Customers" 
       subtitle="View and manage your client relationships."
-      actions={<Button variant="primary" onClick={() => { resetForm(); setIsAddModalOpen(true); }}>+ Add Customer</Button>}
+      actions={<Button variant="primary" onClick={openAddModal}>+ Add Customer</Button>}
     >
       <div className="flex flex-col h-[calc(100vh-180px)] pb-8">
         <Card className="flex flex-col flex-1 min-h-0 relative border-[var(--color-app-border)] p-0 overflow-hidden bg-[var(--color-app-bg)] shadow-none">
@@ -126,38 +190,75 @@ export default function Customers() {
                 <p className="text-sm text-[var(--color-app-text-muted)] mb-6 max-w-sm">
                   {search ? "We couldn't find anyone matching your search." : "Your directory is empty. Add your first customer to start tracking relationships."}
                 </p>
-                {!search && <Button variant="primary" onClick={() => { resetForm(); setIsAddModalOpen(true); }}>Add your first customer</Button>}
+                {!search && <Button variant="primary" onClick={openAddModal}>Add your first customer</Button>}
               </div>
             ) : (
               <ul className="flex flex-col divide-y divide-[var(--color-app-border)]">
                 {processedCustomers.map(customer => (
-                  <li key={customer.id}>
-                    <button
-                      onClick={() => navigate(`/customers/${customer.id}`)}
-                      className="w-full text-left flex items-center justify-between p-4 sm:p-5 bg-[var(--color-app-panel)] hover:bg-[var(--color-app-panel-hover)] transition-colors duration-150 group outline-none focus-visible:bg-[var(--color-app-panel-hover)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-app-border-focus)]"
-                    >
-                      {/* Left: Identity */}
-                      <div className="flex items-center gap-4">
+                  <li key={customer.id} className="relative group">
+                    <div className="w-full flex items-center justify-between p-4 sm:p-5 bg-[var(--color-app-panel)] hover:bg-[var(--color-app-panel-hover)] transition-colors duration-150">
+                      {/* Left: Identity & Click area */}
+                      <button
+                        onClick={() => navigate(`/customers/${customer.id}`)}
+                        className="flex items-center gap-4 flex-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-app-border-focus)] rounded-lg p-1"
+                      >
                         <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-[var(--color-app-accent)] flex items-center justify-center text-white font-semibold text-sm sm:text-base shadow-sm shrink-0">
                           {getInitials(customer.name)}
                         </div>
-                        <div className="flex flex-col">
-                          <span className="font-semibold text-[var(--color-app-text)] group-hover:text-[var(--color-app-accent)] transition-colors">{customer.name}</span>
-                          <span className="text-sm text-[var(--color-app-text-muted)]">{customer.phone}</span>
+                        <div className="flex flex-col min-w-0">
+                          <span className="font-semibold text-[var(--color-app-text)] group-hover:text-[var(--color-app-accent)] transition-colors truncate">{customer.name}</span>
+                          <span className="text-sm text-[var(--color-app-text-muted)] truncate">{customer.phone}</span>
+                        </div>
+                      </button>
+
+                      {/* Right: Metrics & Actions */}
+                      <div className="flex items-center gap-4 sm:gap-6 shrink-0">
+                        <div className="flex flex-col items-end text-right">
+                          <span className="text-xs font-medium text-[var(--color-app-text-muted)] uppercase tracking-wider mb-0.5">Lifetime Spend</span>
+                          <span className="font-mono text-[var(--color-app-text)] font-semibold sm:text-lg leading-tight">
+                            {formatCurrency(customer.lifetimeSpend)}
+                          </span>
+                          <span className="text-xs text-[var(--color-app-text-subtle)] mt-1 font-medium bg-[var(--color-app-elevated)] px-2 py-0.5 rounded-full border border-[var(--color-app-border)]">
+                            {customer.totalOrders} {customer.totalOrders === 1 ? 'Order' : 'Orders'}
+                          </span>
+                        </div>
+
+                        {/* Actions: Edit & Delete */}
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openEditModal(customer);
+                            }}
+                            className="p-2 text-[var(--color-app-text-muted)] hover:text-[var(--color-app-text)] hover:bg-[var(--color-app-elevated)] rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-app-border-focus)]"
+                            title="Edit Customer"
+                            aria-label="Edit Customer"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
+                            </svg>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteTarget(customer);
+                              setDeleteError(null);
+                            }}
+                            className="p-2 text-[var(--color-app-text-muted)] hover:text-[var(--color-app-danger)] hover:bg-[var(--color-app-elevated)] rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-app-border-focus)]"
+                            title="Delete Customer"
+                            aria-label="Delete Customer"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="3 6 5 6 21 6"></polyline>
+                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                          </button>
                         </div>
                       </div>
-
-                      {/* Right: Metrics */}
-                      <div className="flex flex-col items-end text-right">
-                        <span className="text-xs font-medium text-[var(--color-app-text-muted)] uppercase tracking-wider mb-0.5">Lifetime Spend</span>
-                        <span className="font-mono text-[var(--color-app-text)] font-semibold sm:text-lg leading-tight">
-                          {formatCurrency(customer.lifetimeSpend)}
-                        </span>
-                        <span className="text-xs text-[var(--color-app-text-subtle)] mt-1 font-medium bg-[var(--color-app-elevated)] px-2 py-0.5 rounded-full border border-[var(--color-app-border)]">
-                          {customer.totalOrders} {customer.totalOrders === 1 ? 'Order' : 'Orders'}
-                        </span>
-                      </div>
-                    </button>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -166,9 +267,64 @@ export default function Customers() {
         </Card>
       </div>
 
-      {/* Add Modal */}
-      <Modal isOpen={isAddModalOpen} onClose={() => { setIsAddModalOpen(false); resetForm(); }} title="Add New Customer">
+      {/* Add / Edit Modal */}
+      <Modal isOpen={isAddModalOpen || isEditModalOpen} onClose={closeModal} title={isEditModalOpen ? "Edit Customer" : "Add New Customer"}>
         {customerForm}
+      </Modal>
+
+      {/* Delete Confirmation / Warning Modal */}
+      <Modal 
+        isOpen={!!deleteTarget} 
+        onClose={() => { setDeleteTarget(null); setDeleteError(null); }} 
+        title="Delete Customer"
+      >
+        <div className="flex flex-col gap-6">
+          {deleteTarget?.totalOrders > 0 ? (
+            <>
+              <div className="px-4 py-3 rounded-lg bg-[var(--color-app-danger-muted)] text-[var(--color-app-danger)] text-sm font-medium border border-[var(--color-app-danger)] flex flex-col gap-1">
+                <span className="font-bold">Cannot Delete Customer</span>
+                <span>
+                  <strong>{deleteTarget.name}</strong> has {deleteTarget.totalOrders} existing order{deleteTarget.totalOrders === 1 ? '' : 's'}. Customers with order history cannot be deleted.
+                </span>
+              </div>
+
+              <div className="flex justify-end">
+                <Button variant="secondary" onClick={() => { setDeleteTarget(null); setDeleteError(null); }}>
+                  Close
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              {deleteError && (
+                <div className="px-4 py-3 rounded-lg bg-[var(--color-app-danger-muted)] text-[var(--color-app-danger)] text-sm font-medium border border-[var(--color-app-danger)]">
+                  {deleteError}
+                </div>
+              )}
+
+              <p className="text-sm text-[var(--color-app-text-muted)]">
+                Are you sure you want to delete customer <strong className="text-[var(--color-app-text)]">{deleteTarget?.name}</strong>? This action cannot be undone.
+              </p>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <Button 
+                  variant="secondary" 
+                  onClick={() => { setDeleteTarget(null); setDeleteError(null); }}
+                  disabled={isDeleting}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  variant="danger" 
+                  onClick={handleDeleteConfirm}
+                  loading={isDeleting}
+                >
+                  Delete Customer
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
       </Modal>
     </PageContainer>
   );

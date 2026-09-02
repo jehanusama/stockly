@@ -11,29 +11,36 @@ function ManageCategoriesModal({ isOpen, onClose }) {
   const [editName, setEditName] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
 
-  const handleAdd = (e) => {
+  const handleAdd = async (e) => {
     e.preventDefault();
     if (!newCatName.trim()) return;
-    addCategory({ id: `c${Date.now()}`, name: newCatName.trim() });
+    const res = await addCategory({ name: newCatName.trim() });
+    if (res && !res.success) {
+      setErrorMsg(res.error);
+      return;
+    }
     setNewCatName("");
     setErrorMsg("");
   };
 
-  const handleUpdate = (e) => {
+  const handleUpdate = async (e) => {
     e.preventDefault();
     if (!editName.trim()) return;
-    updateCategory({ id: editingId, name: editName.trim() });
+    const res = await updateCategory({ id: editingId, name: editName.trim() });
+    if (res && !res.success) {
+      setErrorMsg(res.error);
+      return;
+    }
     setEditingId(null);
     setEditName("");
     setErrorMsg("");
   };
 
-  const handleDelete = (id) => {
-    try {
-      setErrorMsg("");
-      deleteCategory(id);
-    } catch (err) {
-      setErrorMsg(err.message);
+  const handleDelete = async (id) => {
+    setErrorMsg("");
+    const res = await deleteCategory(id);
+    if (res && !res.success) {
+      setErrorMsg(res.error);
     }
   };
 
