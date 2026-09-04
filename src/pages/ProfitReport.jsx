@@ -32,9 +32,11 @@ function getInitials(name = "") {
 // CSV export 
 function exportCSV(rows, filename) {
   const header = "Date,Customer,Product,Qty,Sale Price,Total,Profit\n";
-  const body = rows.map(r =>
-    `${r.date},${r.customerName},${r.productName},${r.quantity},${r.sale_price},${r.total_price},${r.profit}`
-  ).join("\n");
+  const body = rows.map(r => {
+    const cust = `"${(r.customerName ?? "—").replace(/"/g, '""')}"`;
+    const prod = `"${(r.productName ?? "—").replace(/"/g, '""')}"`;
+    return `${r.date},${cust},${prod},${r.quantity},${r.sale_price},${r.line_total},${r.line_profit}`;
+  }).join("\n");
   const blob = new Blob([header + body], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a"); a.href = url; a.download = filename; a.click();

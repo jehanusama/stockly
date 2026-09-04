@@ -414,11 +414,11 @@ export default function SalesHistory() {
             <div className="bg-[var(--color-app-error)]/5 border border-[var(--color-app-error)]/20 rounded-xl p-4 flex flex-col gap-2">
               <p className="text-sm font-semibold text-[var(--color-app-error)]">This action cannot be undone.</p>
               <p className="text-sm text-[var(--color-app-text-muted)]">
-                Deleting this sale will permanently remove the record for <strong className="text-[var(--color-app-text)]">{deleteTarget.productName}</strong> sold to <strong className="text-[var(--color-app-text)]">{deleteTarget.customerName}</strong>.
+                Deleting this order will permanently remove <strong className="text-[var(--color-app-text)]">{deleteTarget.itemsSummary}</strong> for <strong className="text-[var(--color-app-text)]">{deleteTarget.customerName}</strong>.
               </p>
             </div>
             <p className="text-sm text-[var(--color-app-text-muted)]">
-              Restoring stock for <strong className="text-[var(--color-app-text)]">{deleteTarget.quantity} unit{deleteTarget.quantity !== 1 ? "s" : ""}</strong> of <strong className="text-[var(--color-app-text)]">{deleteTarget.productName}</strong> to inventory.
+              Stock for all items in this order (<strong className="text-[var(--color-app-text)]">{deleteTarget.totalItemsCount} total unit{deleteTarget.totalItemsCount !== 1 ? "s" : ""}</strong>) will be restored to inventory automatically.
             </p>
             <div className="flex justify-end gap-3 pt-2 border-t border-[var(--color-app-border)]">
               <Button variant="secondary" onClick={() => { setDeleteTarget(null); setDeleteError(""); }} disabled={isDeleting}>Cancel</Button>

@@ -6,11 +6,12 @@ import { useAppData } from "@/context/AppContext";
 import { formatCurrency } from "@/utils/currency";
 
 function getInitials(name) {
-  const parts = name.trim().split(" ");
+  if (!name) return "?";
+  const parts = name.trim().split(" ").filter(Boolean);
   if (parts.length >= 2) {
     return (parts[0][0] + parts[1][0]).toUpperCase();
   }
-  return (parts[0][0] || "?").toUpperCase();
+  return (parts[0]?.[0] || "?").toUpperCase();
 }
 
 export default function Customers() {
@@ -75,8 +76,9 @@ export default function Customers() {
         lifetimeSpend: salesByCustomer[c.id]?.spend || 0
       }))
       .filter(c => 
-        c.name.toLowerCase().includes(lowerSearch) || 
-        c.phone.toLowerCase().includes(lowerSearch)
+        (c.name ?? "").toLowerCase().includes(lowerSearch) || 
+        (c.phone ?? "").toLowerCase().includes(lowerSearch) ||
+        (c.notes ?? "").toLowerCase().includes(lowerSearch)
       )
       .sort((a, b) => b.lifetimeSpend - a.lifetimeSpend); 
   }, [customers, orders, search]);

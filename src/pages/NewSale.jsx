@@ -230,12 +230,14 @@ export default function NewSale() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  const { customers: mockCustomers, products: mockProducts, categories, addOrder, isLoading, error, refreshData } = useAppData();
+  const { customers: mockCustomers = [], products: mockProducts = [], categories = [], addOrder, isLoading, error, refreshData } = useAppData();
 
-  const [customerId, setCustomerId] = useState(() => {
-    const urlId = searchParams.get("customer_id") ?? "";
-    return mockCustomers.some(c => c.id === urlId) ? urlId : "";
-  });
+  const [selectedCustomerId, setSelectedCustomerId] = useState("");
+
+  const urlCustomerId = searchParams.get("customer_id");
+  const validUrlCustomer = urlCustomerId && mockCustomers.some(c => c.id === urlCustomerId) ? urlCustomerId : "";
+  const customerId = selectedCustomerId || validUrlCustomer;
+  const setCustomerId = setSelectedCustomerId;
   const [orderDate, setOrderDate] = useState(() => {
     const urlDate = searchParams.get("date");
     if (urlDate && /^\d{4}-\d{2}-\d{2}$/.test(urlDate)) return urlDate;
@@ -251,7 +253,7 @@ export default function NewSale() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
 
-  const selectedCustomer = mockCustomers.find(c => c.id === customerId);
+  const selectedCustomer = (mockCustomers || []).find(c => c.id === customerId);
 
  
   const addBatchToCart = (newItems) => {
@@ -398,7 +400,7 @@ export default function NewSale() {
               <p className="text-[var(--color-app-text-muted)]">
                 You sold{" "}
                 <span className="font-semibold text-[var(--color-app-text)]">{lastSale.items.length} product{lastSale.items.length !== 1 ? "s" : ""}</span>{" "}
-                to <span className="font-semibold text-[var(--color-app-text)]">{lastSale.customer.name}</span>{" "}
+                to <span className="font-semibold text-[var(--color-app-text)]">{lastSale.customer?.name || "Customer"}</span>{" "}
                 on <span className="font-semibold text-[var(--color-app-text)]">{lastSale.orderDate}</span>.
               </p>
             </div>
@@ -453,7 +455,7 @@ export default function NewSale() {
                   label="Customer"
                   value={customerId}
                   onChange={e => setCustomerId(e.target.value)}
-                  options={mockCustomers.map(c => ({ value: c.id, label: `${c.name} (${c.phone})` }))}
+                  options={(mockCustomers || []).map(c => ({ value: c.id, label: c.phone ? `${c.name} (${c.phone})` : c.name }))}
                   placeholder="Select a customer..."
                   required
                   selectClassName="h-11"
