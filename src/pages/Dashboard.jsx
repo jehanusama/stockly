@@ -6,7 +6,7 @@ import { formatCurrency } from "@/utils/currency";
 
 
 const CustomTooltip = ({ active, payload, label }) => {
-  if (active && payload && payload.length) {
+  if (active && payload && payload.length && label && label.trim()) {
     return (
       <div className="bg-[var(--color-app-elevated)] border border-[var(--color-app-border)] p-3 rounded-lg shadow-xl shadow-black/20 backdrop-blur-sm">
         <p className="text-[var(--color-app-text-muted)] text-xs mb-1 font-medium">{label}</p>
@@ -77,11 +77,6 @@ export default function Dashboard() {
   }
 
   const profitPerMonth = sortedMonthKeys.map(key => monthlyProfitMap[key]);
-  if (profitPerMonth.length === 1) {
-    // Pad so a single point AreaChart doesn't just look empty
-    profitPerMonth.unshift({ name: "", profit: profitPerMonth[0].profit });
-    profitPerMonth.push({ name: " ", profit: profitPerMonth[0].profit });
-  }
 
   const lastOrders = [...mockOrders]
     .sort((a, b) => new Date(b.order_date).getTime() - new Date(a.order_date).getTime())
@@ -132,34 +127,49 @@ export default function Dashboard() {
             </div>
             
             {/* Smooth Area Chart */}
-            <div className="h-48 w-full mt-4">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={profitPerMonth} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorProfit" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="var(--color-app-accent)" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="var(--color-app-accent)" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <XAxis 
-                    dataKey="name" 
-                    stroke="transparent" 
-                    tick={{fill: 'var(--color-app-text-subtle)', fontSize: 11, fontFamily: 'var(--font-mono)'}} 
-                    tickLine={false} 
-                    axisLine={false} 
-                    dy={10}
-                  />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Area 
-                    type="monotone" 
-                    dataKey="profit" 
-                    stroke="var(--color-app-accent)" 
-                    strokeWidth={3}
-                    fillOpacity={1} 
-                    fill="url(#colorProfit)" 
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+            <div className="h-48 w-full mt-4 flex flex-col justify-end">
+              {profitPerMonth.length === 0 ? (
+                <div className="flex items-center justify-center h-full text-xs text-[var(--color-app-text-muted)] italic">
+                  No monthly profit data recorded yet
+                </div>
+              ) : (
+                <>
+                  <ResponsiveContainer width="100%" height={profitPerMonth.length === 1 ? 140 : 160}>
+                    <AreaChart data={profitPerMonth} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="colorProfit" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="var(--color-app-accent)" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="var(--color-app-accent)" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <XAxis 
+                        dataKey="name" 
+                        stroke="transparent" 
+                        tick={{fill: 'var(--color-app-text-subtle)', fontSize: 11, fontFamily: 'var(--font-mono)'}} 
+                        tickLine={false} 
+                        axisLine={false} 
+                        dy={10}
+                      />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Area 
+                        type="monotone" 
+                        dataKey="profit" 
+                        stroke="var(--color-app-accent)" 
+                        strokeWidth={3}
+                        dot={profitPerMonth.length === 1 ? { r: 5, fill: "var(--color-app-accent)", stroke: "var(--color-app-panel)", strokeWidth: 2 } : false}
+                        activeDot={{ r: 6, fill: "var(--color-app-accent)" }}
+                        fillOpacity={1} 
+                        fill="url(#colorProfit)" 
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                  {profitPerMonth.length === 1 && (
+                    <p className="text-[11px] text-[var(--color-app-text-muted)] text-center mt-2 italic">
+                      More data points will appear here as you record sales over time.
+                    </p>
+                  )}
+                </>
+              )}
             </div>
           </div>
 

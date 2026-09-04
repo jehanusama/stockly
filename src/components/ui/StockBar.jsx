@@ -1,5 +1,6 @@
 export function StockBar({ current, quantity, threshold, unit = "" }) {
-  const qty = current ?? quantity ?? 0;
+  const rawQty = current ?? quantity ?? 0;
+  const qty = Number(Number(rawQty).toFixed(2));
   const isOut = qty <= 0;
   const isLow = qty > 0 && qty < 10;
 

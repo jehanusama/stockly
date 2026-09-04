@@ -86,7 +86,7 @@ export function AppProvider({ children }) {
 
       if (error) throw error;
       const created = data[0];
-      setCategories((prev) => [created, ...prev]);
+      setCategories((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
       return { success: true, data: created };
     } catch (err) {
       console.error("Error adding category:", err);
@@ -106,7 +106,9 @@ export function AppProvider({ children }) {
       if (error) throw error;
       const updated = data[0] || updatedCategory;
       setCategories((prev) =>
-        prev.map((c) => (c.id === updatedCategory.id ? updated : c))
+        prev
+          .map((c) => (c.id === updatedCategory.id ? updated : c))
+          .sort((a, b) => a.name.localeCompare(b.name))
       );
       return { success: true, data: updated };
     } catch (err) {

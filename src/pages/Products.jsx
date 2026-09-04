@@ -6,6 +6,10 @@ import { formatCurrency } from "@/utils/currency";
 
 function ManageCategoriesModal({ isOpen, onClose }) {
   const { categories, addCategory, updateCategory, deleteCategory } = useAppData();
+  const sortedCategories = useMemo(
+    () => [...(categories || [])].sort((a, b) => a.name.localeCompare(b.name)),
+    [categories]
+  );
   const [newCatName, setNewCatName] = useState("");
   const [editingId, setEditingId] = useState(null);
   const [editName, setEditName] = useState("");
@@ -76,11 +80,11 @@ function ManageCategoriesModal({ isOpen, onClose }) {
 
         <div className="flex flex-col gap-2">
           <h3 className="text-sm font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider">Existing Categories</h3>
-          {categories.length === 0 ? (
+          {sortedCategories.length === 0 ? (
             <p className="text-sm text-[var(--color-app-text-muted)] italic py-4 text-center">No categories exist.</p>
           ) : (
             <div className="flex flex-col rounded-lg border border-[var(--color-app-border)] overflow-hidden">
-              {categories.map(c => (
+              {sortedCategories.map(c => (
                 <div key={c.id} className="flex items-center justify-between p-3 border-b border-[var(--color-app-border)] last:border-0 bg-[var(--color-app-panel)] hover:bg-[var(--color-app-elevated)] transition-colors">
                   {editingId === c.id ? (
                     <form onSubmit={handleUpdate} className="flex items-center gap-2 flex-1 mr-2">
@@ -200,7 +204,7 @@ export default function Products() {
         category_id: formData.category_id,
         name: formData.name.trim(),
         cost_price: parseFloat(formData.cost),
-        stock_quantity: parseInt(formData.stock, 10),
+        stock_quantity: parseFloat(formData.stock),
         unit: formData.unit || "kilo"
       };
       const res = await addProduct(newProduct);
@@ -216,7 +220,7 @@ export default function Products() {
         category_id: formData.category_id,
         name: formData.name.trim(),
         cost_price: parseFloat(formData.cost),
-        stock_quantity: parseInt(formData.stock, 10),
+        stock_quantity: parseFloat(formData.stock),
         unit: formData.unit || "kilo"
       });
       setIsSubmitting(false);
@@ -281,7 +285,7 @@ export default function Products() {
           <button
             type="button"
             className="p-2 rounded-lg text-[var(--color-app-text-muted)] hover:text-[var(--color-app-danger)] hover:bg-[var(--color-app-danger-muted)] transition-colors focus:outline-none"
-            onClick={() => setDeleteTarget(row)}
+            onClick={() => { setDeleteError(""); setDeleteTarget(row); }}
             title="Delete product"
             aria-label="Delete product"
           >
@@ -449,6 +453,7 @@ export default function Products() {
                   label="Initial Stock"
                   type="number"
                   min="0"
+                  step="any"
                   value={formData.stock}
                   onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
                   placeholder="0"
@@ -480,7 +485,7 @@ export default function Products() {
       {/* ── Delete Confirmation Modal ── */}
       <Modal
         isOpen={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
+        onClose={() => { setDeleteTarget(null); setDeleteError(""); }}
         title="Delete Product"
       >
         <div className="flex flex-col gap-5">
@@ -494,7 +499,7 @@ export default function Products() {
             Are you sure you want to delete <strong className="text-[var(--color-app-text)]">{deleteTarget?.name}</strong>? 
           </p>
           <div className="flex justify-end gap-3 mt-2">
-            <Button variant="secondary" onClick={() => setDeleteTarget(null)} disabled={isDeleting}>Cancel</Button>
+            <Button variant="secondary" onClick={() => { setDeleteTarget(null); setDeleteError(""); }} disabled={isDeleting}>Cancel</Button>
             <Button variant="danger" onClick={handleDeleteConfirm} loading={isDeleting}>Delete</Button>
           </div>
         </div>

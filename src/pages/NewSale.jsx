@@ -343,15 +343,27 @@ export default function NewSale() {
       return;
     }
 
+    const savedOrder = res.data || {};
+    const confirmedCustomer = (mockCustomers || []).find(c => c.id === savedOrder.customer_id) || selectedCustomer;
+    const confirmedDate = savedOrder.order_date
+      ? savedOrder.order_date.slice(0, 10)
+      : orderDate;
+
+    const confirmedSubtotal = savedOrder.subtotal ?? totalRevenue;
+    const confirmedFinalTotal = savedOrder.final_total ?? finalTotal;
+    const confirmedDiscountAmount = Math.max(0, confirmedSubtotal - confirmedFinalTotal);
+    const confirmedProfit = savedOrder.final_profit ?? finalProfit;
+
     setLastSale({
-      orderDate,
-      customer: selectedCustomer,
-      items: processedCart,
+      id: savedOrder.id,
+      orderDate: confirmedDate,
+      customer: confirmedCustomer,
+      items: savedOrder.items && savedOrder.items.length > 0 ? savedOrder.items : processedCart,
       totalItemsCount,
-      subtotal: totalRevenue,
-      discountAmount,
-      finalTotal,
-      finalProfit,
+      subtotal: confirmedSubtotal,
+      discountAmount: confirmedDiscountAmount,
+      finalTotal: confirmedFinalTotal,
+      finalProfit: confirmedProfit,
     });
     setIsSuccess(true);
   };

@@ -113,6 +113,27 @@ function MiniCalendar({ selectedDate, activeDates, onSelect }) {
 //  Reassign Modal 
 function ReassignModal({ isOpen, onClose, targetDate, allOrders, onReassign, customers, products }) {
   const [query, setQuery] = useState("");
+  const [reassigningId, setReassigningId] = useState(null);
+  const [reassignError, setReassignError] = useState("");
+
+  const handleClose = () => {
+    setQuery("");
+    setReassignError("");
+    setReassigningId(null);
+    onClose();
+  };
+
+  const handleMove = async (orderId) => {
+    setReassigningId(orderId);
+    setReassignError("");
+    const res = await onReassign(orderId);
+    setReassigningId(null);
+    if (res && !res.success) {
+      setReassignError(res.error || "Failed to reassign order.");
+    } else {
+      handleClose();
+    }
+  };
 
   const enriched = allOrders
     .filter(o => toISODate(o.order_date) !== targetDate)
@@ -135,8 +156,14 @@ function ReassignModal({ isOpen, onClose, targetDate, allOrders, onReassign, cus
     });
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={`Move Order to ${formatDisplayDate(targetDate)}`}>
+    <Modal isOpen={isOpen} onClose={handleClose} title={`Move Order to ${formatDisplayDate(targetDate)}`}>
       <div className="flex flex-col gap-5">
+        {reassignError && (
+          <div className="p-3 rounded-lg bg-[var(--color-app-danger-muted)] text-[var(--color-app-danger)] text-sm border border-[var(--color-app-danger)] font-medium">
+            {reassignError}
+          </div>
+        )}
+
         <p className="text-sm text-[var(--color-app-text-muted)]">
           Select an order from any other date to reassign it to <strong className="text-[var(--color-app-text)]">{formatDisplayDate(targetDate)}</strong>.
         </p>
@@ -162,7 +189,13 @@ function ReassignModal({ isOpen, onClose, targetDate, allOrders, onReassign, cus
                 </div>
                 <div className="flex flex-col items-end gap-2 shrink-0">
                   <span className="font-mono text-sm font-semibold text-[var(--color-app-text)]">{formatCurrency(order.final_total)}</span>
-                  <Button variant="primary" className="text-xs h-7 px-3" onClick={() => { onReassign(order.id); onClose(); }}>
+                  <Button
+                    variant="primary"
+                    className="text-xs h-7 px-3"
+                    loading={reassigningId === order.id}
+                    disabled={reassigningId !== null}
+                    onClick={() => handleMove(order.id)}
+                  >
                     Move here
                   </Button>
                 </div>
@@ -172,7 +205,7 @@ function ReassignModal({ isOpen, onClose, targetDate, allOrders, onReassign, cus
         </div>
 
         <div className="pt-2 border-t border-[var(--color-app-border)] flex justify-end">
-          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button variant="secondary" onClick={handleClose} disabled={reassigningId !== null}>Cancel</Button>
         </div>
       </div>
     </Modal>
@@ -220,7 +253,7 @@ export default function SalesByDay() {
   const dayOrdersCount = dayOrders.length;
 
   const handleReassign = async (orderId) => {
-    await updateOrderDate(orderId, selectedDate + "T12:00:00Z");
+    return await updateOrderDate(orderId, selectedDate + "T12:00:00Z");
   };
 
   if (isLoading) {
