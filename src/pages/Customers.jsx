@@ -183,7 +183,7 @@ export default function Customers() {
       subtitle="View and manage your client relationships."
       actions={<Button variant="primary" onClick={openAddModal}>+ Add Customer</Button>}
     >
-      <div className="flex flex-col h-[calc(100vh-180px)] pb-8">
+      <div className="flex flex-col sm:h-[calc(100vh-180px)] pb-8">
         <Card className="flex flex-col flex-1 min-h-0 relative border-[var(--color-app-border)] p-0 overflow-hidden bg-[var(--color-app-bg)] shadow-none">
           
           {/* Sticky Search */}
@@ -199,7 +199,7 @@ export default function Customers() {
           {/* Directory List Area */}
           <div className="flex-1 overflow-auto bg-[var(--color-app-bg)]">
             {processedCustomers.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-24 text-center">
+              <div className="flex flex-col items-center justify-center py-10 sm:py-14 px-4 text-center">
                 <div className="w-16 h-16 rounded-full bg-[var(--color-app-elevated)] flex items-center justify-center mb-4 border border-[var(--color-app-border)] shadow-sm">
                   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--color-app-text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>

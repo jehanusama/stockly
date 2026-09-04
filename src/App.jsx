@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 
@@ -43,11 +43,15 @@ function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
+  const handleMobileClose = useCallback(() => {
+    setMobileOpen(false);
+  }, []);
+
   return (
     <div className="flex min-h-screen bg-[var(--color-app-bg)]">
       <Sidebar
         mobileOpen={mobileOpen}
-        onMobileClose={() => setMobileOpen(false)}
+        onMobileClose={handleMobileClose}
         collapsed={collapsed}
         onToggleCollapse={() => setCollapsed(c => !c)}
       />
@@ -55,7 +59,10 @@ function AppLayout() {
       <div className={["flex flex-col flex-1 transition-all duration-300", collapsed ? "lg:pl-16" : "lg:pl-64"].join(" ")}>
         <header className="lg:hidden sticky top-0 z-20 flex items-center gap-3 h-14 px-4 border-b border-[var(--color-app-border)] bg-[var(--color-app-panel)]">
           <button
-            onClick={() => setMobileOpen(true)}
+            onClick={(e) => {
+              e.stopPropagation();
+              setMobileOpen(true);
+            }}
             aria-label="Open navigation menu"
             className="flex items-center justify-center w-9 h-9 rounded-lg text-[var(--color-app-text-muted)] hover:text-[var(--color-app-text)] hover:bg-[var(--color-app-elevated)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-app-border-focus)]"
           >

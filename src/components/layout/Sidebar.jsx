@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { Logo } from "@/components/ui";
 import { useAuth } from "@/context/AuthContext";
@@ -114,9 +114,13 @@ export function Sidebar({ mobileOpen, onMobileClose, collapsed: controlledCollap
   const location = useLocation();
   const { user, signOut } = useAuth();
 
-  // Close mobile drawer on route change
+  // Close mobile drawer ONLY when route actually changes
+  const prevPathRef = useRef(location.pathname);
   useEffect(() => {
-    onMobileClose?.();
+    if (prevPathRef.current !== location.pathname) {
+      prevPathRef.current = location.pathname;
+      onMobileClose?.();
+    }
   }, [location.pathname, onMobileClose]);
 
   const sidebarWidth = collapsed ? "w-16" : "w-64";
@@ -251,7 +255,10 @@ export function Sidebar({ mobileOpen, onMobileClose, collapsed: controlledCollap
           {/* Backdrop */}
           <div
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            onClick={onMobileClose}
+            onClick={(e) => {
+              e.stopPropagation();
+              onMobileClose?.();
+            }}
           />
           {/* Drawer panel — always expanded on mobile */}
           <div className="relative flex flex-col h-full w-[280px] max-w-[85vw] bg-[var(--color-app-panel)] border-r border-[var(--color-app-border)] z-10 animate-[slideInLeft_220ms_ease-out]">
