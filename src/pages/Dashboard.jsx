@@ -235,7 +235,7 @@ export default function Dashboard() {
           {/* Operational Alerts  */}
           <div className="flex flex-col">
             <h3 className="text-sm font-semibold text-[var(--color-app-text)] uppercase tracking-wider mb-4 px-1">Operational Alerts</h3>
-            <Card padding="lg" className="flex-1 bg-[var(--color-app-bg)] border-dashed border-[var(--color-app-border)]">
+            <Card padding="lg" className="flex-1 bg-[var(--color-app-bg)] border-dashed border-[var(--color-app-border)] max-h-[420px] overflow-y-auto">
               {lowStockProducts.length === 0 ? (
                 <p className="text-sm text-[var(--color-app-text-muted)] text-center py-8">Inventory levels are healthy.</p>
               ) : (
