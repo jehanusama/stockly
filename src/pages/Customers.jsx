@@ -85,14 +85,14 @@ export default function Customers() {
 
   const handleSaveCustomer = async (e) => {
     e.preventDefault();
-    if (!formData.name.trim() || !formData.phone.trim()) return;
+    if (!formData.name.trim()) return;
 
     setFormError("");
     setIsSubmitting(true);
     if (isAddModalOpen) {
       const res = await addCustomer({
         name: formData.name.trim(),
-        phone: formData.phone.trim(),
+        phone: (formData.phone || "").trim(),
         notes: formData.notes.trim()
       });
       setIsSubmitting(false);
@@ -105,7 +105,7 @@ export default function Customers() {
       const res = await updateCustomer({
         id: formData.id,
         name: formData.name.trim(),
-        phone: formData.phone.trim(),
+        phone: (formData.phone || "").trim(),
         notes: formData.notes.trim()
       });
       setIsSubmitting(false);
@@ -145,7 +145,7 @@ export default function Customers() {
         <h4 className="text-xs font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider border-b border-[var(--color-app-border)] pb-2">Identity & Contact</h4>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input label="Full Name" placeholder="e.g. أحمد محمد" dir="auto" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required />
-          <Input label="Phone Number" placeholder="e.g. 555-0199" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} required />
+          <Input label="Phone Number" placeholder="e.g. 555-0199" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
         </div>
       </div>
 
