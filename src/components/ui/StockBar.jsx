@@ -12,7 +12,7 @@ export function StockBar({ current, quantity, threshold, unit = "" }) {
     : "var(--color-app-success)";
 
   // Calculate visual percentage indicator
-  const maxVal = threshold || 50;
+  const maxVal = threshold || 25;
   const percent = isOut ? 0 : Math.min(100, Math.max(10, (qty / maxVal) * 100));
 
   return (
