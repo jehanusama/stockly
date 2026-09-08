@@ -1,10 +1,14 @@
 
+import { Fragment } from "react";
+
 export function Table({
   columns = [],
   rows = [],
   emptyMessage = "No data available",
   loading = false,
   className = "",
+  expandedRowKeys = [],
+  renderExpandedRow,
 }) {
   const alignClass = {
     left: "text-left",
@@ -62,31 +66,43 @@ export function Table({
               </td>
             </tr>
           ) : (
-            rows.map((row, rowIdx) => (
-              <tr
-                key={row.id ?? rowIdx}
-                className={[
-                  "border-b border-[var(--color-app-border)] last:border-0",
-                  "bg-[var(--color-app-panel)] hover:bg-[var(--color-app-panel-hover)]",
-                  "transition-colors duration-100",
-                  row.className || ""
-                ].filter(Boolean).join(" ")}
-              >
-                {columns.map((col) => (
-                  <td
-                    key={col.key}
+            rows.map((row, rowIdx) => {
+              const rowKey = row.id ?? rowIdx;
+              const isExpanded = expandedRowKeys.includes(rowKey);
+              return (
+                <Fragment key={rowKey}>
+                  <tr
                     className={[
-                      "px-4 py-3 text-[var(--color-app-text)]",
-                      alignClass[col.align ?? "left"],
-                    ].join(" ")}
+                      "border-b border-[var(--color-app-border)] last:border-0",
+                      "bg-[var(--color-app-panel)] hover:bg-[var(--color-app-panel-hover)]",
+                      "transition-colors duration-100",
+                      row.className || ""
+                    ].filter(Boolean).join(" ")}
                   >
-                    {col.render
-                      ? col.render(row[col.key], row)
-                      : (row[col.key] ?? "—")}
-                  </td>
-                ))}
-              </tr>
-            ))
+                    {columns.map((col) => (
+                      <td
+                        key={col.key}
+                        className={[
+                          "px-4 py-3 text-[var(--color-app-text)]",
+                          alignClass[col.align ?? "left"],
+                        ].join(" ")}
+                      >
+                        {col.render
+                          ? col.render(row[col.key], row)
+                          : (row[col.key] ?? "—")}
+                      </td>
+                    ))}
+                  </tr>
+                  {isExpanded && renderExpandedRow && (
+                    <tr key={`${rowKey}-expanded`} className="bg-[var(--color-app-bg)] border-b border-[var(--color-app-border)]">
+                      <td colSpan={columns.length} className="p-3 bg-[var(--color-app-bg)]">
+                        {renderExpandedRow(row)}
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })
           )}
         </tbody>
       </table>

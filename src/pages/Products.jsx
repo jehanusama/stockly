@@ -131,43 +131,123 @@ function ManageCategoriesModal({ isOpen, onClose }) {
   );
 }
 
-
 export default function Products() {
-  const { products, categories, addProduct, updateProduct, deleteProduct, isLoading, error, refreshData } = useAppData();
+  const { products, categories, addProduct, updateProduct, deleteProduct, addStockBatch, editBatch: editBatchFunc, deleteBatch: deleteBatchFunc, isLoading, error, refreshData } = useAppData();
   const [search, setSearch] = useState("");
   
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isRestockModalOpen, setIsRestockModalOpen] = useState(false);
   const [isManageCatsOpen, setIsManageCatsOpen] = useState(false);
+  const [isEditBatchOpen, setIsEditBatchOpen] = useState(false);
+
+  // Expanded row IDs for batch history accordion
+  const [expandedProductIds, setExpandedProductIds] = useState([]);
 
   // Action states
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
-
-  // Form State
-  const [formData, setFormData] = useState({ id: "", category_id: "", name: "", cost: "", stock: "", unit: "kilo" });
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteBatchTarget, setDeleteBatchTarget] = useState(null);
 
-  const resetForm = () => {
-    setFormData({ id: "", category_id: "", name: "", cost: "", stock: "", unit: "kilo" });
+  // Form States
+  const [addFormData, setAddFormData] = useState({ category_id: "", name: "", cost: "", stock: "", unit: "kilo" });
+  const [editFormData, setEditFormData] = useState({ id: "", category_id: "", name: "", unit: "kilo" });
+  const [restockForm, setRestockForm] = useState({
+    product_id: "",
+    productName: "",
+    cost_price: "",
+    quantity_received: "",
+    purchase_date: new Date().toISOString().split("T")[0],
+  });
+  const [editBatchData, setEditBatchData] = useState({
+    id: "",
+    product_id: "",
+    productName: "",
+    cost_price: "",
+    quantity_received: "",
+    purchase_date: new Date().toISOString().split("T")[0],
+  });
+
+  const resetForms = () => {
+    setAddFormData({ category_id: "", name: "", cost: "", stock: "", unit: "kilo" });
+    setEditFormData({ id: "", category_id: "", name: "", unit: "kilo" });
+    setRestockForm({
+      product_id: "",
+      productName: "",
+      cost_price: "",
+      quantity_received: "",
+      purchase_date: new Date().toISOString().split("T")[0],
+    });
+    setEditBatchData({
+      id: "",
+      product_id: "",
+      productName: "",
+      cost_price: "",
+      quantity_received: "",
+      purchase_date: new Date().toISOString().split("T")[0],
+    });
     setFormError("");
   };
 
   const openAddModalWithCat = (catId = "") => {
-    resetForm();
-    if (catId) setFormData(prev => ({ ...prev, category_id: catId }));
-    else if (categories.length > 0) setFormData(prev => ({ ...prev, category_id: categories[0].id }));
+    resetForms();
+    const selectedCat = catId || (categories.length > 0 ? categories[0].id : "");
+    setAddFormData(prev => ({ ...prev, category_id: selectedCat }));
     setIsAddModalOpen(true);
+  };
+
+  const openEditModal = (product) => {
+    resetForms();
+    setEditFormData({
+      id: product.id,
+      category_id: product.category_id,
+      name: product.name,
+      unit: product.unit || "kilo",
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const openRestockModal = (product) => {
+    resetForms();
+    setRestockForm({
+      product_id: product.id,
+      productName: product.name,
+      cost_price: product.cost_price ? product.cost_price.toString() : "",
+      quantity_received: "",
+      purchase_date: new Date().toISOString().split("T")[0],
+    });
+    setIsRestockModalOpen(true);
+  };
+
+  const openEditBatchModal = (batch, product) => {
+    resetForms();
+    setEditBatchData({
+      id: batch.id,
+      product_id: product.id,
+      productName: product.name,
+      cost_price: batch.cost_price ? batch.cost_price.toString() : "",
+      quantity_received: batch.quantity_received ? batch.quantity_received.toString() : "",
+      purchase_date: batch.purchase_date || new Date().toISOString().split("T")[0],
+    });
+    setIsEditBatchOpen(true);
+  };
+
+  const toggleExpandProduct = (productId) => {
+    setExpandedProductIds((prev) =>
+      prev.includes(productId)
+        ? prev.filter((id) => id !== productId)
+        : [...prev, productId]
+    );
   };
 
   // Group and Filter Products
   const filteredGroups = useMemo(() => {
     const q = search.toLowerCase();
     
-    // Group products by category
     let groups = categories.map(c => ({
       ...c,
       products: products.filter(p => p.category_id === c.id)
@@ -188,49 +268,138 @@ export default function Products() {
       }, []);
     }
 
-    // Sort categories alphabetically
     return groups.sort((a, b) => a.name.localeCompare(b.name));
   }, [products, categories, search]);
 
-  const handleSaveProduct = async (e) => {
+  const handleAddProductSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.name || !formData.cost || !formData.stock || !formData.category_id) return;
+    if (!addFormData.name.trim() || !addFormData.category_id) return;
     
     setIsSubmitting(true);
     setFormError("");
 
-    if (isAddModalOpen) {
-      const newProduct = {
-        category_id: formData.category_id,
-        name: formData.name.trim(),
-        cost_price: parseFloat(formData.cost),
-        stock_quantity: parseFloat(formData.stock),
-        unit: formData.unit || "kilo"
-      };
-      const res = await addProduct(newProduct);
-      setIsSubmitting(false);
-      if (res && !res.success) {
-        setFormError(res.error || "Failed to add product.");
-        return;
-      }
-      setIsAddModalOpen(false);
-    } else if (isEditModalOpen) {
-      const res = await updateProduct({
-        id: formData.id,
-        category_id: formData.category_id,
-        name: formData.name.trim(),
-        cost_price: parseFloat(formData.cost),
-        stock_quantity: parseFloat(formData.stock),
-        unit: formData.unit || "kilo"
-      });
-      setIsSubmitting(false);
-      if (res && !res.success) {
-        setFormError(res.error || "Failed to update product.");
-        return;
-      }
-      setIsEditModalOpen(false);
+    const newProduct = {
+      category_id: addFormData.category_id,
+      name: addFormData.name.trim(),
+      cost_price: addFormData.cost ? parseFloat(addFormData.cost) : 0,
+      stock_quantity: addFormData.stock ? parseFloat(addFormData.stock) : 0,
+      unit: addFormData.unit || "kilo"
+    };
+    const res = await addProduct(newProduct);
+    setIsSubmitting(false);
+    if (res && !res.success) {
+      setFormError(res.error || "Failed to add product.");
+      return;
     }
-    resetForm();
+    setIsAddModalOpen(false);
+    resetForms();
+  };
+
+  const handleEditProductSubmit = async (e) => {
+    e.preventDefault();
+    if (!editFormData.name.trim() || !editFormData.category_id) return;
+
+    setIsSubmitting(true);
+    setFormError("");
+
+    const res = await updateProduct({
+      id: editFormData.id,
+      category_id: editFormData.category_id,
+      name: editFormData.name.trim(),
+      unit: editFormData.unit || "kilo"
+    });
+    setIsSubmitting(false);
+    if (res && !res.success) {
+      setFormError(res.error || "Failed to update product.");
+      return;
+    }
+    setIsEditModalOpen(false);
+    resetForms();
+  };
+
+  const handleRestockSubmit = async (e) => {
+    e.preventDefault();
+    const qty = parseFloat(restockForm.quantity_received);
+    const cost = parseFloat(restockForm.cost_price);
+
+    if (isNaN(qty) || qty <= 0) {
+      setFormError("Please enter a valid quantity greater than 0.");
+      return;
+    }
+    if (isNaN(cost) || cost < 0) {
+      setFormError("Please enter a valid cost price.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setFormError("");
+
+    const res = await addStockBatch({
+      product_id: restockForm.product_id,
+      cost_price: cost,
+      quantity_received: qty,
+      purchase_date: restockForm.purchase_date,
+    });
+
+    setIsSubmitting(false);
+    if (res && !res.success) {
+      setFormError(res.error || "Failed to add stock batch.");
+      return;
+    }
+    setIsRestockModalOpen(false);
+    resetForms();
+  };
+
+  const handleEditBatchSubmit = async (e) => {
+    e.preventDefault();
+    const qty = parseFloat(editBatchData.quantity_received);
+    const cost = parseFloat(editBatchData.cost_price);
+
+    if (isNaN(qty) || qty <= 0) {
+      setFormError("Please enter a valid quantity greater than 0.");
+      return;
+    }
+    if (isNaN(cost) || cost < 0) {
+      setFormError("Please enter a valid cost price.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setFormError("");
+
+    const res = await editBatchFunc({
+      id: editBatchData.id,
+      cost_price: cost,
+      quantity_received: qty,
+      purchase_date: editBatchData.purchase_date,
+    });
+
+    setIsSubmitting(false);
+    if (res && !res.success) {
+      setFormError(res.error || "Failed to update batch.");
+      return;
+    }
+    setIsEditBatchOpen(false);
+    resetForms();
+  };
+
+  const handleDeleteBatchConfirm = async () => {
+    if (!deleteBatchTarget) return;
+    const isUntouched = Number(deleteBatchTarget.quantity_remaining) === Number(deleteBatchTarget.quantity_received);
+    if (!isUntouched) {
+      setDeleteError("Can't delete — some of this batch has already been sold");
+      return;
+    }
+
+    setIsDeleting(true);
+    setDeleteError("");
+    const res = await deleteBatchFunc(deleteBatchTarget.id);
+    setIsDeleting(false);
+    if (res && !res.success) {
+      setDeleteError(res.error || "Failed to delete batch.");
+    } else {
+      setDeleteBatchTarget(null);
+    }
   };
 
   const handleDeleteConfirm = async () => {
@@ -246,33 +415,58 @@ export default function Products() {
     }
   };
 
-  const openEditModal = (product) => {
-    setFormData({
-      id: product.id,
-      category_id: product.category_id,
-      name: product.name,
-      cost: product.cost_price.toString(),
-      stock: product.stock_quantity.toString(),
-      unit: product.unit || "kilo"
-    });
-    setFormError("");
-    setIsEditModalOpen(true);
-  };
-
   const columns = [
     {
       key: "name",
       label: "Product Name",
-      render: (val) => <span className="font-semibold text-[var(--color-app-text)]">{val}</span>,
+      render: (val, row) => {
+        const isExpanded = expandedProductIds.includes(row.id);
+        const batchCount = (row.batches || []).length;
+        return (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => toggleExpandProduct(row.id)}
+              className="p-1 text-[var(--color-app-text-muted)] hover:text-[var(--color-app-text)] hover:bg-[var(--color-app-elevated)] rounded transition-colors"
+              title={isExpanded ? "Collapse batches" : "View batch history"}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className={`transition-transform duration-200 ${isExpanded ? "rotate-90 text-[var(--color-app-accent)]" : ""}`}
+              >
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+            </button>
+            <div className="flex flex-col">
+              <span className="font-semibold text-[var(--color-app-text)]">{val}</span>
+              <button
+                type="button"
+                onClick={() => toggleExpandProduct(row.id)}
+                className="text-xs text-[var(--color-app-text-muted)] hover:text-[var(--color-app-accent)] text-left transition-colors flex items-center gap-1 mt-0.5"
+              >
+                <span>{batchCount} {batchCount === 1 ? "batch" : "batches"}</span>
+              </button>
+            </div>
+          </div>
+        );
+      },
     },
     {
       key: "cost_price",
-      label: "Cost Price",
+      label: "Latest Cost",
       render: (val) => <span className="font-mono text-[var(--color-app-text-muted)]">{formatCurrency(val)}</span>,
     },
     {
       key: "stock_quantity",
-      label: "Stock Level",
+      label: "Total Stock",
       render: (val, row) => <StockBar quantity={val} unit={row.unit} />,
     },
     {
@@ -280,8 +474,13 @@ export default function Products() {
       label: "",
       align: "right",
       render: (_, row) => (
-        <div className="flex items-center justify-end gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-          <Button variant="secondary" size="sm" onClick={() => openEditModal(row)}>Edit</Button>
+        <div className="flex items-center justify-end gap-2">
+          <Button variant="secondary" size="sm" onClick={() => openRestockModal(row)}>
+            + Add Stock
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => openEditModal(row)}>
+            Edit
+          </Button>
           <button
             type="button"
             className="p-2 rounded-lg text-[var(--color-app-text-muted)] hover:text-[var(--color-app-danger)] hover:bg-[var(--color-app-danger-muted)] transition-colors focus:outline-none"
@@ -297,6 +496,98 @@ export default function Products() {
       ),
     },
   ];
+
+  const renderBatchHistory = (product) => {
+    const batches = product.batches || [];
+    if (batches.length === 0) {
+      return (
+        <div className="p-4 rounded-lg bg-[var(--color-app-panel)] border border-[var(--color-app-border)] text-center flex flex-col items-center gap-2">
+          <p className="text-sm text-[var(--color-app-text-muted)]">No stock batches recorded yet for this product.</p>
+          <Button variant="primary" size="sm" onClick={() => openRestockModal(product)}>
+            + Add First Batch
+          </Button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex flex-col gap-2 p-3 rounded-lg bg-[var(--color-app-panel)] border border-[var(--color-app-border)]">
+        <div className="flex items-center justify-between px-1">
+          <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-app-text-muted)]">
+            Batch History ({batches.length})
+          </span>
+          <span className="text-xs text-[var(--color-app-text-muted)]">
+            Total Remaining: <strong className="text-[var(--color-app-text)] font-mono">{product.stock_quantity} {product.unit || "kilo"}</strong>
+          </span>
+        </div>
+        <div className="overflow-x-auto rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-bg)]">
+          <table className="w-full text-xs text-left">
+            <thead>
+              <tr className="border-b border-[var(--color-app-border)] bg-[var(--color-app-elevated)] text-[var(--color-app-text-muted)] font-semibold">
+                <th className="px-3 py-2">Purchase Date</th>
+                <th className="px-3 py-2">Cost Price</th>
+                <th className="px-3 py-2">Quantity Received</th>
+                <th className="px-3 py-2">Quantity Remaining</th>
+                <th className="px-3 py-2 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-app-border)] text-[var(--color-app-text)]">
+              {batches.map((batch) => {
+                const isUntouched = Number(batch.quantity_remaining) === Number(batch.quantity_received);
+                const disabledTooltip = "Can't edit — some of this batch has already been sold";
+                const disabledDeleteTooltip = "Can't delete — some of this batch has already been sold";
+
+                return (
+                  <tr key={batch.id} className="hover:bg-[var(--color-app-panel)] transition-colors">
+                    <td className="px-3 py-2 font-mono">{batch.purchase_date ? new Date(batch.purchase_date).toLocaleDateString() : "—"}</td>
+                    <td className="px-3 py-2 font-mono">{formatCurrency(batch.cost_price)}</td>
+                    <td className="px-3 py-2 font-mono">{batch.quantity_received} {product.unit || "kilo"}</td>
+                    <td className="px-3 py-2 font-mono">
+                      <span className={batch.quantity_remaining > 0 ? "text-[var(--color-app-success)] font-semibold" : "text-[var(--color-app-text-muted)]"}>
+                        {batch.quantity_remaining} {product.unit || "kilo"}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          type="button"
+                          disabled={!isUntouched}
+                          onClick={() => isUntouched && openEditBatchModal(batch, product)}
+                          className="p-1 rounded text-[var(--color-app-text-muted)] hover:text-[var(--color-app-text)] hover:bg-[var(--color-app-elevated)] transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+                          title={isUntouched ? "Edit batch" : disabledTooltip}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!isUntouched}
+                          onClick={() => {
+                            if (isUntouched) {
+                              setDeleteError("");
+                              setDeleteBatchTarget(batch);
+                            }
+                          }}
+                          className="p-1 rounded text-[var(--color-app-text-muted)] hover:text-[var(--color-app-danger)] hover:bg-[var(--color-app-danger-muted)] transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+                          title={isUntouched ? "Delete batch" : disabledDeleteTooltip}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="3 6 5 6 21 6"></polyline>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                          </svg>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
 
   if (isLoading) {
     return (
@@ -384,6 +675,8 @@ export default function Products() {
                     <Table 
                       columns={columns} 
                       rows={group.products} 
+                      expandedRowKeys={expandedProductIds}
+                      renderExpandedRow={renderBatchHistory}
                       className="!border-0 !rounded-none" 
                     />
                   ) : (
@@ -399,13 +692,13 @@ export default function Products() {
         </div>
       </div>
 
-      {/* ── Product Add/Edit Modal ── */}
+      {/* ── Product Add Modal ── */}
       <Modal 
-        isOpen={isAddModalOpen || isEditModalOpen} 
-        onClose={() => { setIsAddModalOpen(false); setIsEditModalOpen(false); resetForm(); }}
-        title={isAddModalOpen ? "Add New Product" : "Edit Product"}
+        isOpen={isAddModalOpen} 
+        onClose={() => { setIsAddModalOpen(false); resetForms(); }}
+        title="Add New Product"
       >
-        <form onSubmit={handleSaveProduct} className="flex flex-col gap-5">
+        <form onSubmit={handleAddProductSubmit} className="flex flex-col gap-5">
           {formError && (
             <div className="p-3 rounded-lg bg-[var(--color-app-danger-muted)] text-[var(--color-app-danger)] text-sm border border-[var(--color-app-danger)] font-medium">
               {formError}
@@ -420,8 +713,8 @@ export default function Products() {
           
           <Select
             label="Category"
-            value={formData.category_id}
-            onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
+            value={addFormData.category_id}
+            onChange={(e) => setAddFormData({ ...addFormData, category_id: e.target.value })}
             options={categories.map(c => ({ value: c.id, label: c.name }))}
             required
             disabled={categories.length === 0}
@@ -429,8 +722,8 @@ export default function Products() {
 
           <Input
             label="Product Name"
-            value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            value={addFormData.name}
+            onChange={(e) => setAddFormData({ ...addFormData, name: e.target.value })}
             placeholder="e.g. Medium Paper Bag"
             required
             autoFocus
@@ -438,14 +731,13 @@ export default function Products() {
 
           <div className="grid grid-cols-2 gap-4">
             <Input
-              label="Cost Price (EGP)"
+              label="Initial Cost Price (EGP)"
               type="number"
               min="0"
               step="0.01"
-              value={formData.cost}
-              onChange={(e) => setFormData({ ...formData, cost: e.target.value })}
-              placeholder="0.00"
-              required
+              value={addFormData.cost}
+              onChange={(e) => setAddFormData({ ...addFormData, cost: e.target.value })}
+              placeholder="0.00 (Optional)"
             />
             <div className="flex gap-2">
               <div className="flex-1">
@@ -454,17 +746,16 @@ export default function Products() {
                   type="number"
                   min="0"
                   step="any"
-                  value={formData.stock}
-                  onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
-                  placeholder="0"
-                  required
+                  value={addFormData.stock}
+                  onChange={(e) => setAddFormData({ ...addFormData, stock: e.target.value })}
+                  placeholder="0 (Optional)"
                 />
               </div>
               <div className="w-24">
                 <Input
                   label="Unit"
-                  value={formData.unit}
-                  onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
+                  value={addFormData.unit}
+                  onChange={(e) => setAddFormData({ ...addFormData, unit: e.target.value })}
                   placeholder="kilo"
                 />
               </div>
@@ -472,17 +763,178 @@ export default function Products() {
           </div>
 
           <div className="flex justify-end gap-3 mt-4">
-            <Button type="button" variant="secondary" onClick={() => { setIsAddModalOpen(false); setIsEditModalOpen(false); resetForm(); }} disabled={isSubmitting}>
+            <Button type="button" variant="secondary" onClick={() => { setIsAddModalOpen(false); resetForms(); }} disabled={isSubmitting}>
               Cancel
             </Button>
             <Button type="submit" variant="primary" disabled={categories.length === 0} loading={isSubmitting}>
-              {isAddModalOpen ? "Add Product" : "Save Changes"}
+              Add Product
             </Button>
           </div>
         </form>
       </Modal>
 
-      {/* ── Delete Confirmation Modal ── */}
+      {/* ── Product Edit Details Modal ── */}
+      <Modal 
+        isOpen={isEditModalOpen} 
+        onClose={() => { setIsEditModalOpen(false); resetForms(); }}
+        title="Edit Product Details"
+      >
+        <form onSubmit={handleEditProductSubmit} className="flex flex-col gap-5">
+          {formError && (
+            <div className="p-3 rounded-lg bg-[var(--color-app-danger-muted)] text-[var(--color-app-danger)] text-sm border border-[var(--color-app-danger)] font-medium">
+              {formError}
+            </div>
+          )}
+
+          <Select
+            label="Category"
+            value={editFormData.category_id}
+            onChange={(e) => setEditFormData({ ...editFormData, category_id: e.target.value })}
+            options={categories.map(c => ({ value: c.id, label: c.name }))}
+            required
+          />
+
+          <Input
+            label="Product Name"
+            value={editFormData.name}
+            onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+            placeholder="e.g. Medium Paper Bag"
+            required
+            autoFocus
+          />
+
+          <Input
+            label="Unit"
+            value={editFormData.unit}
+            onChange={(e) => setEditFormData({ ...editFormData, unit: e.target.value })}
+            placeholder="kilo"
+            required
+          />
+
+          <div className="flex justify-end gap-3 mt-4">
+            <Button type="button" variant="secondary" onClick={() => { setIsEditModalOpen(false); resetForms(); }} disabled={isSubmitting}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" loading={isSubmitting}>
+              Save Changes
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* ── Restock Batch Modal ── */}
+      <Modal 
+        isOpen={isRestockModalOpen} 
+        onClose={() => { setIsRestockModalOpen(false); resetForms(); }}
+        title={`Add Stock - ${restockForm.productName}`}
+      >
+        <form onSubmit={handleRestockSubmit} className="flex flex-col gap-5">
+          {formError && (
+            <div className="p-3 rounded-lg bg-[var(--color-app-danger-muted)] text-[var(--color-app-danger)] text-sm border border-[var(--color-app-danger)] font-medium">
+              {formError}
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Quantity Received"
+              type="number"
+              min="0.01"
+              step="any"
+              value={restockForm.quantity_received}
+              onChange={(e) => setRestockForm({ ...restockForm, quantity_received: e.target.value })}
+              placeholder="e.g. 50"
+              required
+              autoFocus
+            />
+            <Input
+              label="Batch Cost Price (EGP)"
+              type="number"
+              min="0"
+              step="0.01"
+              value={restockForm.cost_price}
+              onChange={(e) => setRestockForm({ ...restockForm, cost_price: e.target.value })}
+              placeholder="0.00"
+              required
+            />
+          </div>
+
+          <Input
+            label="Purchase Date"
+            type="date"
+            value={restockForm.purchase_date}
+            onChange={(e) => setRestockForm({ ...restockForm, purchase_date: e.target.value })}
+            required
+          />
+
+          <div className="flex justify-end gap-3 mt-4">
+            <Button type="button" variant="secondary" onClick={() => { setIsRestockModalOpen(false); resetForms(); }} disabled={isSubmitting}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" loading={isSubmitting}>
+              Add Batch Stock
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* ── Edit Batch Modal ── */}
+      <Modal 
+        isOpen={isEditBatchOpen} 
+        onClose={() => { setIsEditBatchOpen(false); resetForms(); }}
+        title={`Edit Batch - ${editBatchData.productName}`}
+      >
+        <form onSubmit={handleEditBatchSubmit} className="flex flex-col gap-5">
+          {formError && (
+            <div className="p-3 rounded-lg bg-[var(--color-app-danger-muted)] text-[var(--color-app-danger)] text-sm border border-[var(--color-app-danger)] font-medium">
+              {formError}
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Quantity Received"
+              type="number"
+              min="0.01"
+              step="any"
+              value={editBatchData.quantity_received}
+              onChange={(e) => setEditBatchData({ ...editBatchData, quantity_received: e.target.value })}
+              placeholder="e.g. 50"
+              required
+              autoFocus
+            />
+            <Input
+              label="Batch Cost Price (EGP)"
+              type="number"
+              min="0"
+              step="0.01"
+              value={editBatchData.cost_price}
+              onChange={(e) => setEditBatchData({ ...editBatchData, cost_price: e.target.value })}
+              placeholder="0.00"
+              required
+            />
+          </div>
+
+          <Input
+            label="Purchase Date"
+            type="date"
+            value={editBatchData.purchase_date}
+            onChange={(e) => setEditBatchData({ ...editBatchData, purchase_date: e.target.value })}
+            required
+          />
+
+          <div className="flex justify-end gap-3 mt-4">
+            <Button type="button" variant="secondary" onClick={() => { setIsEditBatchOpen(false); resetForms(); }} disabled={isSubmitting}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" loading={isSubmitting}>
+              Save Batch Changes
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* ── Delete Product Modal ── */}
       <Modal
         isOpen={!!deleteTarget}
         onClose={() => { setDeleteTarget(null); setDeleteError(""); }}
@@ -501,6 +953,29 @@ export default function Products() {
           <div className="flex justify-end gap-3 mt-2">
             <Button variant="secondary" onClick={() => { setDeleteTarget(null); setDeleteError(""); }} disabled={isDeleting}>Cancel</Button>
             <Button variant="danger" onClick={handleDeleteConfirm} loading={isDeleting}>Delete</Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ── Delete Batch Modal ── */}
+      <Modal
+        isOpen={!!deleteBatchTarget}
+        onClose={() => { setDeleteBatchTarget(null); setDeleteError(""); }}
+        title="Delete Batch"
+      >
+        <div className="flex flex-col gap-5">
+          {deleteError && (
+            <div className="p-3 rounded-lg bg-[var(--color-app-danger-muted)] text-[var(--color-app-danger)] text-sm border border-[var(--color-app-danger)] font-medium">
+              {deleteError}
+            </div>
+          )}
+
+          <p className="text-[var(--color-app-text-muted)] text-sm leading-relaxed">
+            Are you sure you want to delete this batch of <strong className="text-[var(--color-app-text)]">{deleteBatchTarget?.quantity_received} units</strong> purchased on <strong className="text-[var(--color-app-text)]">{deleteBatchTarget?.purchase_date}</strong>?
+          </p>
+          <div className="flex justify-end gap-3 mt-2">
+            <Button variant="secondary" onClick={() => { setDeleteBatchTarget(null); setDeleteError(""); }} disabled={isDeleting}>Cancel</Button>
+            <Button variant="danger" onClick={handleDeleteBatchConfirm} loading={isDeleting}>Delete Batch</Button>
           </div>
         </div>
       </Modal>
