@@ -226,6 +226,34 @@ function BatchPicker({ categories, products, onAddToCart }) {
 
 
 
+function calculateFifoCost(product, qty) {
+  if (!product || qty <= 0) return 0;
+  const batches = (product.batches || [])
+    .filter((b) => b.quantity_remaining > 0)
+    .sort((a, b) => new Date(a.purchase_date) - new Date(b.purchase_date));
+
+  if (batches.length === 0) {
+    return qty * (product.cost_price || 0);
+  }
+
+  let remaining = qty;
+  let totalCost = 0;
+
+  for (const b of batches) {
+    if (remaining <= 0) break;
+    const take = Math.min(b.quantity_remaining, remaining);
+    totalCost += take * b.cost_price;
+    remaining -= take;
+  }
+
+  if (remaining > 0) {
+    const lastCost = batches[batches.length - 1].cost_price || product.cost_price || 0;
+    totalCost += remaining * lastCost;
+  }
+
+  return totalCost;
+}
+
 export default function NewSale() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -255,7 +283,6 @@ export default function NewSale() {
 
   const selectedCustomer = (mockCustomers || []).find(c => c.id === customerId);
 
- 
   const addBatchToCart = (newItems) => {
     setCart(prev => [...prev, ...newItems]);
   };
@@ -271,20 +298,20 @@ export default function NewSale() {
     }));
   };
 
-
   const processedCart = cart.map(item => {
     const product = mockProducts.find(p => p.id === item.productId);
     const qty = parseFloat(item.quantity) || 0;
     const price = parseFloat(item.customPrice) || 0;
     const hasEnoughStock = product ? qty <= product.stock_quantity : false;
-    return { ...item, product, qty, price, hasEnoughStock };
+    const costBasis = calculateFifoCost(product, qty);
+    return { ...item, product, qty, price, hasEnoughStock, costBasis };
   });
 
   const { totalRevenue, totalCost, totalItemsCount } = processedCart.reduce(
     (acc, item) => {
       if (item.product) {
         acc.totalRevenue += item.qty * item.price;
-        acc.totalCost += item.qty * item.product.cost_price;
+        acc.totalCost += item.costBasis;
         acc.totalItemsCount += item.qty;
       }
       return acc;
@@ -331,7 +358,6 @@ export default function NewSale() {
         quantity: item.qty,
         sale_price: item.price,
         line_total: item.qty * item.price,
-        line_profit: (item.qty * item.price) - (item.qty * item.product.cost_price),
       })),
     };
 
