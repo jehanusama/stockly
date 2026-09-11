@@ -14,6 +14,7 @@ import NewSale           from "@/pages/NewSale";
 import SalesHistory      from "@/pages/SalesHistory";
 import SalesByDay        from "@/pages/SalesByDay";
 import ProfitReport      from "@/pages/ProfitReport";
+import Outstanding       from "@/pages/Outstanding";
 
 function ProtectedRoute() {
   const { session, loading } = useAuth();
@@ -82,6 +83,7 @@ function AppLayout() {
           <Route path="/sales"          element={<SalesHistory />} />
           <Route path="/sales-by-day"   element={<SalesByDay />} />
           <Route path="/profit"         element={<ProfitReport />} />
+          <Route path="/outstanding"    element={<Outstanding />} />
           <Route path="*"               element={<Navigate to="/" replace />} />
         </Routes>
       </div>
