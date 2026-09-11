@@ -275,6 +275,7 @@ export default function NewSale() {
   const [cart, setCart] = useState([]);
   const [discountType, setDiscountType] = useState("none");
   const [discountValue, setDiscountValue] = useState("");
+  const [amountPaidInput, setAmountPaidInput] = useState("");
   const [isSuccess, setIsSuccess] = useState(false);
   const [lastSale, setLastSale] = useState(null);
 
@@ -319,11 +320,6 @@ export default function NewSale() {
     { totalRevenue: 0, totalCost: 0, totalItemsCount: 0 }
   );
 
-  const isFormValid =
-    customerId !== "" &&
-    processedCart.length > 0 &&
-    processedCart.every(item => item.product && item.qty > 0 && item.price >= 0 && item.hasEnoughStock);
-
   const preDiscountProfit = totalRevenue - totalCost;
 
   const discountAmount = useMemo(() => {
@@ -337,6 +333,26 @@ export default function NewSale() {
   const finalTotal = totalRevenue - discountAmount;
   const finalProfit = finalTotal - totalCost;
   const finalMargin = finalTotal > 0 ? ((finalProfit / finalTotal) * 100).toFixed(0) : 0;
+
+  const effectiveAmountPaid = amountPaidInput !== "" ? parseFloat(amountPaidInput) || 0 : finalTotal;
+  const isPaidInputValid = effectiveAmountPaid >= 0 && effectiveAmountPaid <= finalTotal + 0.001;
+  const balanceDue = Math.max(0, finalTotal - effectiveAmountPaid);
+
+  const paymentBadge = useMemo(() => {
+    if (effectiveAmountPaid >= finalTotal && finalTotal > 0) {
+      return { label: "Fully Paid", style: "bg-[var(--color-app-success)]/10 text-[var(--color-app-success)] border-[var(--color-app-success)]/30" };
+    }
+    if (effectiveAmountPaid > 0) {
+      return { label: "Partially Paid", style: "bg-[var(--color-app-accent)]/10 text-[var(--color-app-accent)] border-[var(--color-app-accent)]/30" };
+    }
+    return { label: "Fully on Credit", style: "bg-[var(--color-app-warning)]/10 text-[var(--color-app-warning)] border-[var(--color-app-warning)]/30" };
+  }, [effectiveAmountPaid, finalTotal]);
+
+  const isFormValid =
+    customerId !== "" &&
+    processedCart.length > 0 &&
+    isPaidInputValid &&
+    processedCart.every(item => item.product && item.qty > 0 && item.price >= 0 && item.hasEnoughStock);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -353,6 +369,7 @@ export default function NewSale() {
       subtotal: totalRevenue,
       final_total: finalTotal,
       final_profit: finalProfit,
+      amount_paid_now: effectiveAmountPaid,
       items: processedCart.map(item => ({
         product_id: item.productId,
         quantity: item.qty,
@@ -390,6 +407,9 @@ export default function NewSale() {
       discountAmount: confirmedDiscountAmount,
       finalTotal: confirmedFinalTotal,
       finalProfit: confirmedProfit,
+      amountPaidNow: effectiveAmountPaid,
+      balanceDue,
+      paymentBadge,
     });
     setIsSuccess(true);
   };
@@ -400,6 +420,7 @@ export default function NewSale() {
     setCart([]);
     setDiscountType("none");
     setDiscountValue("");
+    setAmountPaidInput("");
     setIsSuccess(false);
     setLastSale(null);
     setSubmitError("");
@@ -458,7 +479,23 @@ export default function NewSale() {
                 <span className="text-xs font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider">Total</span>
                 <span className="font-mono text-xl font-bold text-[var(--color-app-text)]">{formatCurrency(lastSale.finalTotal)}</span>
               </div>
+              <div className="flex justify-between items-center pb-2 border-b border-dashed border-[var(--color-app-border)]">
+                <span className="text-xs font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider">Paid Now</span>
+                <span className="font-mono text-base font-semibold text-[var(--color-app-success)]">{formatCurrency(lastSale.amountPaidNow)}</span>
+              </div>
+              <div className="flex justify-between items-center pb-2 border-b border-dashed border-[var(--color-app-border)]">
+                <span className="text-xs font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider">Balance Due</span>
+                <span className={`font-mono text-base font-semibold ${lastSale.balanceDue > 0 ? "text-[var(--color-app-warning)]" : "text-[var(--color-app-text-muted)]"}`}>
+                  {formatCurrency(lastSale.balanceDue)}
+                </span>
+              </div>
               <div className="flex justify-between items-center pt-1">
+                <span className="text-xs font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider">Payment Status</span>
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-full border text-[11px] font-semibold font-mono ${lastSale.paymentBadge?.style}`}>
+                  {lastSale.paymentBadge?.label}
+                </span>
+              </div>
+              <div className="flex justify-between items-center pt-1 border-t border-[var(--color-app-border)]">
                 <span className="text-xs font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider">Net Profit</span>
                 <span className="font-mono text-xl font-bold text-[var(--color-app-success)]">+{formatCurrency(lastSale.finalProfit)}</span>
               </div>
@@ -692,7 +729,7 @@ export default function NewSale() {
                     <span className="font-mono text-[var(--color-app-text-subtle)]">-{formatCurrency(totalCost)}</span>
                   </div>
 
-                  <div className="flex flex-col pt-2 gap-1">
+                  <div className="flex flex-col pt-2 gap-1 pb-4 border-b border-dashed border-[var(--color-app-border)]">
                     <div className="flex justify-between items-end mb-1">
                       <span className="text-xs uppercase font-bold text-[var(--color-app-text-subtle)] tracking-wider">
                         {discountAmount > 0 ? "Final Profit" : "Net Profit"}
@@ -705,6 +742,40 @@ export default function NewSale() {
                         (was {formatCurrency(preDiscountProfit)} before discount)
                       </span>
                     )}
+                  </div>
+
+                  {/* Payment & Credit Options */}
+                  <div className="flex flex-col gap-3 pt-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs uppercase font-bold text-[var(--color-app-text-muted)] tracking-wider">Payment Status</span>
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full border text-[11px] font-semibold font-mono ${paymentBadge.style}`}>
+                        {paymentBadge.label}
+                      </span>
+                    </div>
+
+                    <Input
+                      label="Amount Paid Now (EGP)"
+                      type="number"
+                      min="0"
+                      max={finalTotal}
+                      step="0.01"
+                      value={amountPaidInput === "" ? (finalTotal > 0 ? finalTotal.toString() : "0") : amountPaidInput}
+                      onChange={e => setAmountPaidInput(e.target.value)}
+                      placeholder={finalTotal.toString()}
+                    />
+
+                    {!isPaidInputValid && (
+                      <span className="text-xs font-medium text-[var(--color-app-danger)] leading-snug">
+                        Amount paid cannot be negative or exceed total {formatCurrency(finalTotal)}.
+                      </span>
+                    )}
+
+                    <div className="flex justify-between items-center pt-1">
+                      <span className="text-xs font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider">Balance Due</span>
+                      <span className={`font-mono text-base font-bold ${balanceDue > 0 ? "text-[var(--color-app-warning)]" : "text-[var(--color-app-text-muted)]"}`}>
+                        {formatCurrency(balanceDue)}
+                      </span>
+                    </div>
                   </div>
                 </>
               )}

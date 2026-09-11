@@ -9,6 +9,7 @@ export function AppProvider({ children }) {
   const [products, setProducts] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [orders, setOrders] = useState([]);
+  const [payments, setPayments] = useState([]);
   const [categories, setCategories] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -21,12 +22,13 @@ export function AppProvider({ children }) {
     setIsLoading(true);
     setError(null);
     try {
-      const [catRes, prodRes, custRes, ordRes, batchRes] = await Promise.all([
+      const [catRes, prodRes, custRes, ordRes, batchRes, payRes] = await Promise.all([
         supabase.from("categories").select("*").order("name"),
         supabase.from("products").select("*, categories(*)").order("name"),
         supabase.from("customers").select("*").order("name"),
         supabase.from("orders").select("*, order_items(*)").order("order_date", { ascending: false }),
         supabase.from("product_batches").select("*").order("purchase_date", { ascending: false }).order("created_at", { ascending: false }),
+        supabase.from("payments").select("*").order("payment_date", { ascending: false }).order("created_at", { ascending: false }),
       ]);
 
       if (catRes.error) throw catRes.error;
@@ -57,19 +59,32 @@ export function AppProvider({ children }) {
       );
       setCustomers(custRes.data || []);
       setOrders(
-        (ordRes.data || []).map((o) => ({
-          ...o,
-          subtotal: Number(o.subtotal ?? 0),
-          discount_value: Number(o.discount_value ?? 0),
-          final_total: Number(o.final_total ?? 0),
-          final_profit: Number(o.final_profit ?? 0),
-          items: (o.order_items || []).map((item) => ({
-            ...item,
-            quantity: Number(item.quantity ?? 0),
-            sale_price: Number(item.sale_price ?? 0),
-            line_total: Number(item.line_total ?? 0),
-            line_profit: Number(item.line_profit ?? 0),
-          })),
+        (ordRes.data || []).map((o) => {
+          const finalTot = Number(o.final_total ?? 0);
+          const amtPaid = Number(o.amount_paid ?? 0);
+          const balDue = Number(o.balance_due ?? Math.max(0, finalTot - amtPaid));
+          return {
+            ...o,
+            subtotal: Number(o.subtotal ?? 0),
+            discount_value: Number(o.discount_value ?? 0),
+            final_total: finalTot,
+            final_profit: Number(o.final_profit ?? 0),
+            amount_paid: amtPaid,
+            balance_due: balDue,
+            items: (o.order_items || []).map((item) => ({
+              ...item,
+              quantity: Number(item.quantity ?? 0),
+              sale_price: Number(item.sale_price ?? 0),
+              line_total: Number(item.line_total ?? 0),
+              line_profit: Number(item.line_profit ?? 0),
+            })),
+          };
+        })
+      );
+      setPayments(
+        (payRes.data || []).map((p) => ({
+          ...p,
+          amount: Number(p.amount ?? 0),
         }))
       );
     } catch (err) {
@@ -524,15 +539,25 @@ export function AppProvider({ children }) {
         }
       }
 
-      // 5. Update product_batches remaining quantities
-      for (const [bId, newRemaining] of Object.entries(batchUpdates)) {
-        const { error: bUpdateErr } = await supabase
-          .from("product_batches")
-          .update({ quantity_remaining: newRemaining })
-          .eq("id", bId);
+      // 5b. Insert initial payment if amount_paid_now > 0
+      const amountPaidNow = order.amount_paid_now !== undefined
+        ? Number(order.amount_paid_now)
+        : finalTotal;
 
-        if (bUpdateErr) {
-          console.error("Error updating batch remaining qty:", bUpdateErr);
+      if (amountPaidNow > 0 && createdOrder.id && createdOrder.customer_id) {
+        const paymentPayload = {
+          order_id: createdOrder.id,
+          customer_id: createdOrder.customer_id,
+          amount: amountPaidNow,
+          payment_date: (order.order_date || new Date().toISOString()).slice(0, 10),
+          notes: "Initial payment upon order creation",
+        };
+        const { error: payErr } = await supabase
+          .from("payments")
+          .insert([paymentPayload]);
+
+        if (payErr) {
+          console.error("Error inserting initial payment:", payErr);
         }
       }
 
@@ -545,6 +570,8 @@ export function AppProvider({ children }) {
         discount_value: Number(createdOrder.discount_value),
         final_total: Number(createdOrder.final_total),
         final_profit: Number(createdOrder.final_profit),
+        amount_paid: amountPaidNow,
+        balance_due: Math.max(0, Number(createdOrder.final_total) - amountPaidNow),
         items: (insertedItems || []).map((item) => ({
           ...item,
           quantity: Number(item.quantity),
@@ -655,6 +682,7 @@ export function AppProvider({ children }) {
     products,
     customers,
     orders,
+    payments,
     categories,
     isLoading,
     error,
