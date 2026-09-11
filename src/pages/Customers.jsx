@@ -87,6 +87,8 @@ export default function Customers() {
         if (sortBy === "balance") return b.outstandingBalance - a.outstandingBalance;
         if (sortBy === "spend") return b.lifetimeSpend - a.lifetimeSpend;
         if (sortBy === "name") return (a.name || "").localeCompare(b.name || "");
+        if (sortBy === "newest") return new Date(b.created_at) - new Date(a.created_at);
+        if (sortBy === "oldest") return new Date(a.created_at) - new Date(b.created_at);
         return 0;
       }); 
   }, [customers, orders, search, sortBy]);
@@ -211,6 +213,8 @@ export default function Customers() {
                   { value: "balance", label: "Balance Owed (High to Low)" },
                   { value: "spend", label: "Lifetime Spend (High to Low)" },
                   { value: "name", label: "Name (A-Z)" },
+                  { value: "newest", label: "Newest Added" },
+                  { value: "oldest", label: "Oldest Added" },
                 ]}
                 className="w-full sm:w-56"
                 selectClassName="h-9 text-xs"
