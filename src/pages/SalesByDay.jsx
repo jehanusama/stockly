@@ -216,7 +216,7 @@ function ReassignModal({ isOpen, onClose, targetDate, allOrders, onReassign, cus
 export default function SalesByDay() {
   const navigate = useNavigate();
   const today = new Date().toISOString().slice(0, 10);
-  const { orders, customers: mockCustomers, products: mockProducts, updateOrderDate, isLoading, error, refreshData } = useAppData();
+  const { orders, customers: mockCustomers, products: mockProducts, categories, updateOrderDate, isLoading, error, refreshData } = useAppData();
 
   // Default to most recent order date if available
   const latestOrderDate = orders.length > 0
@@ -426,12 +426,20 @@ export default function SalesByDay() {
                           <div key={order.id} className="flex flex-col px-5 py-3.5 gap-2 hover:bg-[var(--color-app-panel-hover)] transition-colors">
                             {order.items.map((item, idx) => {
                               const product = mockProducts.find(p => p.id === item.product_id);
+                              const categoryName = product?.categories?.name || categories?.find(c => c.id === product?.category_id)?.name;
                               return (
                                 <div key={idx} className="flex items-center justify-between gap-4">
                                   <div className="flex items-center gap-3 min-w-0">
                                     <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-app-border)] shrink-0 ml-1" />
                                     <div className="min-w-0">
-                                      <span className="text-sm font-medium text-[var(--color-app-text)] truncate block">{product?.name || "Unknown Product"}</span>
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="text-sm font-medium text-[var(--color-app-text)] truncate">{product?.name || "Unknown Product"}</span>
+                                        {categoryName && (
+                                          <span className="text-[11px] font-semibold text-[var(--color-app-text-muted)] bg-[var(--color-app-elevated)] border border-[var(--color-app-border)] px-1.5 py-0.5 rounded-md">
+                                            {categoryName}
+                                          </span>
+                                        )}
+                                      </div>
                                       <span className="text-xs text-[var(--color-app-text-subtle)]">
                                         {item.quantity} × {formatCurrency(item.sale_price)}/unit
                                       </span>

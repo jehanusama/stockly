@@ -22,14 +22,13 @@ export function AppProvider({ children }) {
     setIsLoading(true);
     setError(null);
     try {
-      const [catRes, prodRes, custRes, ordRes, batchRes, payRes, consumeRes] = await Promise.all([
+      const [catRes, prodRes, custRes, ordRes, batchRes, payRes] = await Promise.all([
         supabase.from("categories").select("*").order("name"),
         supabase.from("products").select("*, categories(*)").order("name"),
         supabase.from("customers").select("*").order("name"),
         supabase.from("orders").select("*, order_items(*)").order("order_date", { ascending: false }),
         supabase.from("product_batches").select("*").order("purchase_date", { ascending: false }).order("created_at", { ascending: false }),
         supabase.from("payments").select("*").order("payment_date", { ascending: false }).order("created_at", { ascending: false }),
-        supabase.from("order_item_batch_consumptions").select("*"),
       ]);
 
       if (catRes.error) throw catRes.error;
@@ -37,19 +36,59 @@ export function AppProvider({ children }) {
       if (custRes.error) throw custRes.error;
       if (ordRes.error) throw ordRes.error;
 
-      const consumedByBatch = {};
-      (consumeRes?.data || []).forEach((c) => {
-        if (c.batch_id) {
-          consumedByBatch[c.batch_id] = (consumedByBatch[c.batch_id] || 0) + Number(c.quantity_consumed ?? 0);
-        }
+      // Calculate total quantity sold per product across ALL order items ever created
+      const totalSoldPerProduct = {};
+      (ordRes.data || []).forEach((o) => {
+        (o.order_items || []).forEach((item) => {
+          if (item.product_id) {
+            totalSoldPerProduct[item.product_id] =
+              (totalSoldPerProduct[item.product_id] || 0) + Number(item.quantity ?? 0);
+          }
+        });
       });
 
-      const fetchedBatches = (batchRes.data || []).map((b) => {
-        const qtyReceived = Number(b.quantity_received ?? 0);
-        const consumed = consumedByBatch[b.id] || 0;
-        const calculatedRemaining = Math.max(0, qtyReceived - consumed);
+      // Process batches per product using FIFO allocation from totalSoldPerProduct
+      const rawBatches = (batchRes.data || []).map((b) => ({
+        ...b,
+        cost_price: Number(b.cost_price ?? 0),
+        quantity_received: Number(b.quantity_received ?? 0),
+        quantity_remaining: Number(b.quantity_remaining ?? 0),
+      }));
 
-        if (Number(b.quantity_remaining ?? 0) !== calculatedRemaining) {
+      const batchesByProduct = {};
+      rawBatches.forEach((b) => {
+        if (!batchesByProduct[b.product_id]) {
+          batchesByProduct[b.product_id] = [];
+        }
+        batchesByProduct[b.product_id].push(b);
+      });
+
+      const calculatedBatchRemaining = {};
+
+      Object.keys(batchesByProduct).forEach((productId) => {
+        // Sort product batches oldest first
+        const pBatches = batchesByProduct[productId].sort((a, b) => {
+          const dateA = new Date(a.purchase_date || a.created_at).getTime();
+          const dateB = new Date(b.purchase_date || b.created_at).getTime();
+          return dateA - dateB;
+        });
+
+        let remainingToDeduct = totalSoldPerProduct[productId] || 0;
+        pBatches.forEach((batch) => {
+          const received = batch.quantity_received;
+          const take = Math.min(received, remainingToDeduct);
+          remainingToDeduct -= take;
+          calculatedBatchRemaining[batch.id] = Math.max(0, received - take);
+        });
+      });
+
+      const fetchedBatches = rawBatches.map((b) => {
+        const calculatedRemaining = calculatedBatchRemaining[b.id] !== undefined
+          ? calculatedBatchRemaining[b.id]
+          : b.quantity_remaining;
+
+        // Auto-heal DB batch quantity_remaining if out of sync
+        if (b.quantity_remaining !== calculatedRemaining) {
           supabase
             .from("product_batches")
             .update({ quantity_remaining: calculatedRemaining })
@@ -59,8 +98,6 @@ export function AppProvider({ children }) {
 
         return {
           ...b,
-          cost_price: Number(b.cost_price ?? 0),
-          quantity_received: qtyReceived,
           quantity_remaining: calculatedRemaining,
         };
       });
@@ -81,9 +118,12 @@ export function AppProvider({ children }) {
       setProducts(
         (prodRes.data || []).map((p) => {
           const pBatches = fetchedBatches.filter((b) => b.product_id === p.id);
-          const sumRemaining = pBatches.reduce((sum, b) => sum + b.quantity_remaining, 0);
+          const sumRemainingInBatches = pBatches.reduce((sum, b) => sum + b.quantity_remaining, 0);
           const latestBatchCost = pBatches.length > 0 ? pBatches[0].cost_price : Number(p.cost_price ?? 0);
-          const trueStock = pBatches.length > 0 ? sumRemaining : Number(p.stock_quantity ?? 0);
+
+          const trueStock = pBatches.length > 0
+            ? sumRemainingInBatches
+            : Math.max(0, Number(p.stock_quantity ?? 0) - (totalSoldPerProduct[p.id] || 0));
 
           if (Number(p.stock_quantity ?? 0) !== trueStock) {
             supabase
