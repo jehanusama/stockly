@@ -22,13 +22,14 @@ export function AppProvider({ children }) {
     setIsLoading(true);
     setError(null);
     try {
-      const [catRes, prodRes, custRes, ordRes, batchRes, payRes] = await Promise.all([
+      const [catRes, prodRes, custRes, ordRes, batchRes, payRes, consumeRes] = await Promise.all([
         supabase.from("categories").select("*").order("name"),
         supabase.from("products").select("*, categories(*)").order("name"),
         supabase.from("customers").select("*").order("name"),
         supabase.from("orders").select("*, order_items(*)").order("order_date", { ascending: false }),
         supabase.from("product_batches").select("*").order("purchase_date", { ascending: false }).order("created_at", { ascending: false }),
         supabase.from("payments").select("*").order("payment_date", { ascending: false }).order("created_at", { ascending: false }),
+        supabase.from("order_item_batch_consumptions").select("*"),
       ]);
 
       if (catRes.error) throw catRes.error;
@@ -36,12 +37,33 @@ export function AppProvider({ children }) {
       if (custRes.error) throw custRes.error;
       if (ordRes.error) throw ordRes.error;
 
-      const fetchedBatches = (batchRes.data || []).map((b) => ({
-        ...b,
-        cost_price: Number(b.cost_price ?? 0),
-        quantity_received: Number(b.quantity_received ?? 0),
-        quantity_remaining: Number(b.quantity_remaining ?? 0),
-      }));
+      const consumedByBatch = {};
+      (consumeRes?.data || []).forEach((c) => {
+        if (c.batch_id) {
+          consumedByBatch[c.batch_id] = (consumedByBatch[c.batch_id] || 0) + Number(c.quantity_consumed ?? 0);
+        }
+      });
+
+      const fetchedBatches = (batchRes.data || []).map((b) => {
+        const qtyReceived = Number(b.quantity_received ?? 0);
+        const consumed = consumedByBatch[b.id] || 0;
+        const calculatedRemaining = Math.max(0, qtyReceived - consumed);
+
+        if (Number(b.quantity_remaining ?? 0) !== calculatedRemaining) {
+          supabase
+            .from("product_batches")
+            .update({ quantity_remaining: calculatedRemaining })
+            .eq("id", b.id)
+            .then(() => {});
+        }
+
+        return {
+          ...b,
+          cost_price: Number(b.cost_price ?? 0),
+          quantity_received: qtyReceived,
+          quantity_remaining: calculatedRemaining,
+        };
+      });
 
       const fetchedPayments = (payRes.data || []).map((p) => ({
         ...p,
@@ -61,10 +83,20 @@ export function AppProvider({ children }) {
           const pBatches = fetchedBatches.filter((b) => b.product_id === p.id);
           const sumRemaining = pBatches.reduce((sum, b) => sum + b.quantity_remaining, 0);
           const latestBatchCost = pBatches.length > 0 ? pBatches[0].cost_price : Number(p.cost_price ?? 0);
+          const trueStock = pBatches.length > 0 ? sumRemaining : Number(p.stock_quantity ?? 0);
+
+          if (Number(p.stock_quantity ?? 0) !== trueStock) {
+            supabase
+              .from("products")
+              .update({ stock_quantity: trueStock })
+              .eq("id", p.id)
+              .then(() => {});
+          }
+
           return {
             ...p,
             cost_price: latestBatchCost,
-            stock_quantity: pBatches.length > 0 ? sumRemaining : Number(p.stock_quantity ?? 0),
+            stock_quantity: trueStock,
             batches: pBatches,
           };
         })
@@ -550,6 +582,40 @@ export function AppProvider({ children }) {
         }
       }
 
+      // 5a. Update product_batches quantity_remaining in Supabase
+      for (const [batchId, newQty] of Object.entries(batchUpdates)) {
+        const { error: batchUpdErr } = await supabase
+          .from("product_batches")
+          .update({ quantity_remaining: newQty })
+          .eq("id", batchId);
+
+        if (batchUpdErr) {
+          console.error(`Error updating batch ${batchId} remaining qty:`, batchUpdErr);
+        }
+      }
+
+      // 5b. Update products stock_quantity in Supabase
+      const productQtyMap = {};
+      processedItems.forEach((item) => {
+        productQtyMap[item.product_id] = (productQtyMap[item.product_id] || 0) + item.quantity;
+      });
+
+      for (const [productId, qtyDeducted] of Object.entries(productQtyMap)) {
+        const targetProduct = products.find((p) => p.id === productId);
+        if (targetProduct) {
+          const currentStock = Number(targetProduct.stock_quantity ?? 0);
+          const updatedStock = Math.max(0, currentStock - qtyDeducted);
+          const { error: prodUpdErr } = await supabase
+            .from("products")
+            .update({ stock_quantity: updatedStock })
+            .eq("id", productId);
+
+          if (prodUpdErr) {
+            console.error(`Error updating product ${productId} stock:`, prodUpdErr);
+          }
+        }
+      }
+
       // 5b. Insert initial payment if amount_paid_now > 0
       const amountPaidNow = order.amount_paid_now !== undefined
         ? Number(order.amount_paid_now)
@@ -605,7 +671,7 @@ export function AppProvider({ children }) {
       // 1. Get order items for this order
       const { data: orderItems, error: itemsErr } = await supabase
         .from("order_items")
-        .select("id")
+        .select("id, product_id, quantity")
         .eq("order_id", id);
 
       if (itemsErr) throw itemsErr;
@@ -648,6 +714,19 @@ export function AppProvider({ children }) {
             if (restoreErr) {
               console.error("Error restoring batch remaining qty:", restoreErr);
             }
+          }
+        }
+
+        // Restore products table stock_quantity
+        for (const item of orderItems || []) {
+          const targetProduct = products.find((p) => p.id === item.product_id);
+          if (targetProduct) {
+            const currentStock = Number(targetProduct.stock_quantity ?? 0);
+            const restoredStock = currentStock + Number(item.quantity ?? 0);
+            await supabase
+              .from("products")
+              .update({ stock_quantity: restoredStock })
+              .eq("id", item.product_id);
           }
         }
       }
