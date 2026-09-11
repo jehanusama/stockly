@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button, Card, Input, StockBar, Select, DatePicker, LoadingState, ErrorState } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
@@ -261,6 +261,9 @@ export default function NewSale() {
   const { customers: mockCustomers = [], products: mockProducts = [], categories = [], addOrder, isLoading, error, refreshData } = useAppData();
 
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [customerOpen, setCustomerOpen] = useState(false);
+  const customerRef = useRef(null);
 
   const urlCustomerId = searchParams.get("customer_id");
   const validUrlCustomer = urlCustomerId && mockCustomers.some(c => c.id === urlCustomerId) ? urlCustomerId : "";
@@ -526,15 +529,88 @@ export default function NewSale() {
                 1. Order Details
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Select
-                  label="Customer"
-                  value={customerId}
-                  onChange={e => setCustomerId(e.target.value)}
-                  options={(mockCustomers || []).map(c => ({ value: c.id, label: c.phone ? `${c.name} (${c.phone})` : c.name }))}
-                  placeholder="Select a customer..."
-                  required
-                  selectClassName="h-11"
-                />
+                {/* Searchable Customer Combobox */}
+                <div className="flex flex-col gap-1.5 relative" ref={customerRef}>
+                  <label className="text-sm font-medium text-[var(--color-app-text-muted)]">
+                    Customer <span className="ml-0.5 text-[var(--color-app-danger)]">*</span>
+                  </label>
+                  <div
+                    className={[
+                      "flex items-center h-11 px-3 rounded-lg border bg-[var(--color-app-bg)] text-sm transition-colors cursor-text gap-2",
+                      customerOpen
+                        ? "border-[var(--color-app-border-focus)] ring-1 ring-[var(--color-app-border-focus)]"
+                        : "border-[var(--color-app-border)]",
+                    ].join(" ")}
+                    onClick={() => setCustomerOpen(true)}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-[var(--color-app-text-muted)]">
+                      <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    </svg>
+                    <input
+                      type="text"
+                      className="flex-1 bg-transparent outline-none text-[var(--color-app-text)] placeholder-[var(--color-app-text-muted)] min-w-0"
+                      placeholder={customerId && !customerOpen
+                        ? (mockCustomers.find(c => c.id === customerId)?.name ?? "Select a customer...")
+                        : "Search by name or phone..."}
+                      value={customerOpen
+                        ? customerSearch
+                        : (customerId ? (mockCustomers.find(c => c.id === customerId)?.name ?? "") : "")}
+                      onChange={e => { setCustomerSearch(e.target.value); setCustomerOpen(true); }}
+                      onFocus={() => { setCustomerOpen(true); setCustomerSearch(""); }}
+                      onBlur={() => setTimeout(() => setCustomerOpen(false), 150)}
+                      autoComplete="off"
+                      dir="auto"
+                    />
+                    {customerId && (
+                      <button
+                        type="button"
+                        tabIndex={-1}
+                        onClick={e => { e.stopPropagation(); setCustomerId(""); setCustomerSearch(""); }}
+                        className="shrink-0 text-[var(--color-app-text-muted)] hover:text-[var(--color-app-danger)] transition-colors"
+                        aria-label="Clear customer"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+
+                  {customerOpen && (() => {
+                    const q = customerSearch.trim().toLowerCase();
+                    const filtered = (mockCustomers || []).filter(c =>
+                      !q ||
+                      (c.name ?? "").toLowerCase().includes(q) ||
+                      (c.phone ?? "").toLowerCase().includes(q)
+                    );
+                    return (
+                      <div className="absolute top-full left-0 right-0 mt-1 z-50 rounded-xl border border-[var(--color-app-border)] bg-[var(--color-app-panel)] shadow-xl max-h-60 overflow-y-auto">
+                        {filtered.length === 0 ? (
+                          <div className="px-4 py-3 text-sm text-[var(--color-app-text-muted)] text-center italic">
+                            No customers match &ldquo;{customerSearch}&rdquo;
+                          </div>
+                        ) : (
+                          filtered.map(c => (
+                            <button
+                              key={c.id}
+                              type="button"
+                              onMouseDown={() => { setCustomerId(c.id); setCustomerSearch(""); setCustomerOpen(false); }}
+                              className={[
+                                "w-full flex flex-col items-start px-4 py-2.5 text-sm transition-colors text-left border-b border-[var(--color-app-border)] last:border-0",
+                                c.id === customerId
+                                  ? "bg-[var(--color-app-accent)]/15 text-[var(--color-app-accent)]"
+                                  : "text-[var(--color-app-text)] hover:bg-[var(--color-app-elevated)]",
+                              ].join(" ")}
+                            >
+                              <span className="font-medium" dir="auto">{c.name}</span>
+                              {c.phone && <span className="text-xs text-[var(--color-app-text-muted)] font-mono">{c.phone}</span>}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
                 <DatePicker
                   label="Order Date"
                   value={orderDate}
