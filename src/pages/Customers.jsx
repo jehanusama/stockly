@@ -205,127 +205,121 @@ export default function Customers() {
       subtitle="View and manage your client relationships."
       actions={<Button variant="primary" onClick={openAddModal}>+ Add Customer</Button>}
     >
-      <div className="flex flex-col sm:h-[calc(100vh-180px)] pb-8">
-        <Card className="flex flex-col flex-1 min-h-0 relative border-[var(--color-app-border)] p-0 overflow-hidden bg-[var(--color-app-bg)] shadow-none">
-          
-          {/* Sticky Search & Sort Toolbar */}
-          <div className="sticky top-0 z-10 p-4 border-b border-[var(--color-app-border)] bg-[var(--color-app-panel)] rounded-t-xl flex flex-col sm:flex-row items-center justify-between gap-3">
-            <Input 
-              placeholder="Search by name or phone..." 
-              value={search}
+      <div className="flex flex-col gap-6 pb-8">
+        
+        {/* Search & Sort Toolbar */}
+        <div className="p-4 border border-[var(--color-app-border)] bg-[var(--color-app-panel)] rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3">
+          <Input 
+            placeholder="Search by name or phone..." 
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setCurrentPage(1);
+            }}
+            className="w-full sm:max-w-xs bg-[var(--color-app-bg)] border-[var(--color-app-border)] shadow-sm"
+          />
+          <div className="flex items-center gap-2 w-full sm:w-auto shrink-0 justify-end">
+            <span className="text-xs font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider hidden sm:inline">Sort:</span>
+            <Select
+              value={sortBy}
               onChange={(e) => {
-                setSearch(e.target.value);
+                setSortBy(e.target.value);
                 setCurrentPage(1);
               }}
-              className="w-full sm:max-w-xs bg-[var(--color-app-bg)] border-[var(--color-app-border)] shadow-sm"
+              options={[
+                { value: "balance", label: "Balance Owed (High to Low)" },
+                { value: "spend", label: "Lifetime Spend (High to Low)" },
+                { value: "name", label: "Name (A-Z)" },
+                { value: "newest", label: "Newest Added" },
+                { value: "oldest", label: "Oldest Added" },
+              ]}
+              className="w-full sm:w-56"
+              selectClassName="h-9 text-xs"
             />
-            <div className="flex items-center gap-2 w-full sm:w-auto shrink-0 justify-end">
-              <span className="text-xs font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider hidden sm:inline">Sort:</span>
-              <Select
-                value={sortBy}
-                onChange={(e) => {
-                  setSortBy(e.target.value);
-                  setCurrentPage(1);
-                }}
-                options={[
-                  { value: "balance", label: "Balance Owed (High to Low)" },
-                  { value: "spend", label: "Lifetime Spend (High to Low)" },
-                  { value: "name", label: "Name (A-Z)" },
-                  { value: "newest", label: "Newest Added" },
-                  { value: "oldest", label: "Oldest Added" },
-                ]}
-                className="w-full sm:w-56"
-                selectClassName="h-9 text-xs"
-              />
-            </div>
           </div>
+        </div>
 
-          {/* Directory List Area */}
-          <div className="flex-1 overflow-auto bg-[var(--color-app-bg)]">
-            {processedCustomers.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 sm:py-14 px-4 text-center">
-                <div className="w-16 h-16 rounded-full bg-[var(--color-app-elevated)] flex items-center justify-center mb-4 border border-[var(--color-app-border)] shadow-sm">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--color-app-text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                    <circle cx="9" cy="7" r="4"></circle>
-                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                  </svg>
-                </div>
-                <h3 className="text-lg font-medium text-[var(--color-app-text)] mb-2">No customers found</h3>
-                <p className="text-sm text-[var(--color-app-text-muted)] mb-6 max-w-sm">
-                  {search ? "We couldn't find anyone matching your search." : "Your directory is empty. Add your first customer to start tracking relationships."}
-                </p>
-                {!search && <Button variant="primary" onClick={openAddModal}>Add your first customer</Button>}
-              </div>
-            ) : (
-              <ul className="flex flex-col divide-y divide-[var(--color-app-border)]">
-                {(() => {
-                  const maxP = Math.max(1, Math.ceil(processedCustomers.length / pageSize));
-                  const safeP = Math.min(currentPage, maxP);
-                  return processedCustomers.slice((safeP - 1) * pageSize, safeP * pageSize);
-                })().map(customer => (
-                  <li key={customer.id} className="relative group">
-                    <div className={`w-full flex items-center justify-between p-3.5 sm:p-5 gap-3 transition-colors duration-150 ${customer.outstandingBalance > 0 ? "bg-[var(--color-app-warning)]/[0.03] hover:bg-[var(--color-app-warning)]/[0.07]" : "bg-[var(--color-app-panel)] hover:bg-[var(--color-app-panel-hover)]"}`}>
-                      {/* Left: Identity & Click area */}
-                      <button
-                        onClick={() => navigate(`/customers/${customer.id}`)}
-                        className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-app-border-focus)] rounded-lg p-1"
-                      >
-                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-[var(--color-app-accent)] flex items-center justify-center text-white font-semibold text-sm sm:text-base shadow-sm shrink-0">
-                          {getInitials(customer.name)}
-                        </div>
-                        <div className="flex flex-col min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-sm sm:text-base text-[var(--color-app-text)] group-hover:text-[var(--color-app-accent)] transition-colors truncate">{customer.name}</span>
+        {processedCustomers.length === 0 ? (
+          <Card padding="lg" className="flex flex-col items-center justify-center py-16 text-center border-dashed border-[var(--color-app-border)] bg-[var(--color-app-bg)] shadow-none">
+            <div className="w-16 h-16 rounded-full bg-[var(--color-app-elevated)] flex items-center justify-center mb-4 border border-[var(--color-app-border)] shadow-sm">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--color-app-text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                <circle cx="9" cy="7" r="4"></circle>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+              </svg>
+            </div>
+            <h3 className="text-lg font-medium text-[var(--color-app-text)] mb-2">No customers found</h3>
+            <p className="text-sm text-[var(--color-app-text-muted)] mb-6 max-w-sm">
+              {search ? "We couldn't find anyone matching your search." : "Your directory is empty. Add your first customer to start tracking relationships."}
+            </p>
+            {!search && <Button variant="primary" onClick={openAddModal}>Add your first customer</Button>}
+          </Card>
+        ) : (
+          <>
+            {/* Desktop Table View */}
+            <div className="hidden sm:block w-full overflow-x-auto rounded-xl border border-[var(--color-app-border)] bg-[var(--color-app-panel)]">
+              <table className="w-full border-collapse text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--color-app-border)] bg-[var(--color-app-elevated)]">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider">Customer</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider">Phone</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider">Balance Owed</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider">Lifetime Spend</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider">Orders</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-app-border)]">
+                  {(() => {
+                    const maxP = Math.max(1, Math.ceil(processedCustomers.length / pageSize));
+                    const safeP = Math.min(currentPage, maxP);
+                    return processedCustomers.slice((safeP - 1) * pageSize, safeP * pageSize);
+                  })().map(customer => (
+                    <tr 
+                      key={customer.id} 
+                      onClick={() => navigate(`/customers/${customer.id}`)}
+                      className={`cursor-pointer transition-colors duration-150 ${customer.outstandingBalance > 0 ? "bg-[var(--color-app-warning)]/[0.03] hover:bg-[var(--color-app-warning)]/[0.08]" : "hover:bg-[var(--color-app-panel-hover)]"}`}
+                    >
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-full bg-[var(--color-app-accent)] flex items-center justify-center text-white font-semibold text-xs shrink-0 shadow-sm">
+                            {getInitials(customer.name)}
                           </div>
-                          <span className="text-xs sm:text-sm text-[var(--color-app-text-muted)] truncate">{customer.phone}</span>
+                          <span className="font-semibold text-[var(--color-app-text)] hover:text-[var(--color-app-accent)] transition-colors">
+                            {customer.name}
+                          </span>
                         </div>
-                      </button>
-
-                      {/* Right: Metrics & Actions */}
-                      <div className="flex items-center gap-3 sm:gap-6 shrink-0">
-                        {/* Outstanding Balance Badge / Metric */}
+                      </td>
+                      <td className="px-4 py-3.5 text-xs text-[var(--color-app-text-muted)] font-mono">
+                        {customer.phone || "—"}
+                      </td>
+                      <td className="px-4 py-3.5 text-right">
                         {customer.outstandingBalance > 0 ? (
-                          <div className="flex flex-col items-end text-right px-2.5 py-1 rounded-lg bg-[var(--color-app-warning)]/15 border border-[var(--color-app-warning)]/30">
-                            <span className="text-[10px] font-bold text-[var(--color-app-warning)] uppercase tracking-wider">
-                              Owes
-                            </span>
-                            <span className="font-mono text-sm sm:text-base text-[var(--color-app-warning)] font-bold leading-tight">
-                              {formatCurrency(customer.outstandingBalance)}
-                            </span>
-                          </div>
+                          <span className="inline-flex flex-col items-end px-2.5 py-1 rounded-md bg-[var(--color-app-warning)]/15 border border-[var(--color-app-warning)]/30 font-mono text-xs font-bold text-[var(--color-app-warning)]">
+                            {formatCurrency(customer.outstandingBalance)}
+                          </span>
                         ) : (
-                          <div className="flex flex-col items-end text-right">
-                            <span className="text-[10px] font-semibold text-[var(--color-app-success)] uppercase tracking-wider mb-0.5">
-                              Balance
-                            </span>
-                            <span className="font-mono text-xs sm:text-sm text-[var(--color-app-success)] font-medium leading-tight">
-                              Settled
-                            </span>
-                          </div>
+                          <span className="text-xs font-semibold text-[var(--color-app-success)]">
+                            Settled
+                          </span>
                         )}
-
-                        {/* Lifetime Spend */}
-                        <div className="hidden sm:flex flex-col items-end text-right">
-                          <span className="text-[10px] sm:text-xs font-medium text-[var(--color-app-text-muted)] uppercase tracking-wider mb-0.5">Spend</span>
-                          <span className="font-mono text-sm sm:text-lg text-[var(--color-app-text)] font-semibold leading-tight">
-                            {formatCurrency(customer.lifetimeSpend)}
-                          </span>
-                          <span className="text-[10px] sm:text-xs text-[var(--color-app-text-subtle)] mt-1 font-medium bg-[var(--color-app-elevated)] px-2 py-0.5 rounded-full border border-[var(--color-app-border)]">
-                            {customer.totalOrders} {customer.totalOrders === 1 ? 'Order' : 'Orders'}
-                          </span>
-                        </div>
-
-                        {/* Actions: Edit & Delete */}
-                        <div className="flex items-center gap-1">
+                      </td>
+                      <td className="px-4 py-3.5 text-right font-mono font-semibold text-xs text-[var(--color-app-text)]">
+                        {formatCurrency(customer.lifetimeSpend)}
+                      </td>
+                      <td className="px-4 py-3.5 text-right font-mono text-xs text-[var(--color-app-text-muted)]">
+                        {customer.totalOrders} {customer.totalOrders === 1 ? 'order' : 'orders'}
+                      </td>
+                      <td className="px-4 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1">
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               openEditModal(customer);
                             }}
-                            className="p-2 text-[var(--color-app-text-muted)] hover:text-[var(--color-app-text)] hover:bg-[var(--color-app-elevated)] rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-app-border-focus)]"
+                            className="p-1.5 text-[var(--color-app-text-muted)] hover:text-[var(--color-app-text)] hover:bg-[var(--color-app-elevated)] rounded-lg transition-colors"
                             title="Edit Customer"
                             aria-label="Edit Customer"
                           >
@@ -333,7 +327,6 @@ export default function Customers() {
                               <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
                             </svg>
                           </button>
-
                           <button
                             type="button"
                             onClick={(e) => {
@@ -341,7 +334,7 @@ export default function Customers() {
                               setDeleteTarget(customer);
                               setDeleteError(null);
                             }}
-                            className="p-2 text-[var(--color-app-text-muted)] hover:text-[var(--color-app-danger)] hover:bg-[var(--color-app-elevated)] rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-app-border-focus)]"
+                            className="p-1.5 text-[var(--color-app-text-muted)] hover:text-[var(--color-app-danger)] hover:bg-[var(--color-app-elevated)] rounded-lg transition-colors"
                             title="Delete Customer"
                             aria-label="Delete Customer"
                           >
@@ -351,23 +344,82 @@ export default function Customers() {
                             </svg>
                           </button>
                         </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <div className="px-4">
+                <Pagination
+                  currentPage={currentPage}
+                  totalItems={processedCustomers.length}
+                  pageSize={pageSize}
+                  onPageChange={setCurrentPage}
+                  onPageSizeChange={setPageSize}
+                  pageSizeOptions={[10, 20, 50, 100]}
+                />
+              </div>
+            </div>
+
+            {/* Mobile Stacked Card View */}
+            <div className="sm:hidden flex flex-col gap-3">
+              {(() => {
+                const maxP = Math.max(1, Math.ceil(processedCustomers.length / pageSize));
+                const safeP = Math.min(currentPage, maxP);
+                return processedCustomers.slice((safeP - 1) * pageSize, safeP * pageSize);
+              })().map(customer => (
+                <Card 
+                  key={customer.id}
+                  padding="md"
+                  onClick={() => navigate(`/customers/${customer.id}`)}
+                  className={`cursor-pointer border-[var(--color-app-border)] ${customer.outstandingBalance > 0 ? "bg-[var(--color-app-warning)]/[0.03]" : "bg-[var(--color-app-panel)]"}`}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-full bg-[var(--color-app-accent)] flex items-center justify-center text-white font-semibold text-sm shrink-0">
+                        {getInitials(customer.name)}
+                      </div>
+                      <div className="flex flex-col min-w-0">
+                        <span className="font-semibold text-sm text-[var(--color-app-text)] truncate">{customer.name}</span>
+                        <span className="text-xs text-[var(--color-app-text-muted)] truncate">{customer.phone || "No phone"}</span>
                       </div>
                     </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
 
-          <Pagination
-            currentPage={currentPage}
-            totalItems={processedCustomers.length}
-            pageSize={pageSize}
-            onPageChange={setCurrentPage}
-            onPageSizeChange={setPageSize}
-            pageSizeOptions={[10, 20, 50, 100]}
-          />
-        </Card>
+                    <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                      {customer.outstandingBalance > 0 ? (
+                        <span className="font-mono text-xs font-bold text-[var(--color-app-warning)] bg-[var(--color-app-warning)]/15 px-2 py-0.5 rounded border border-[var(--color-app-warning)]/30">
+                          {formatCurrency(customer.outstandingBalance)}
+                        </span>
+                      ) : (
+                        <span className="text-xs font-medium text-[var(--color-app-success)]">Settled</span>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => openEditModal(customer)}
+                        className="p-1.5 text-[var(--color-app-text-muted)] hover:text-[var(--color-app-text)]"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+
+              <Pagination
+                currentPage={currentPage}
+                totalItems={processedCustomers.length}
+                pageSize={pageSize}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={setPageSize}
+                pageSizeOptions={[10, 20, 50, 100]}
+              />
+            </div>
+          </>
+        )}
       </div>
 
       {/* Add / Edit Modal */}
