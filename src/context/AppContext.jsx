@@ -678,6 +678,65 @@ export function AppProvider({ children }) {
     }
   };
 
+  const recordCustomerPayment = async (customerId, amount, paymentDate, notes) => {
+    try {
+      const payAmount = Number(amount);
+      if (!customerId || isNaN(payAmount) || payAmount <= 0) {
+        return { success: false, error: "Invalid payment amount" };
+      }
+
+      // Get unpaid orders for this customer, sorted by oldest order_date first
+      const unpaidOrders = orders
+        .filter((o) => o.customer_id === customerId && (o.balance_due ?? 0) > 0)
+        .sort((a, b) => new Date(a.order_date).getTime() - new Date(b.order_date).getTime());
+
+      const totalOutstanding = unpaidOrders.reduce((sum, o) => sum + (o.balance_due ?? 0), 0);
+
+      if (payAmount > totalOutstanding + 0.001) {
+        return {
+          success: false,
+          error: `Payment amount (${payAmount}) exceeds total outstanding balance (${totalOutstanding.toFixed(2)}).`,
+        };
+      }
+
+      let remainingToAllocate = payAmount;
+      const paymentPayloads = [];
+
+      for (const order of unpaidOrders) {
+        if (remainingToAllocate <= 0) break;
+        const allocated = Math.min(order.balance_due, remainingToAllocate);
+        remainingToAllocate -= allocated;
+
+        paymentPayloads.push({
+          order_id: order.id,
+          customer_id: customerId,
+          amount: Number(allocated.toFixed(2)),
+          payment_date: paymentDate || new Date().toISOString().split("T")[0],
+          notes: notes || "FIFO payment allocation",
+        });
+      }
+
+      if (paymentPayloads.length === 0) {
+        return { success: false, error: "No unpaid orders found to apply payment to." };
+      }
+
+      const { data, error: payErr } = await supabase
+        .from("payments")
+        .insert(paymentPayloads)
+        .select();
+
+      if (payErr) throw payErr;
+
+      // Refetch full state to update order balance_due & amount_paid
+      await fetchData();
+
+      return { success: true, data };
+    } catch (err) {
+      console.error("Error recording customer payment:", err);
+      return { success: false, error: err.message || "Failed to record payment" };
+    }
+  };
+
   const value = {
     products,
     customers,
@@ -699,6 +758,7 @@ export function AppProvider({ children }) {
     addOrder,
     deleteOrder,
     updateOrderDate,
+    recordCustomerPayment,
     addCategory,
     updateCategory,
     deleteCategory
