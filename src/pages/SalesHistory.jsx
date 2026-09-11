@@ -4,7 +4,7 @@ import { PageContainer } from "@/components/layout/PageContainer";
 import { formatCurrency } from "@/utils/currency";
 import { useAppData } from "@/context/AppContext";
 
-//  Filter Toolbar 
+// Filter Toolbar 
 function FilterToolbar({ filters, onChange, onClear, hasActiveFilters, customers, products, categories }) {
 
   return (
@@ -20,6 +20,20 @@ function FilterToolbar({ filters, onChange, onClear, hasActiveFilters, customers
         placeholder=""
         className="flex-1 min-w-[130px]"
         selectClassName="h-9 text-xs"
+      />
+
+      {/* Payment Status filter */}
+      <Select
+        value={filters.paymentStatus}
+        onChange={e => onChange("paymentStatus", e.target.value)}
+        options={[
+          { value: "", label: "All Payment Statuses" },
+          { value: "paid", label: "Fully Paid" },
+          { value: "unpaid", label: "Has Balance Due" },
+        ]}
+        placeholder=""
+        className="flex-1 min-w-[130px]"
+        selectClassName="h-9 text-xs font-semibold"
       />
 
       {/* Product filter — grouped by category */}
@@ -90,10 +104,10 @@ function FilterToolbar({ filters, onChange, onClear, hasActiveFilters, customers
   );
 }
 
-//  Main Component 
+// Main Component 
 export default function SalesHistory() {
   const { orders, customers: mockCustomers, products: mockProducts, categories, deleteOrder, isLoading, error, refreshData } = useAppData();
-  const [filters, setFilters] = useState({ customerId: "", productId: "", categoryId: "", dateFrom: "", dateTo: "" });
+  const [filters, setFilters] = useState({ customerId: "", paymentStatus: "", productId: "", categoryId: "", dateFrom: "", dateTo: "" });
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
@@ -101,13 +115,17 @@ export default function SalesHistory() {
   const hasActiveFilters = Object.values(filters).some(v => v !== "");
 
   const updateFilter = (key, value) => setFilters(prev => ({ ...prev, [key]: value }));
-  const clearFilters = () => setFilters({ customerId: "", productId: "", categoryId: "", dateFrom: "", dateTo: "" });
+  const clearFilters = () => setFilters({ customerId: "", paymentStatus: "", productId: "", categoryId: "", dateFrom: "", dateTo: "" });
 
   // Process and filter orders
   const tableRows = orders
     .filter(order => {
       if (filters.customerId && order.customer_id !== filters.customerId) return false;
       
+      const balDue = order.balance_due ?? 0;
+      if (filters.paymentStatus === "paid" && balDue > 0) return false;
+      if (filters.paymentStatus === "unpaid" && balDue === 0) return false;
+
       if (filters.productId) {
         const hasProduct = order.items.some(item => item.product_id === filters.productId);
         if (!hasProduct) return false;
@@ -152,6 +170,8 @@ export default function SalesHistory() {
 
   // Totals for the footer
   const footerRevenue = tableRows.reduce((s, r) => s + r.final_total, 0);
+  const footerPaid = tableRows.reduce((s, r) => s + (r.amount_paid ?? 0), 0);
+  const footerBalance = tableRows.reduce((s, r) => s + (r.balance_due ?? 0), 0);
   const footerProfit = tableRows.reduce((s, r) => s + r.final_profit, 0);
 
   const columns = [
@@ -181,23 +201,31 @@ export default function SalesHistory() {
       render: (val) => <span className="font-mono text-[var(--color-app-text)]">{val}</span>,
     },
     {
-      key: "discountAmount",
-      label: "Discount",
-      align: "right",
-      render: (_, row) => {
-        const discountAmount = row.discount_type === "none" ? 0 : row.subtotal - row.final_total;
-        return discountAmount > 0 ? (
-          <span className="font-mono text-[var(--color-app-warning)]">-{formatCurrency(discountAmount)}</span>
-        ) : (
-          <span className="text-[var(--color-app-text-muted)]">—</span>
-        );
-      },
-    },
-    {
       key: "final_total",
       label: "Total",
       align: "right",
       render: (val) => <span className="font-mono font-semibold text-[var(--color-app-text)]">{formatCurrency(val)}</span>,
+    },
+    {
+      key: "amount_paid",
+      label: "Paid",
+      align: "right",
+      render: (val) => <span className="font-mono text-[var(--color-app-text-muted)]">{formatCurrency(val ?? 0)}</span>,
+    },
+    {
+      key: "balance_due",
+      label: "Balance Due",
+      align: "right",
+      render: (val) => {
+        const due = val ?? 0;
+        return due > 0 ? (
+          <span className="font-mono font-bold text-[var(--color-app-warning)] px-2 py-0.5 rounded bg-[var(--color-app-warning)]/10">
+            {formatCurrency(due)}
+          </span>
+        ) : (
+          <span className="text-xs font-semibold text-[var(--color-app-success)]">Paid</span>
+        );
+      },
     },
     {
       key: "final_profit",
@@ -241,7 +269,7 @@ export default function SalesHistory() {
             </svg>
           </div>
           <p className="text-sm font-medium text-[var(--color-app-text)]">No sales match your filters</p>
-          <p className="text-xs text-[var(--color-app-text-muted)] max-w-xs">Try adjusting the customer, product, or date range — or clear all filters to see the full history.</p>
+          <p className="text-xs text-[var(--color-app-text-muted)] max-w-xs">Try adjusting the customer, payment status, product, or date range — or clear all filters to see the full history.</p>
           {hasActiveFilters && (
             <button onClick={clearFilters} className="mt-2 text-xs font-semibold text-[var(--color-app-accent)] hover:opacity-70 transition-opacity">
               Clear all filters →
@@ -298,13 +326,21 @@ export default function SalesHistory() {
 
         {/* Summary Footer Strip */}
         {tableRows.length > 0 && (
-          <div className="flex items-center gap-6 px-4 py-3 bg-[var(--color-app-panel)] border border-[var(--color-app-border)] rounded-xl text-xs">
+          <div className="flex flex-wrap items-center gap-4 sm:gap-6 px-4 py-3 bg-[var(--color-app-panel)] border border-[var(--color-app-border)] rounded-xl text-xs">
             <span className="text-[var(--color-app-text-muted)]">
               Showing <span className="font-semibold text-[var(--color-app-text)]">{tableRows.length}</span> transactions
             </span>
             <span className="ml-auto text-[var(--color-app-text-muted)]">
               Revenue: <span className="font-mono font-semibold text-[var(--color-app-text)]">{formatCurrency(footerRevenue)}</span>
             </span>
+            <span className="text-[var(--color-app-text-muted)]">
+              Paid: <span className="font-mono font-semibold text-[var(--color-app-text-muted)]">{formatCurrency(footerPaid)}</span>
+            </span>
+            {footerBalance > 0 && (
+              <span className="text-[var(--color-app-warning)]">
+                Due: <span className="font-mono font-bold text-[var(--color-app-warning)]">{formatCurrency(footerBalance)}</span>
+              </span>
+            )}
             <span className="text-[var(--color-app-text-muted)]">
               Profit: <span className="font-mono font-bold text-[var(--color-app-success)]">+{formatCurrency(footerProfit)}</span>
             </span>
@@ -363,35 +399,45 @@ export default function SalesHistory() {
               No sales match your filters
             </div>
           ) : (
-            tableRows.map((row, idx) => (
-              <div key={row.id ?? idx} className="bg-[var(--color-app-panel)] border border-[var(--color-app-border)] rounded-xl p-4 flex flex-col gap-2.5 shadow-sm">
-                <div className="flex justify-between items-start">
-                  <div className="flex flex-col">
-                    <span className="font-semibold text-sm text-[var(--color-app-text)]">{row.customerName}</span>
-                    <span className="text-xs text-[var(--color-app-text-subtle)] font-mono">
-                      {new Date(row.order_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
-                    </span>
+            tableRows.map((row, idx) => {
+              const due = row.balance_due ?? 0;
+              return (
+                <div key={row.id ?? idx} className="bg-[var(--color-app-panel)] border border-[var(--color-app-border)] rounded-xl p-4 flex flex-col gap-2.5 shadow-sm">
+                  <div className="flex justify-between items-start">
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-sm text-[var(--color-app-text)]">{row.customerName}</span>
+                      <span className="text-xs text-[var(--color-app-text-subtle)] font-mono">
+                        {new Date(row.order_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="flex flex-col items-end">
+                        <span className="font-mono font-bold text-sm text-[var(--color-app-text)]">{formatCurrency(row.final_total)}</span>
+                        {due > 0 ? (
+                          <span className="text-[10px] font-mono font-semibold text-[var(--color-app-warning)]">Due: {formatCurrency(due)}</span>
+                        ) : (
+                          <span className="text-[10px] font-semibold text-[var(--color-app-success)]">Paid</span>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => setDeleteTarget(row)}
+                        className="text-[var(--color-app-text-subtle)] hover:text-[var(--color-app-error)] p-1.5 rounded ml-1"
+                        aria-label="Delete sale"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6"></polyline>
+                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                        </svg>
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono font-bold text-sm text-[var(--color-app-text)]">{formatCurrency(row.final_total)}</span>
-                    <button
-                      onClick={() => setDeleteTarget(row)}
-                      className="text-[var(--color-app-text-subtle)] hover:text-[var(--color-app-error)] p-1.5 rounded"
-                      aria-label="Delete sale"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="3 6 5 6 21 6"></polyline>
-                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                      </svg>
-                    </button>
+                  <div className="text-xs text-[var(--color-app-text-muted)] pt-1 border-t border-[var(--color-app-border)] flex justify-between items-center">
+                    <span>{row.itemsSummary} ({row.totalItemsCount} items)</span>
+                    <span className="font-mono text-[var(--color-app-success)] font-semibold">+{formatCurrency(row.final_profit)}</span>
                   </div>
                 </div>
-                <div className="text-xs text-[var(--color-app-text-muted)] pt-1 border-t border-[var(--color-app-border)] flex justify-between items-center">
-                  <span>{row.itemsSummary} ({row.totalItemsCount} items)</span>
-                  <span className="font-mono text-[var(--color-app-success)] font-semibold">+{formatCurrency(row.final_profit)}</span>
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
 

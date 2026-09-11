@@ -284,12 +284,22 @@ export default function CustomerDetails() {
                           <p className="text-xs text-[var(--color-app-text-subtle)] mt-0.5">{order.items.length} product type{order.items.length !== 1 ? 's' : ''}</p>
                         </div>
                       </div>
-                      <div className="flex items-center justify-between sm:justify-end gap-4 sm:gap-6 border-t sm:border-t-0 sm:border-l border-[var(--color-app-border)] pt-2 sm:pt-0 sm:pl-4">
+                      <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-5 border-t sm:border-t-0 sm:border-l border-[var(--color-app-border)] pt-2 sm:pt-0 sm:pl-4">
                         <div className="flex flex-col items-start sm:items-end">
                           <span className="text-[10px] font-semibold text-[var(--color-app-text-subtle)] uppercase tracking-wider mb-0.5">Total</span>
-                          <span className="font-mono font-bold text-base sm:text-lg text-[var(--color-app-text)]">{formatCurrency(order.final_total)}</span>
+                          <span className="font-mono font-bold text-sm sm:text-base text-[var(--color-app-text)]">{formatCurrency(order.final_total)}</span>
                         </div>
-                        <div className="flex flex-col items-end min-w-[70px]">
+                        <div className="flex flex-col items-start sm:items-end">
+                          <span className="text-[10px] font-semibold text-[var(--color-app-text-subtle)] uppercase tracking-wider mb-0.5">Paid</span>
+                          <span className="font-mono font-semibold text-xs sm:text-sm text-[var(--color-app-text-muted)]">{formatCurrency(order.amount_paid ?? 0)}</span>
+                        </div>
+                        <div className="flex flex-col items-start sm:items-end">
+                          <span className="text-[10px] font-semibold text-[var(--color-app-text-subtle)] uppercase tracking-wider mb-0.5">Due</span>
+                          <span className={`font-mono font-semibold text-xs sm:text-sm ${balDue > 0 ? "text-[var(--color-app-warning)] font-bold" : "text-[var(--color-app-success)]"}`}>
+                            {formatCurrency(balDue)}
+                          </span>
+                        </div>
+                        <div className="flex flex-col items-end min-w-[60px]">
                           <span className="text-[10px] font-semibold text-[var(--color-app-text-subtle)] uppercase tracking-wider mb-0.5">Profit</span>
                           <span className="font-mono text-xs sm:text-sm text-[var(--color-app-success)] font-semibold">+{formatCurrency(order.final_profit)}</span>
                           <span className="text-[10px] font-mono font-medium text-[var(--color-app-success)] bg-[var(--color-app-success)]/10 px-1.5 rounded mt-0.5">{margin}% mgn</span>

@@ -1,3 +1,5 @@
+import { useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card, Table, StockBar, LoadingState, ErrorState } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { useAppData } from "@/context/AppContext";
@@ -20,7 +22,33 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 export default function Dashboard() {
-  const { products: mockProducts, customers: mockCustomers, orders: mockOrders, categories, isLoading, error, refreshData } = useAppData();
+  const navigate = useNavigate();
+  const { products: mockProducts, customers: mockCustomers, orders: mockOrders, isLoading, error, refreshData } = useAppData();
+
+  const totalRevenue = useMemo(() => mockOrders.reduce((sum, o) => sum + o.final_total, 0), [mockOrders]);
+  const totalProfit = useMemo(() => mockOrders.reduce((sum, o) => sum + o.final_profit, 0), [mockOrders]);
+  const totalOutstanding = useMemo(() => mockOrders.reduce((sum, o) => sum + (o.balance_due ?? 0), 0), [mockOrders]);
+
+  const unpaidCustomers = useMemo(() => {
+    const balances = {};
+    mockOrders.forEach(o => {
+      const due = o.balance_due ?? 0;
+      if (due > 0 && o.customer_id) {
+        balances[o.customer_id] = (balances[o.customer_id] || 0) + due;
+      }
+    });
+
+    return Object.entries(balances)
+      .map(([cust_id, balance]) => {
+        const cust = mockCustomers.find(c => c.id === cust_id);
+        return {
+          id: cust_id,
+          name: cust ? cust.name : "Unknown Customer",
+          balance,
+        };
+      })
+      .sort((a, b) => b.balance - a.balance);
+  }, [mockOrders, mockCustomers]);
 
   if (isLoading) {
     return (
@@ -38,8 +66,6 @@ export default function Dashboard() {
     );
   }
 
-  const totalRevenue = mockOrders.reduce((sum, o) => sum + o.final_total, 0);
-  const totalProfit = mockOrders.reduce((sum, o) => sum + o.final_profit, 0);
   const productCount = mockProducts.length;
   const customerCount = mockCustomers.length;
 
@@ -101,8 +127,6 @@ export default function Dashboard() {
     { key: "final_total", label: "Total", align: "right", render: (val) => <span className="font-mono font-medium text-[var(--color-app-text)]">{formatCurrency(val)}</span> },
     { key: "final_profit", label: "Profit", align: "right", render: (val) => <span className="font-mono font-semibold text-[var(--color-app-success)]">+{formatCurrency(val)}</span> }
   ];
-
-
 
   // 4. Low Stock Products
   const lowStockProducts = mockProducts.filter(p => p.stock_quantity < 10);
@@ -179,6 +203,14 @@ export default function Dashboard() {
               <p className="text-xs text-[var(--color-app-text-muted)] uppercase tracking-wider mb-2">Gross Revenue</p>
               <p className="text-2xl font-mono font-medium text-[var(--color-app-text)]">{formatCurrency(totalRevenue)}</p>
             </Card>
+
+            <Card padding="lg" className={`flex-1 flex flex-col justify-center border-l-4 ${totalOutstanding > 0 ? "border-l-[var(--color-app-warning)] bg-[var(--color-app-warning)]/5" : "border-l-[var(--color-app-success)]"}`}>
+              <p className="text-xs text-[var(--color-app-text-muted)] uppercase tracking-wider mb-2">Outstanding Credit</p>
+              <p className={`text-2xl font-mono font-bold ${totalOutstanding > 0 ? "text-[var(--color-app-warning)]" : "text-[var(--color-app-success)]"}`}>
+                {formatCurrency(totalOutstanding)}
+              </p>
+            </Card>
+
             <div className="flex gap-4 flex-1">
               <Card padding="lg" className="flex-1 flex flex-col justify-center">
                 <p className="text-xs text-[var(--color-app-text-muted)] uppercase tracking-wider mb-2">Products</p>
@@ -192,7 +224,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/*  Sales & Operational Alerts */}
+        {/* Sales & Operational Alerts */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
           
           {/* Recent Sales */}
@@ -232,28 +264,72 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* Operational Alerts  */}
-          <div className="flex flex-col">
-            <h3 className="text-sm font-semibold text-[var(--color-app-text)] uppercase tracking-wider mb-4 px-1">Operational Alerts</h3>
-            <Card padding="lg" className="flex-1 bg-[var(--color-app-bg)] border-dashed border-[var(--color-app-border)] max-h-[420px] overflow-y-auto">
-              {lowStockProducts.length === 0 ? (
-                <p className="text-sm text-[var(--color-app-text-muted)] text-center py-8">Inventory levels are healthy.</p>
-              ) : (
-                <ul className="flex flex-col gap-4">
-                  {lowStockProducts.map(p => (
-                    <li key={p.id} className="flex flex-col gap-3 pb-4 border-b border-[var(--color-app-border)] last:border-0 last:pb-0">
-                      <div className="flex justify-between items-start gap-4">
-                        <div className="flex flex-col gap-0.5 min-w-0">
-                          <p className="font-medium text-sm text-[var(--color-app-text)] leading-tight truncate">{p.name}</p>
-                          {(() => { const cat = categories.find(c => c.id === p.category_id); return cat ? <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-app-text-muted)]">{cat.name}</span> : null; })()}
+          {/* Operational Alerts */}
+          <div className="flex flex-col gap-6">
+            
+            {/* Outstanding Credit Alerts */}
+            <div className="flex flex-col">
+              <div className="flex items-center justify-between mb-3 px-1">
+                <h3 className="text-xs font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider">
+                  Outstanding Credit ({unpaidCustomers.length})
+                </h3>
+                {totalOutstanding > 0 && (
+                  <span className="text-xs font-mono font-bold text-[var(--color-app-warning)]">
+                    Total: {formatCurrency(totalOutstanding)}
+                  </span>
+                )}
+              </div>
+              <Card padding="md" className="bg-[var(--color-app-panel)] border border-[var(--color-app-border)] max-h-[220px] overflow-y-auto">
+                {unpaidCustomers.length === 0 ? (
+                  <p className="text-xs text-[var(--color-app-success)] text-center py-4 font-medium">
+                    ✓ All customer accounts are fully settled.
+                  </p>
+                ) : (
+                  <ul className="flex flex-col divide-y divide-[var(--color-app-border)]">
+                    {unpaidCustomers.map(c => (
+                      <li key={c.id} className="flex items-center justify-between py-2 text-xs">
+                        <button
+                          onClick={() => navigate(`/customers/${c.id}`)}
+                          className="font-medium text-[var(--color-app-text)] hover:text-[var(--color-app-accent)] text-left truncate pr-2"
+                        >
+                          {c.name}
+                        </button>
+                        <span className="font-mono font-bold text-[var(--color-app-warning)] shrink-0">
+                          {formatCurrency(c.balance)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Card>
+            </div>
+
+            {/* Low Stock Alerts */}
+            <div className="flex flex-col">
+              <h3 className="text-xs font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider mb-3 px-1">
+                Low Stock Alerts ({lowStockProducts.length})
+              </h3>
+              <Card padding="md" className="bg-[var(--color-app-panel)] border border-[var(--color-app-border)] max-h-[220px] overflow-y-auto">
+                {lowStockProducts.length === 0 ? (
+                  <p className="text-xs text-[var(--color-app-text-muted)] text-center py-4 italic">
+                    Inventory levels are healthy.
+                  </p>
+                ) : (
+                  <ul className="flex flex-col gap-3">
+                    {lowStockProducts.map(p => (
+                      <li key={p.id} className="flex items-center justify-between gap-3 pb-2.5 border-b border-[var(--color-app-border)] last:border-0 last:pb-0">
+                        <div className="flex flex-col min-w-0">
+                          <span className="font-medium text-xs text-[var(--color-app-text)] truncate">{p.name}</span>
+                          <span className="text-[10px] text-[var(--color-app-text-subtle)] font-mono">{p.stock_quantity} {p.unit} left</span>
                         </div>
                         <StockBar current={p.stock_quantity} unit={p.unit} threshold={10} />
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Card>
+            </div>
+
           </div>
 
         </div>
@@ -261,3 +337,4 @@ export default function Dashboard() {
     </PageContainer>
   );
 }
+

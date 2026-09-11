@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Card, Input, Modal, LoadingState, ErrorState } from "@/components/ui";
+import { Button, Card, Input, Select, Modal, LoadingState, ErrorState } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { useAppData } from "@/context/AppContext";
 import { formatCurrency } from "@/utils/currency";
@@ -18,6 +18,7 @@ export default function Customers() {
   const navigate = useNavigate();
   const { customers, orders, addCustomer, updateCustomer, deleteCustomer, isLoading, error, refreshData } = useAppData();
   const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState("balance"); // "balance" | "spend" | "name"
   
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -62,10 +63,11 @@ export default function Customers() {
     const salesByCustomer = {};
     orders.forEach(order => {
       if (!salesByCustomer[order.customer_id]) {
-        salesByCustomer[order.customer_id] = { orders: 0, spend: 0 };
+        salesByCustomer[order.customer_id] = { orders: 0, spend: 0, balance: 0 };
       }
       salesByCustomer[order.customer_id].orders += 1;
       salesByCustomer[order.customer_id].spend += order.final_total;
+      salesByCustomer[order.customer_id].balance += (order.balance_due ?? 0);
     });
 
     const lowerSearch = search.toLowerCase();
@@ -73,15 +75,21 @@ export default function Customers() {
       .map(c => ({
         ...c,
         totalOrders: salesByCustomer[c.id]?.orders || 0,
-        lifetimeSpend: salesByCustomer[c.id]?.spend || 0
+        lifetimeSpend: salesByCustomer[c.id]?.spend || 0,
+        outstandingBalance: salesByCustomer[c.id]?.balance || 0,
       }))
       .filter(c => 
         (c.name ?? "").toLowerCase().includes(lowerSearch) || 
         (c.phone ?? "").toLowerCase().includes(lowerSearch) ||
         (c.notes ?? "").toLowerCase().includes(lowerSearch)
       )
-      .sort((a, b) => b.lifetimeSpend - a.lifetimeSpend); 
-  }, [customers, orders, search]);
+      .sort((a, b) => {
+        if (sortBy === "balance") return b.outstandingBalance - a.outstandingBalance;
+        if (sortBy === "spend") return b.lifetimeSpend - a.lifetimeSpend;
+        if (sortBy === "name") return (a.name || "").localeCompare(b.name || "");
+        return 0;
+      }); 
+  }, [customers, orders, search, sortBy]);
 
   const handleSaveCustomer = async (e) => {
     e.preventDefault();
@@ -186,14 +194,28 @@ export default function Customers() {
       <div className="flex flex-col sm:h-[calc(100vh-180px)] pb-8">
         <Card className="flex flex-col flex-1 min-h-0 relative border-[var(--color-app-border)] p-0 overflow-hidden bg-[var(--color-app-bg)] shadow-none">
           
-          {/* Sticky Search */}
-          <div className="sticky top-0 z-10 p-4 border-b border-[var(--color-app-border)] bg-[var(--color-app-panel)] rounded-t-xl">
+          {/* Sticky Search & Sort Toolbar */}
+          <div className="sticky top-0 z-10 p-4 border-b border-[var(--color-app-border)] bg-[var(--color-app-panel)] rounded-t-xl flex flex-col sm:flex-row items-center justify-between gap-3">
             <Input 
               placeholder="Search by name or phone..." 
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="max-w-md bg-[var(--color-app-bg)] border-[var(--color-app-border)] shadow-sm"
+              className="w-full sm:max-w-xs bg-[var(--color-app-bg)] border-[var(--color-app-border)] shadow-sm"
             />
+            <div className="flex items-center gap-2 w-full sm:w-auto shrink-0 justify-end">
+              <span className="text-xs font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider hidden sm:inline">Sort:</span>
+              <Select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                options={[
+                  { value: "balance", label: "Balance Owed (High to Low)" },
+                  { value: "spend", label: "Lifetime Spend (High to Low)" },
+                  { value: "name", label: "Name (A-Z)" },
+                ]}
+                className="w-full sm:w-56"
+                selectClassName="h-9 text-xs"
+              />
+            </div>
           </div>
 
           {/* Directory List Area */}
@@ -218,7 +240,7 @@ export default function Customers() {
               <ul className="flex flex-col divide-y divide-[var(--color-app-border)]">
                 {processedCustomers.map(customer => (
                   <li key={customer.id} className="relative group">
-                    <div className="w-full flex items-center justify-between p-3.5 sm:p-5 gap-3 bg-[var(--color-app-panel)] hover:bg-[var(--color-app-panel-hover)] transition-colors duration-150">
+                    <div className={`w-full flex items-center justify-between p-3.5 sm:p-5 gap-3 transition-colors duration-150 ${customer.outstandingBalance > 0 ? "bg-[var(--color-app-warning)]/[0.03] hover:bg-[var(--color-app-warning)]/[0.07]" : "bg-[var(--color-app-panel)] hover:bg-[var(--color-app-panel-hover)]"}`}>
                       {/* Left: Identity & Click area */}
                       <button
                         onClick={() => navigate(`/customers/${customer.id}`)}
@@ -228,14 +250,38 @@ export default function Customers() {
                           {getInitials(customer.name)}
                         </div>
                         <div className="flex flex-col min-w-0">
-                          <span className="font-semibold text-sm sm:text-base text-[var(--color-app-text)] group-hover:text-[var(--color-app-accent)] transition-colors truncate">{customer.name}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-sm sm:text-base text-[var(--color-app-text)] group-hover:text-[var(--color-app-accent)] transition-colors truncate">{customer.name}</span>
+                          </div>
                           <span className="text-xs sm:text-sm text-[var(--color-app-text-muted)] truncate">{customer.phone}</span>
                         </div>
                       </button>
 
                       {/* Right: Metrics & Actions */}
-                      <div className="flex items-center gap-2 sm:gap-6 shrink-0">
-                        <div className="flex flex-col items-end text-right">
+                      <div className="flex items-center gap-3 sm:gap-6 shrink-0">
+                        {/* Outstanding Balance Badge / Metric */}
+                        {customer.outstandingBalance > 0 ? (
+                          <div className="flex flex-col items-end text-right px-2.5 py-1 rounded-lg bg-[var(--color-app-warning)]/15 border border-[var(--color-app-warning)]/30">
+                            <span className="text-[10px] font-bold text-[var(--color-app-warning)] uppercase tracking-wider">
+                              Owes
+                            </span>
+                            <span className="font-mono text-sm sm:text-base text-[var(--color-app-warning)] font-bold leading-tight">
+                              {formatCurrency(customer.outstandingBalance)}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-end text-right">
+                            <span className="text-[10px] font-semibold text-[var(--color-app-success)] uppercase tracking-wider mb-0.5">
+                              Balance
+                            </span>
+                            <span className="font-mono text-xs sm:text-sm text-[var(--color-app-success)] font-medium leading-tight">
+                              Settled
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Lifetime Spend */}
+                        <div className="hidden sm:flex flex-col items-end text-right">
                           <span className="text-[10px] sm:text-xs font-medium text-[var(--color-app-text-muted)] uppercase tracking-wider mb-0.5">Spend</span>
                           <span className="font-mono text-sm sm:text-lg text-[var(--color-app-text)] font-semibold leading-tight">
                             {formatCurrency(customer.lifetimeSpend)}
