@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Button, Card, LoadingState, ErrorState, Modal, Input } from "@/components/ui";
+import { Button, Card, LoadingState, ErrorState, Modal, Input, Pagination } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { useAppData } from "@/context/AppContext";
 import { formatCurrency } from "@/utils/currency";
@@ -26,6 +26,10 @@ export default function CustomerDetails() {
   const [paymentNotes, setPaymentNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [modalError, setModalError] = useState("");
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(5);
 
   const customer = useMemo(() => mockCustomers.find(c => c.id === id), [mockCustomers, id]);
 
@@ -242,12 +246,16 @@ export default function CustomerDetails() {
             </Card>
           ) : (
             <div className="flex flex-col gap-3">
-              {customerOrders.map((order) => {
+              {(() => {
+                const maxP = Math.max(1, Math.ceil(customerOrders.length / pageSize));
+                const safeP = Math.min(currentPage, maxP);
+                return customerOrders.slice((safeP - 1) * pageSize, safeP * pageSize);
+              })().map((order) => {
                 const margin = order.final_total > 0 ? ((order.final_profit / order.final_total) * 100).toFixed(0) : 0;
                 const discountAmount = order.discount_type !== "none" ? order.subtotal - order.final_total : 0;
-                const balDue = order.balance_due ?? 0;
-                const isPaid = balDue === 0;
-                const isPartial = balDue > 0 && balDue < order.final_total;
+                const balDue = Number(order.balance_due ?? 0);
+                const isPaid = balDue < 0.01;
+                const isPartial = balDue >= 0.01 && balDue < order.final_total;
 
                 return (
                   <Card key={order.id} padding="none" className="overflow-hidden bg-[var(--color-app-panel)] border-[var(--color-app-border)] hover:bg-[var(--color-app-panel-hover)] transition-colors shadow-sm">
@@ -338,6 +346,15 @@ export default function CustomerDetails() {
                   </Card>
                 );
               })}
+
+              <Pagination
+                currentPage={currentPage}
+                totalItems={customerOrders.length}
+                pageSize={pageSize}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={setPageSize}
+                pageSizeOptions={[5, 10, 20, 50]}
+              />
             </div>
           )}
         </div>

@@ -1,13 +1,25 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Card, Modal, LoadingState, ErrorState } from "@/components/ui";
+import { Button, Card, Modal, LoadingState, ErrorState, Pagination } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { formatCurrency } from "@/utils/currency";
 import { useAppData } from "@/context/AppContext";
 
 // ── Helpers ──────────────────────────────────────────────────────
 function toISODate(dateString) {
-  return new Date(dateString).toISOString().slice(0, 10);
+  if (!dateString) return new Date().toISOString().slice(0, 10);
+  if (typeof dateString === "string" && /^\d{4}-\d{2}-\d{2}/.test(dateString)) {
+    const match = dateString.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (match && !dateString.includes("Z") && !dateString.includes("+")) {
+      return match[1];
+    }
+  }
+  const d = new Date(dateString);
+  if (isNaN(d.getTime())) return new Date().toISOString().slice(0, 10);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function formatDisplayDate(isoDate) {
@@ -28,10 +40,20 @@ function nextDay(isoDate) {
   return d.toISOString().slice(0, 10);
 }
 
-// ── Compact Calendar ─────────────────────────────────────────────
+//  Compact Calendar 
 function MiniCalendar({ selectedDate, activeDates, onSelect }) {
+  const [prevSelectedDate, setPrevSelectedDate] = useState(selectedDate);
   const [viewYear, setViewYear] = useState(() => new Date(selectedDate + "T12:00:00").getFullYear());
   const [viewMonth, setViewMonth] = useState(() => new Date(selectedDate + "T12:00:00").getMonth());
+
+  if (selectedDate !== prevSelectedDate) {
+    setPrevSelectedDate(selectedDate);
+    const d = new Date(selectedDate + "T12:00:00");
+    if (!isNaN(d.getTime())) {
+      setViewYear(d.getFullYear());
+      setViewMonth(d.getMonth());
+    }
+  }
 
   const firstDay = new Date(viewYear, viewMonth, 1).getDay(); // 0=Sun
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
@@ -77,7 +99,7 @@ function MiniCalendar({ selectedDate, activeDates, onSelect }) {
           const isoDate = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
           const isSelected = isoDate === selectedDate;
           const hasActivity = activeDates.has(isoDate);
-          const today = new Date().toISOString().slice(0, 10);
+          const today = toISODate(new Date());
           const isToday = isoDate === today;
 
           return (
@@ -139,15 +161,16 @@ function ReassignModal({ isOpen, onClose, targetDate, allOrders, onReassign, cus
     .filter(o => toISODate(o.order_date) !== targetDate)
     .map(o => {
       const customer = customers.find(c => c.id === o.customer_id);
+      const items = o.items || [];
       let itemsSummary = "—";
-      if (o.items.length > 0) {
-        const firstProduct = products.find(p => p.id === o.items[0].product_id);
+      if (items.length > 0) {
+        const firstProduct = products.find(p => p.id === items[0].product_id);
         itemsSummary = firstProduct?.name ?? "Unknown";
-        if (o.items.length > 1) {
-          itemsSummary += ` (+${o.items.length - 1} more)`;
+        if (items.length > 1) {
+          itemsSummary += ` (+${items.length - 1} more)`;
         }
       }
-      return { ...o, customerName: customer?.name ?? "—", itemsSummary };
+      return { ...o, customerName: customer?.name ?? "Walk-in Customer", itemsSummary };
     })
     .filter(o => {
       const q = query.toLowerCase();
@@ -180,27 +203,31 @@ function ReassignModal({ isOpen, onClose, targetDate, allOrders, onReassign, cus
           {enriched.length === 0 ? (
             <p className="text-sm text-center text-[var(--color-app-text-muted)] py-6 italic">No orders found.</p>
           ) : (
-            enriched.map(order => (
-              <div key={order.id} className="flex items-center justify-between gap-4 p-3 bg-[var(--color-app-elevated)] border border-[var(--color-app-border)] rounded-xl hover:border-[var(--color-app-accent)]/40 transition-colors">
-                <div className="flex flex-col gap-0.5 min-w-0">
-                  <span className="text-sm font-semibold text-[var(--color-app-text)] truncate">{order.customerName}</span>
-                  <span className="text-xs text-[var(--color-app-text-subtle)] truncate">{order.itemsSummary} · {order.items.reduce((s, i) => s + i.quantity, 0)} item(s)</span>
-                  <span className="text-[10px] font-mono text-[var(--color-app-text-muted)]">{toISODate(order.order_date)}</span>
+            enriched.map(order => {
+              const items = order.items || [];
+              const itemCount = items.reduce((s, i) => s + (i.quantity || 0), 0);
+              return (
+                <div key={order.id} className="flex items-center justify-between gap-4 p-3 bg-[var(--color-app-elevated)] border border-[var(--color-app-border)] rounded-xl hover:border-[var(--color-app-accent)]/40 transition-colors">
+                  <div className="flex flex-col gap-0.5 min-w-0">
+                    <span className="text-sm font-semibold text-[var(--color-app-text)] truncate">{order.customerName}</span>
+                    <span className="text-xs text-[var(--color-app-text-subtle)] truncate">{order.itemsSummary} · {itemCount} item(s)</span>
+                    <span className="text-[10px] font-mono text-[var(--color-app-text-muted)]">{toISODate(order.order_date)}</span>
+                  </div>
+                  <div className="flex flex-col items-end gap-2 shrink-0">
+                    <span className="font-mono text-sm font-semibold text-[var(--color-app-text)]">{formatCurrency(order.final_total)}</span>
+                    <Button
+                      variant="primary"
+                      className="text-xs h-7 px-3"
+                      loading={reassigningId === order.id}
+                      disabled={reassigningId !== null}
+                      onClick={() => handleMove(order.id)}
+                    >
+                      Move here
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex flex-col items-end gap-2 shrink-0">
-                  <span className="font-mono text-sm font-semibold text-[var(--color-app-text)]">{formatCurrency(order.final_total)}</span>
-                  <Button
-                    variant="primary"
-                    className="text-xs h-7 px-3"
-                    loading={reassigningId === order.id}
-                    disabled={reassigningId !== null}
-                    onClick={() => handleMove(order.id)}
-                  >
-                    Move here
-                  </Button>
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
 
@@ -215,16 +242,28 @@ function ReassignModal({ isOpen, onClose, targetDate, allOrders, onReassign, cus
 //  Main Component 
 export default function SalesByDay() {
   const navigate = useNavigate();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = toISODate(new Date());
   const { orders, customers: mockCustomers, products: mockProducts, categories, updateOrderDate, isLoading, error, refreshData } = useAppData();
 
-  // Default to most recent order date if available
-  const latestOrderDate = orders.length > 0
-    ? toISODate(orders.reduce((a, b) => new Date(a.order_date) > new Date(b.order_date) ? a : b).order_date)
-    : today;
-
-  const [selectedDate, setSelectedDate] = useState(latestOrderDate);
+  const [selectedDate, setSelectedDate] = useState(today);
   const [isReassignOpen, setIsReassignOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(5);
+  const [hasUserSelectedDate, setHasUserSelectedDate] = useState(false);
+  const [prevOrdersLength, setPrevOrdersLength] = useState(0);
+
+  // Auto-sync selectedDate to latest available order date on first load if user hasn't picked a date
+  if (!hasUserSelectedDate && orders.length > 0 && prevOrdersLength === 0) {
+    setPrevOrdersLength(orders.length);
+    const latest = toISODate(orders.reduce((a, b) => new Date(a.order_date) > new Date(b.order_date) ? a : b).order_date);
+    setSelectedDate(latest);
+  }
+
+  const handleSelectDate = (dateStr) => {
+    setSelectedDate(dateStr);
+    setCurrentPage(1);
+    setHasUserSelectedDate(true);
+  };
 
   // Build the set of active (order-having) dates for the calendar dots
   const activeDates = new Set(orders.map(o => toISODate(o.order_date)));
@@ -234,18 +273,27 @@ export default function SalesByDay() {
     .filter(o => toISODate(o.order_date) === selectedDate)
     .map(o => {
       const customer = mockCustomers.find(c => c.id === o.customer_id);
-      return { ...o, customerName: customer?.name ?? "—" };
+      return { ...o, customerName: customer?.name ?? "Walk-in Customer" };
     })
     .sort((a, b) => (a.customer_id || "").localeCompare(b.customer_id || ""));
 
   // Group by customer
   const byCustomer = dayOrders.reduce((acc, order) => {
-    if (!acc[order.customer_id]) {
-      acc[order.customer_id] = { customerName: order.customerName, orders: [] };
+    const key = order.customer_id || "guest";
+    if (!acc[key]) {
+      acc[key] = { customerName: order.customerName, orders: [] };
     }
-    acc[order.customer_id].orders.push(order);
+    acc[key].orders.push(order);
     return acc;
   }, {});
+
+  const customerEntries = Object.entries(byCustomer);
+  const totalPages = Math.max(1, Math.ceil(customerEntries.length / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedCustomerEntries = customerEntries.slice(
+    (safePage - 1) * pageSize,
+    safePage * pageSize
+  );
 
   // Day totals
   const dayRevenue = dayOrders.reduce((s, r) => s + r.final_total, 0);
@@ -279,14 +327,14 @@ export default function SalesByDay() {
     >
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 pb-12">
 
-        {/* ── Left: Calendar Column ── */}
+        {/* Left: Calendar Column */}
         <div className="lg:col-span-4">
           <div className="sticky top-20 flex flex-col gap-4">
             <Card padding="lg" className="bg-[var(--color-app-panel)] border-[var(--color-app-border)]">
               <MiniCalendar
                 selectedDate={selectedDate}
                 activeDates={activeDates}
-                onSelect={setSelectedDate}
+                onSelect={handleSelectDate}
               />
             </Card>
 
@@ -295,7 +343,7 @@ export default function SalesByDay() {
               <Button
                 variant="secondary"
                 className="flex-1 flex items-center justify-center gap-2 text-sm"
-                onClick={() => setSelectedDate(prevDay(selectedDate))}
+                onClick={() => handleSelectDate(prevDay(selectedDate))}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
                 Prev Day
@@ -303,14 +351,14 @@ export default function SalesByDay() {
               <Button
                 variant="secondary"
                 className="flex-1 flex items-center justify-center gap-2 text-sm"
-                onClick={() => setSelectedDate(today)}
+                onClick={() => handleSelectDate(today)}
               >
                 Today
               </Button>
               <Button
                 variant="secondary"
                 className="flex-1 flex items-center justify-center gap-2 text-sm"
-                onClick={() => setSelectedDate(nextDay(selectedDate))}
+                onClick={() => handleSelectDate(nextDay(selectedDate))}
               >
                 Next Day
                 <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
@@ -323,7 +371,7 @@ export default function SalesByDay() {
           </div>
         </div>
 
-        {/* ── Right: Day Detail Column ── */}
+        {/* Right: Day Detail Column */}
         <div className="lg:col-span-8 flex flex-col gap-6">
 
           {/* Day Header */}
@@ -392,7 +440,7 @@ export default function SalesByDay() {
             </Card>
           ) : (
             <div className="flex flex-col gap-5">
-              {Object.entries(byCustomer).map(([customerId, { customerName, orders: custOrders }]) => {
+              {paginatedCustomerEntries.map(([customerId, { customerName, orders: custOrders }]) => {
                 const custRevenue = custOrders.reduce((s, r) => s + r.final_total, 0);
                 const custProfit = custOrders.reduce((s, r) => s + r.final_profit, 0);
                 const initials = customerName.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
@@ -477,6 +525,15 @@ export default function SalesByDay() {
                   </Card>
                 );
               })}
+
+              <Pagination
+                currentPage={currentPage}
+                totalItems={customerEntries.length}
+                pageSize={pageSize}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={setPageSize}
+                pageSizeOptions={[5, 10, 20, 50]}
+              />
             </div>
           )}
         </div>

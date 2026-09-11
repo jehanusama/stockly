@@ -1,11 +1,11 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Card, Select, Input, Modal, LoadingState, ErrorState } from "@/components/ui";
+import { Button, Card, Select, Input, Modal, LoadingState, ErrorState, Pagination } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { useAppData } from "@/context/AppContext";
 import { formatCurrency } from "@/utils/currency";
 
-// ── Helpers ──────────────────────────────────────────────────
+// Helpers
 function getInitials(name) {
   if (!name) return "?";
   const parts = name.trim().split(" ").filter(Boolean);
@@ -52,12 +52,14 @@ function AgeBadge({ dateStr }) {
   );
 }
 
-// ── Main Component ────────────────────────────────────────────
+// Main Component
 export default function Outstanding() {
   const navigate = useNavigate();
   const { customers, orders, isLoading, error, refreshData, recordCustomerPayment } = useAppData();
 
   const [sortBy, setSortBy] = useState("balance"); // "balance" | "oldest"
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(5);
   const [paymentTarget, setPaymentTarget] = useState(null); // { customer, totalBalance, oldestOrderDate }
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split("T")[0]);
@@ -70,8 +72,8 @@ export default function Outstanding() {
     const map = {};
 
     orders.forEach((o) => {
-      const due = o.balance_due ?? 0;
-      if (due <= 0 || !o.customer_id) return;
+      const due = Number(o.balance_due ?? 0);
+      if (due < 0.01 || !o.customer_id) return;
 
       if (!map[o.customer_id]) {
         map[o.customer_id] = {
@@ -96,6 +98,7 @@ export default function Outstanding() {
         const cust = customers.find((c) => c.id === entry.customerId);
         return {
           ...entry,
+          totalBalance: Math.round(entry.totalBalance * 100) / 100,
           name: cust?.name ?? "Unknown Customer",
           phone: cust?.phone ?? "",
         };
@@ -123,7 +126,7 @@ export default function Outstanding() {
       .filter(
         (o) =>
           o.customer_id === paymentTarget.customerId &&
-          (o.balance_due ?? 0) > 0
+          (o.balance_due ?? 0) >= 0.01
       )
       .sort((a, b) => new Date(a.order_date) - new Date(b.order_date));
 
@@ -133,11 +136,12 @@ export default function Outstanding() {
       if (remaining <= 0) break;
       const allocated = Math.min(order.balance_due, remaining);
       remaining -= allocated;
+      const newBal = order.balance_due - allocated;
       result.push({
         order,
         allocated,
-        newBalance: order.balance_due - allocated,
-        isFullyPaid: order.balance_due - allocated === 0,
+        newBalance: newBal,
+        isFullyPaid: newBal < 0.01,
       });
     }
     return result;
@@ -203,7 +207,7 @@ export default function Outstanding() {
     >
       <div className="flex flex-col gap-6 pb-8">
 
-        {/* ── Hero Strip ── */}
+        {/* Hero Strip */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Card
             padding="lg"
@@ -253,7 +257,7 @@ export default function Outstanding() {
           </div>
         </div>
 
-        {/* ── Sort toolbar ── */}
+        {/*  Sort toolbar  */}
         {unpaidCustomers.length > 1 && (
           <div className="flex items-center gap-3 justify-end">
             <span className="text-xs font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider">
@@ -261,7 +265,10 @@ export default function Outstanding() {
             </span>
             <Select
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
+              onChange={(e) => {
+                setSortBy(e.target.value);
+                setCurrentPage(1);
+              }}
               options={[
                 { value: "balance", label: "Highest Balance" },
                 { value: "oldest", label: "Oldest Unpaid Order" },
@@ -272,7 +279,7 @@ export default function Outstanding() {
           </div>
         )}
 
-        {/* ── Customer Worklist ── */}
+        {/* Customer Worklist */}
         {unpaidCustomers.length === 0 ? (
           /* Empty state */
           <Card
@@ -294,7 +301,11 @@ export default function Outstanding() {
           </Card>
         ) : (
           <div className="flex flex-col gap-3">
-            {unpaidCustomers.map((entry) => {
+            {(() => {
+              const maxP = Math.max(1, Math.ceil(unpaidCustomers.length / pageSize));
+              const safeP = Math.min(currentPage, maxP);
+              return unpaidCustomers.slice((safeP - 1) * pageSize, safeP * pageSize);
+            })().map((entry) => {
               const days = daysSince(entry.oldestUnpaidDate);
               const isEscalated = days >= 30;
               const isCritical = days >= 60;
@@ -397,6 +408,15 @@ export default function Outstanding() {
                 </Card>
               );
             })}
+
+            <Pagination
+              currentPage={currentPage}
+              totalItems={unpaidCustomers.length}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={setPageSize}
+              pageSizeOptions={[5, 10, 20, 50]}
+            />
           </div>
         )}
       </div>

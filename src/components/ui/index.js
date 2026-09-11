@@ -9,4 +9,5 @@ export { Badge }      from "./Badge";
 export { Logo }       from "./Logo";
 export { StockBar }   from "./StockBar";
 export { DatePicker } from "./DatePicker";
+export { Pagination } from "./Pagination";
 export { LoadingState, ErrorState } from "./LoadingState";

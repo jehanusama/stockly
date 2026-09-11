@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Card, Input, Select, Modal, LoadingState, ErrorState } from "@/components/ui";
+import { Button, Card, Input, Select, Modal, LoadingState, ErrorState, Pagination } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { useAppData } from "@/context/AppContext";
 import { formatCurrency } from "@/utils/currency";
@@ -19,6 +19,8 @@ export default function Customers() {
   const { customers, orders, addCustomer, updateCustomer, deleteCustomer, isLoading, error, refreshData } = useAppData();
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("balance"); // "balance" | "spend" | "name"
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -62,12 +64,14 @@ export default function Customers() {
   const processedCustomers = useMemo(() => {
     const salesByCustomer = {};
     orders.forEach(order => {
+      if (!order.customer_id) return;
       if (!salesByCustomer[order.customer_id]) {
         salesByCustomer[order.customer_id] = { orders: 0, spend: 0, balance: 0 };
       }
+      const due = Number(order.balance_due ?? 0);
       salesByCustomer[order.customer_id].orders += 1;
-      salesByCustomer[order.customer_id].spend += order.final_total;
-      salesByCustomer[order.customer_id].balance += (order.balance_due ?? 0);
+      salesByCustomer[order.customer_id].spend += Number(order.final_total ?? 0);
+      salesByCustomer[order.customer_id].balance += due >= 0.01 ? due : 0;
     });
 
     const lowerSearch = search.toLowerCase();
@@ -84,11 +88,19 @@ export default function Customers() {
         (c.notes ?? "").toLowerCase().includes(lowerSearch)
       )
       .sort((a, b) => {
-        if (sortBy === "balance") return b.outstandingBalance - a.outstandingBalance;
-        if (sortBy === "spend") return b.lifetimeSpend - a.lifetimeSpend;
+        if (sortBy === "balance") return (b.outstandingBalance || 0) - (a.outstandingBalance || 0);
+        if (sortBy === "spend") return (b.lifetimeSpend || 0) - (a.lifetimeSpend || 0);
         if (sortBy === "name") return (a.name || "").localeCompare(b.name || "");
-        if (sortBy === "newest") return new Date(b.created_at) - new Date(a.created_at);
-        if (sortBy === "oldest") return new Date(a.created_at) - new Date(b.created_at);
+        if (sortBy === "newest") {
+          const tA = a.created_at ? new Date(a.created_at).getTime() : 0;
+          const tB = b.created_at ? new Date(b.created_at).getTime() : 0;
+          return tB - tA;
+        }
+        if (sortBy === "oldest") {
+          const tA = a.created_at ? new Date(a.created_at).getTime() : 0;
+          const tB = b.created_at ? new Date(b.created_at).getTime() : 0;
+          return tA - tB;
+        }
         return 0;
       }); 
   }, [customers, orders, search, sortBy]);
@@ -201,14 +213,20 @@ export default function Customers() {
             <Input 
               placeholder="Search by name or phone..." 
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setCurrentPage(1);
+              }}
               className="w-full sm:max-w-xs bg-[var(--color-app-bg)] border-[var(--color-app-border)] shadow-sm"
             />
             <div className="flex items-center gap-2 w-full sm:w-auto shrink-0 justify-end">
               <span className="text-xs font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider hidden sm:inline">Sort:</span>
               <Select
                 value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
+                onChange={(e) => {
+                  setSortBy(e.target.value);
+                  setCurrentPage(1);
+                }}
                 options={[
                   { value: "balance", label: "Balance Owed (High to Low)" },
                   { value: "spend", label: "Lifetime Spend (High to Low)" },
@@ -242,7 +260,11 @@ export default function Customers() {
               </div>
             ) : (
               <ul className="flex flex-col divide-y divide-[var(--color-app-border)]">
-                {processedCustomers.map(customer => (
+                {(() => {
+                  const maxP = Math.max(1, Math.ceil(processedCustomers.length / pageSize));
+                  const safeP = Math.min(currentPage, maxP);
+                  return processedCustomers.slice((safeP - 1) * pageSize, safeP * pageSize);
+                })().map(customer => (
                   <li key={customer.id} className="relative group">
                     <div className={`w-full flex items-center justify-between p-3.5 sm:p-5 gap-3 transition-colors duration-150 ${customer.outstandingBalance > 0 ? "bg-[var(--color-app-warning)]/[0.03] hover:bg-[var(--color-app-warning)]/[0.07]" : "bg-[var(--color-app-panel)] hover:bg-[var(--color-app-panel-hover)]"}`}>
                       {/* Left: Identity & Click area */}
@@ -336,6 +358,15 @@ export default function Customers() {
               </ul>
             )}
           </div>
+
+          <Pagination
+            currentPage={currentPage}
+            totalItems={processedCustomers.length}
+            pageSize={pageSize}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={setPageSize}
+            pageSizeOptions={[10, 20, 50, 100]}
+          />
         </Card>
       </div>
 

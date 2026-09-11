@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, Modal, Select, DatePicker, LoadingState, ErrorState } from "@/components/ui";
+import { Button, Modal, Select, DatePicker, LoadingState, ErrorState, Pagination } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { formatCurrency } from "@/utils/currency";
 import { useAppData } from "@/context/AppContext";
@@ -108,14 +108,22 @@ function FilterToolbar({ filters, onChange, onClear, hasActiveFilters, customers
 export default function SalesHistory() {
   const { orders, customers: mockCustomers, products: mockProducts, categories, deleteOrder, isLoading, error, refreshData } = useAppData();
   const [filters, setFilters] = useState({ customerId: "", paymentStatus: "", productId: "", categoryId: "", dateFrom: "", dateTo: "" });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
 
   const hasActiveFilters = Object.values(filters).some(v => v !== "");
 
-  const updateFilter = (key, value) => setFilters(prev => ({ ...prev, [key]: value }));
-  const clearFilters = () => setFilters({ customerId: "", paymentStatus: "", productId: "", categoryId: "", dateFrom: "", dateTo: "" });
+  const updateFilter = (key, value) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
+    setCurrentPage(1);
+  };
+  const clearFilters = () => {
+    setFilters({ customerId: "", paymentStatus: "", productId: "", categoryId: "", dateFrom: "", dateTo: "" });
+    setCurrentPage(1);
+  };
 
   // Process and filter orders
   const tableRows = orders
@@ -167,6 +175,11 @@ export default function SalesHistory() {
         marginPct 
       };
     });
+
+  const paginatedTableRows = tableRows.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
 
   // Totals for the footer
   const footerRevenue = tableRows.reduce((s, r) => s + r.final_total, 0);
@@ -368,7 +381,7 @@ export default function SalesHistory() {
             </thead>
             <tbody>
               {tableRows.length === 0 ? emptyStateNode : (
-                tableRows.map((row, idx) => (
+                paginatedTableRows.map((row, idx) => (
                   <tr
                     key={row.id ?? idx}
                     className="border-b border-[var(--color-app-border)] last:border-0 bg-[var(--color-app-panel)] hover:bg-[var(--color-app-panel-hover)] transition-colors duration-100"
@@ -399,7 +412,7 @@ export default function SalesHistory() {
               No sales match your filters
             </div>
           ) : (
-            tableRows.map((row, idx) => {
+            paginatedTableRows.map((row, idx) => {
               const due = row.balance_due ?? 0;
               return (
                 <div key={row.id ?? idx} className="bg-[var(--color-app-panel)] border border-[var(--color-app-border)] rounded-xl p-4 flex flex-col gap-2.5 shadow-sm">
@@ -440,6 +453,15 @@ export default function SalesHistory() {
             })
           )}
         </div>
+
+        <Pagination
+          currentPage={currentPage}
+          totalItems={tableRows.length}
+          pageSize={pageSize}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={setPageSize}
+          pageSizeOptions={[10, 25, 50, 100]}
+        />
 
       </div>
 
