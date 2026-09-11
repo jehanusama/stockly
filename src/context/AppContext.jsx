@@ -174,6 +174,7 @@ export function AppProvider({ children }) {
       const payload = {
         name: product.name,
         cost_price: Number(product.cost_price ?? 0),
+        sale_price: product.sale_price !== "" && product.sale_price != null ? Number(product.sale_price) : null,
         stock_quantity: 0,
         unit: product.unit || "kilo",
         category_id: product.category_id,
@@ -220,6 +221,7 @@ export function AppProvider({ children }) {
         name: updatedProduct.name,
         unit: updatedProduct.unit || "kilo",
         category_id: updatedProduct.category_id,
+        sale_price: updatedProduct.sale_price !== "" && updatedProduct.sale_price != null ? Number(updatedProduct.sale_price) : null,
       };
 
       const { data, error } = await supabase

@@ -154,7 +154,7 @@ export default function Products() {
   const [deleteBatchTarget, setDeleteBatchTarget] = useState(null);
 
   // Form States
-  const [addFormData, setAddFormData] = useState({ category_id: "", name: "", cost: "", stock: "", unit: "kilo" });
+  const [addFormData, setAddFormData] = useState({ category_id: "", name: "", cost: "", sale_price: "", stock: "", unit: "kilo" });
   const [editFormData, setEditFormData] = useState({ id: "", category_id: "", name: "", unit: "kilo" });
   const [restockForm, setRestockForm] = useState({
     product_id: "",
@@ -173,8 +173,8 @@ export default function Products() {
   });
 
   const resetForms = () => {
-    setAddFormData({ category_id: "", name: "", cost: "", stock: "", unit: "kilo" });
-    setEditFormData({ id: "", category_id: "", name: "", unit: "kilo" });
+    setAddFormData({ category_id: "", name: "", cost: "", sale_price: "", stock: "", unit: "kilo" });
+    setEditFormData({ id: "", category_id: "", name: "", unit: "kilo", sale_price: "" });
     setRestockForm({
       product_id: "",
       productName: "",
@@ -207,6 +207,7 @@ export default function Products() {
       category_id: product.category_id,
       name: product.name,
       unit: product.unit || "kilo",
+      sale_price: product.sale_price != null ? String(product.sale_price) : "",
     });
     setIsEditModalOpen(true);
   };
@@ -282,6 +283,7 @@ export default function Products() {
       category_id: addFormData.category_id,
       name: addFormData.name.trim(),
       cost_price: addFormData.cost ? parseFloat(addFormData.cost) : 0,
+      sale_price: addFormData.sale_price !== "" ? parseFloat(addFormData.sale_price) : null,
       stock_quantity: addFormData.stock ? parseFloat(addFormData.stock) : 0,
       unit: addFormData.unit || "kilo"
     };
@@ -306,7 +308,8 @@ export default function Products() {
       id: editFormData.id,
       category_id: editFormData.category_id,
       name: editFormData.name.trim(),
-      unit: editFormData.unit || "kilo"
+      unit: editFormData.unit || "kilo",
+      sale_price: editFormData.sale_price !== "" ? parseFloat(editFormData.sale_price) : null,
     });
     setIsSubmitting(false);
     if (res && !res.success) {
@@ -739,6 +742,16 @@ export default function Products() {
               onChange={(e) => setAddFormData({ ...addFormData, cost: e.target.value })}
               placeholder="0.00 (Optional)"
             />
+            <Input
+              label="Default Sale Price (EGP)"
+              type="number"
+              min="0"
+              step="0.01"
+              value={addFormData.sale_price}
+              onChange={(e) => setAddFormData({ ...addFormData, sale_price: e.target.value })}
+              placeholder="Leave blank = auto"
+              helperText="Pre-fills the price when selling"
+            />
             <div className="flex gap-2">
               <div className="flex-1">
                 <Input
@@ -809,6 +822,17 @@ export default function Products() {
             onChange={(e) => setEditFormData({ ...editFormData, unit: e.target.value })}
             placeholder="kilo"
             required
+          />
+
+          <Input
+            label="Default Sale Price (EGP)"
+            type="number"
+            min="0"
+            step="0.01"
+            value={editFormData.sale_price}
+            onChange={(e) => setEditFormData({ ...editFormData, sale_price: e.target.value })}
+            placeholder="Leave blank = auto (cost × 1.2)"
+            helperText="Pre-fills the price when adding this product to a sale"
           />
 
           <div className="flex justify-end gap-3 mt-4">

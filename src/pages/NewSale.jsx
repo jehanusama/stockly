@@ -56,7 +56,7 @@ function BatchPicker({ categories, products, onAddToCart }) {
         [product.id]: {
           checked: true,
           quantity: "1",
-          customPrice: (product.cost_price * 1.2).toFixed(2),
+          customPrice: (product.sale_price != null ? product.sale_price : product.cost_price * 1.2).toFixed(2),
         },
       };
     });
