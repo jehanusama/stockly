@@ -829,6 +829,31 @@ export default function NewSale() {
                       </span>
                     </div>
 
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setAmountPaidInput(finalTotal.toString())}
+                        className={`flex-1 py-1.5 px-2.5 text-xs font-semibold rounded-lg border transition-colors ${
+                          effectiveAmountPaid >= finalTotal && finalTotal > 0
+                            ? "border-[var(--color-app-success)]/40 bg-[var(--color-app-success)]/10 text-[var(--color-app-success)]"
+                            : "border-[var(--color-app-border)] hover:bg-[var(--color-app-panel-hover)] text-[var(--color-app-text-muted)]"
+                        }`}
+                      >
+                        Pay Full ({formatCurrency(finalTotal)})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAmountPaidInput("0")}
+                        className={`flex-1 py-1.5 px-2.5 text-xs font-semibold rounded-lg border transition-colors ${
+                          effectiveAmountPaid === 0
+                            ? "border-[var(--color-app-warning)] bg-[var(--color-app-warning)]/15 text-[var(--color-app-warning)]"
+                            : "border-[var(--color-app-border)] hover:bg-[var(--color-app-warning)]/10 text-[var(--color-app-warning)]"
+                        }`}
+                      >
+                        On Credit (0 EGP)
+                      </button>
+                    </div>
+
                     <Input
                       label="Amount Paid Now (EGP)"
                       type="number"

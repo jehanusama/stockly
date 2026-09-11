@@ -43,6 +43,18 @@ export function AppProvider({ children }) {
         quantity_remaining: Number(b.quantity_remaining ?? 0),
       }));
 
+      const fetchedPayments = (payRes.data || []).map((p) => ({
+        ...p,
+        amount: Number(p.amount ?? 0),
+      }));
+
+      const paymentsByOrder = {};
+      fetchedPayments.forEach((p) => {
+        if (p.order_id) {
+          paymentsByOrder[p.order_id] = (paymentsByOrder[p.order_id] || 0) + p.amount;
+        }
+      });
+
       setCategories(catRes.data || []);
       setProducts(
         (prodRes.data || []).map((p) => {
@@ -61,8 +73,10 @@ export function AppProvider({ children }) {
       setOrders(
         (ordRes.data || []).map((o) => {
           const finalTot = Number(o.final_total ?? 0);
-          const amtPaid = Number(o.amount_paid ?? 0);
-          const balDue = Number(o.balance_due ?? Math.max(0, finalTot - amtPaid));
+          const amtPaid = paymentsByOrder[o.id] !== undefined
+            ? paymentsByOrder[o.id]
+            : Number(o.amount_paid ?? 0);
+          const balDue = Math.max(0, finalTot - amtPaid);
           return {
             ...o,
             subtotal: Number(o.subtotal ?? 0),
@@ -81,12 +95,7 @@ export function AppProvider({ children }) {
           };
         })
       );
-      setPayments(
-        (payRes.data || []).map((p) => ({
-          ...p,
-          amount: Number(p.amount ?? 0),
-        }))
-      );
+      setPayments(fetchedPayments);
     } catch (err) {
       console.error("Error fetching data from Supabase:", err);
       setError(err.message || "Failed to load data from Supabase");
