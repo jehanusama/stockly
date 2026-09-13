@@ -16,7 +16,7 @@ function getInitials(name) {
 
 export default function Customers() {
   const navigate = useNavigate();
-  const { customers, orders, addCustomer, updateCustomer, deleteCustomer, isLoading, error, refreshData } = useAppData();
+  const { customers, orders, printedSales = [], getCustomerTotalBalance, addCustomer, updateCustomer, deleteCustomer, isLoading, error, refreshData } = useAppData();
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("balance"); // "balance" | "spend" | "name"
   const [currentPage, setCurrentPage] = useState(1);
@@ -66,12 +66,19 @@ export default function Customers() {
     orders.forEach(order => {
       if (!order.customer_id) return;
       if (!salesByCustomer[order.customer_id]) {
-        salesByCustomer[order.customer_id] = { orders: 0, spend: 0, balance: 0 };
+        salesByCustomer[order.customer_id] = { orders: 0, spend: 0 };
       }
-      const due = Number(order.balance_due ?? 0);
       salesByCustomer[order.customer_id].orders += 1;
       salesByCustomer[order.customer_id].spend += Number(order.final_total ?? 0);
-      salesByCustomer[order.customer_id].balance += due >= 0.01 ? due : 0;
+    });
+
+    printedSales.forEach(sale => {
+      if (!sale.customer_id) return;
+      if (!salesByCustomer[sale.customer_id]) {
+        salesByCustomer[sale.customer_id] = { orders: 0, spend: 0 };
+      }
+      salesByCustomer[sale.customer_id].orders += 1;
+      salesByCustomer[sale.customer_id].spend += Number(sale.line_total ?? 0);
     });
 
     const lowerSearch = search.toLowerCase();
@@ -80,7 +87,7 @@ export default function Customers() {
         ...c,
         totalOrders: salesByCustomer[c.id]?.orders || 0,
         lifetimeSpend: salesByCustomer[c.id]?.spend || 0,
-        outstandingBalance: salesByCustomer[c.id]?.balance || 0,
+        outstandingBalance: getCustomerTotalBalance(c.id),
       }))
       .filter(c => 
         (c.name ?? "").toLowerCase().includes(lowerSearch) || 
@@ -103,7 +110,7 @@ export default function Customers() {
         }
         return 0;
       }); 
-  }, [customers, orders, search, sortBy]);
+  }, [customers, orders, printedSales, getCustomerTotalBalance, search, sortBy]);
 
   const handleSaveCustomer = async (e) => {
     e.preventDefault();

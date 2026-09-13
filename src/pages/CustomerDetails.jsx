@@ -17,7 +17,18 @@ function getInitials(name) {
 export default function CustomerDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { customers: mockCustomers, orders: mockOrders, products: mockProducts, isLoading, error, refreshData, recordCustomerPayment } = useAppData();
+  const {
+    customers: mockCustomers = [],
+    orders: mockOrders = [],
+    printedSales = [],
+    printedItems = [],
+    products: mockProducts = [],
+    getCustomerTotalBalance,
+    isLoading,
+    error,
+    refreshData,
+    recordCustomerPayment,
+  } = useAppData();
 
   // Payment Modal state
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -33,26 +44,85 @@ export default function CustomerDetails() {
 
   const customer = useMemo(() => mockCustomers.find(c => c.id === id), [mockCustomers, id]);
 
-  const customerOrders = useMemo(() => {
-    return mockOrders
+  // Build unified transaction ledger combining Bags orders and Printed sales
+  const allTransactions = useMemo(() => {
+    const bagTxns = (mockOrders || [])
       .filter(o => o.customer_id === id)
-      .sort((a, b) => new Date(b.order_date).getTime() - new Date(a.order_date).getTime());
-  }, [mockOrders, id]);
+      .map(o => ({
+        id: o.id,
+        lineType: "Bags",
+        date: o.order_date,
+        itemsCount: (o.items || []).length,
+        itemsSummary: (o.items || []).length > 0
+          ? `${o.items.length} product type${o.items.length !== 1 ? 's' : ''}`
+          : (o.notes || "Manual Balance Entry"),
+        subtotal: o.subtotal ?? 0,
+        discountAmount: o.discount_type !== "none" ? (o.subtotal - o.final_total) : 0,
+        finalTotal: o.final_total ?? 0,
+        amountPaid: o.amount_paid ?? 0,
+        balanceDue: o.balance_due ?? 0,
+        profit: o.final_profit ?? 0,
+        items: (o.items || []).map((item, idx) => {
+          const p = mockProducts.find(prod => prod.id === item.product_id);
+          return {
+            id: item.id || `${item.product_id}-${idx}`,
+            name: p?.name ?? "Unknown product",
+            quantity: item.quantity,
+            unit: p?.unit ?? "kilo",
+            price: item.sale_price,
+            lineTotal: item.line_total,
+          };
+        }),
+        notes: o.notes,
+      }));
 
-  // Aggregate metrics
-  const totalOrders = customerOrders.length;
-  const lifetimeSpend = customerOrders.reduce((sum, o) => sum + o.final_total, 0);
-  const totalProfit = customerOrders.reduce((sum, o) => sum + o.final_profit, 0);
+    const printedTxns = (printedSales || [])
+      .filter(s => s.customer_id === id)
+      .map(s => {
+        const item = printedItems.find(p => p.id === s.printed_item_id) || s.printed_items;
+        const itemName = item?.name ?? "Printed Item";
+        const itemUnit = item?.unit ?? "piece";
+        return {
+          id: s.id,
+          lineType: "Printed",
+          date: s.sale_date,
+          itemsCount: 1,
+          itemsSummary: itemName,
+          subtotal: Number(s.line_total ?? 0),
+          discountAmount: 0,
+          finalTotal: Number(s.line_total ?? 0),
+          amountPaid: Number(s.amount_paid ?? 0),
+          balanceDue: Number(s.balance_due ?? 0),
+          profit: Number(s.line_profit ?? 0),
+          items: [{
+            id: s.id,
+            name: itemName,
+            quantity: Number(s.quantity ?? 0),
+            unit: itemUnit,
+            price: Number(s.sale_price ?? 0),
+            lineTotal: Number(s.line_total ?? 0),
+          }],
+          notes: s.notes,
+        };
+      });
+
+    return [...bagTxns, ...printedTxns].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [mockOrders, printedSales, id, mockProducts, printedItems]);
+
+  // Aggregate metrics across unified transactions
+  const totalOrders = allTransactions.length;
+  const lifetimeSpend = allTransactions.reduce((sum, t) => sum + t.finalTotal, 0);
+  const totalProfit = allTransactions.reduce((sum, t) => sum + t.profit, 0);
   const totalOutstandingBalance = useMemo(() => {
-    return customerOrders.reduce((sum, o) => sum + (o.balance_due ?? 0), 0);
-  }, [customerOrders]);
+    return getCustomerTotalBalance ? getCustomerTotalBalance(id) : allTransactions.reduce((sum, t) => sum + (t.balanceDue ?? 0), 0);
+  }, [getCustomerTotalBalance, id, allTransactions]);
 
-  // Unpaid orders sorted oldest first for FIFO allocation preview
-  const oldestUnpaidOrders = useMemo(() => {
-    return [...customerOrders]
-      .filter(o => (o.balance_due ?? 0) > 0)
-      .sort((a, b) => new Date(a.order_date).getTime() - new Date(b.order_date).getTime());
-  }, [customerOrders]);
+  // Unpaid transactions sorted oldest first for FIFO allocation preview
+  const oldestUnpaidTransactions = useMemo(() => {
+    return [...allTransactions]
+      .filter(t => (t.balanceDue ?? 0) > 0)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [allTransactions]);
 
   // Live FIFO Allocation Preview computation
   const allocationPreview = useMemo(() => {
@@ -62,22 +132,22 @@ export default function CustomerDetails() {
     let remaining = val;
     const allocations = [];
 
-    for (const order of oldestUnpaidOrders) {
+    for (const txn of oldestUnpaidTransactions) {
       if (remaining <= 0) break;
-      const allocated = Math.min(order.balance_due, remaining);
+      const allocated = Math.min(txn.balanceDue, remaining);
       remaining -= allocated;
-      const newBal = order.balance_due - allocated;
+      const newBal = txn.balanceDue - allocated;
       allocations.push({
-        order,
+        txn,
         allocated,
-        previousBalance: order.balance_due,
+        previousBalance: txn.balanceDue,
         newBalance: newBal,
         isFullyPaid: newBal === 0,
       });
     }
 
     return allocations;
-  }, [paymentAmount, oldestUnpaidOrders]);
+  }, [paymentAmount, oldestUnpaidTransactions]);
 
   const handleOpenPaymentModal = () => {
     setPaymentAmount(totalOutstandingBalance > 0 ? String(totalOutstandingBalance) : "");
@@ -176,7 +246,6 @@ export default function CustomerDetails() {
         
         {/* ── Account Header ── */}
         <Card padding="lg" className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 sm:gap-8 border-[var(--color-app-border)] bg-[var(--color-app-panel)] relative overflow-hidden">
-          {/* subtle background decoration */}
           <div className="absolute top-0 right-0 w-64 h-64 bg-[var(--color-app-accent)] opacity-5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none" />
 
           {/* Identity */}
@@ -198,10 +267,10 @@ export default function CustomerDetails() {
             </div>
           </div>
 
-          {/* Relationship Stats */}
+          {/* Combined Relationship Stats */}
           <div className="flex flex-wrap sm:flex-nowrap gap-6 sm:gap-8 sm:pl-8 sm:border-l border-[var(--color-app-border)] z-10 w-full sm:w-auto pt-4 sm:pt-0 border-t sm:border-t-0">
             <div className="flex flex-col">
-              <span className="text-[10px] font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider mb-1">Outstanding Balance</span>
+              <span className="text-[10px] font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider mb-1">Total Outstanding Balance</span>
               <span className={`text-2xl sm:text-3xl font-mono font-bold tracking-tight ${totalOutstandingBalance > 0 ? "text-[var(--color-app-warning)]" : "text-[var(--color-app-success)]"}`}>
                 {formatCurrency(totalOutstandingBalance)}
               </span>
@@ -218,18 +287,21 @@ export default function CustomerDetails() {
                 <span className="font-mono text-sm text-[var(--color-app-success)] font-semibold">{formatCurrency(totalProfit)}</span>
               </div>
               <div className="flex flex-col">
-                <span className="text-[10px] font-semibold text-[var(--color-app-text-subtle)] uppercase tracking-wider">Orders</span>
+                <span className="text-[10px] font-semibold text-[var(--color-app-text-subtle)] uppercase tracking-wider">Transactions</span>
                 <span className="font-mono text-sm text-[var(--color-app-text)] font-semibold">{totalOrders}</span>
               </div>
             </div>
           </div>
         </Card>
 
-        {/* ── Transaction Ledger ── */}
+        {/* ── Unified Transaction Ledger ── */}
         <div>
-          <h2 className="text-lg font-semibold text-[var(--color-app-text)] tracking-tight mb-4 px-1">Transaction Ledger</h2>
+          <div className="flex items-center justify-between mb-4 px-1">
+            <h2 className="text-lg font-semibold text-[var(--color-app-text)] tracking-tight">Unified Transaction Ledger</h2>
+            <span className="text-xs text-[var(--color-app-text-muted)] font-medium">Bags & Printed Line Transactions</span>
+          </div>
           
-          {customerOrders.length === 0 ? (
+          {allTransactions.length === 0 ? (
             <Card padding="lg" className="flex flex-col items-center justify-center py-16 text-center border-dashed border-[var(--color-app-border)] bg-[var(--color-app-bg)] shadow-none">
               <div className="w-16 h-16 rounded-full bg-[var(--color-app-elevated)] flex items-center justify-center mb-4 border border-[var(--color-app-border)] shadow-sm text-[var(--color-app-accent)]">
                 <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -247,33 +319,44 @@ export default function CustomerDetails() {
           ) : (
             <div className="flex flex-col gap-3">
               {(() => {
-                const maxP = Math.max(1, Math.ceil(customerOrders.length / pageSize));
+                const maxP = Math.max(1, Math.ceil(allTransactions.length / pageSize));
                 const safeP = Math.min(currentPage, maxP);
-                return customerOrders.slice((safeP - 1) * pageSize, safeP * pageSize);
-              })().map((order) => {
-                const margin = order.final_total > 0 ? ((order.final_profit / order.final_total) * 100).toFixed(0) : 0;
-                const discountAmount = order.discount_type !== "none" ? order.subtotal - order.final_total : 0;
-                const balDue = Number(order.balance_due ?? 0);
+                return allTransactions.slice((safeP - 1) * pageSize, safeP * pageSize);
+              })().map((txn) => {
+                const margin = txn.finalTotal > 0 ? ((txn.profit / txn.finalTotal) * 100).toFixed(0) : 0;
+                const balDue = Number(txn.balanceDue ?? 0);
                 const isPaid = balDue < 0.01;
-                const isPartial = balDue >= 0.01 && balDue < order.final_total;
+                const isPartial = balDue >= 0.01 && balDue < txn.finalTotal;
 
                 return (
-                  <Card key={order.id} padding="none" className="overflow-hidden bg-[var(--color-app-panel)] border-[var(--color-app-border)] hover:bg-[var(--color-app-panel-hover)] transition-colors shadow-sm">
+                  <Card key={txn.id} padding="none" className="overflow-hidden bg-[var(--color-app-panel)] border-[var(--color-app-border)] hover:bg-[var(--color-app-panel-hover)] transition-colors shadow-sm">
 
-                    {/* Order Header — Date, Status & Totals */}
+                    {/* Transaction Header — Date, Line Badge, Status & Totals */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 px-4 py-3 border-b border-[var(--color-app-border)] bg-[var(--color-app-elevated)]">
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="flex flex-col items-center justify-center w-12 h-12 bg-[var(--color-app-bg)] border border-[var(--color-app-border)] rounded-xl shrink-0">
                           <span className="text-[9px] uppercase font-bold text-[var(--color-app-text-muted)] tracking-wider leading-none mb-0.5">
-                            {new Date(order.order_date).toLocaleString('default', { month: 'short' })}
+                            {new Date(txn.date).toLocaleString('default', { month: 'short' })}
                           </span>
                           <span className="text-base font-mono font-bold text-[var(--color-app-text)] leading-none">
-                            {new Date(order.order_date).getDate()}
+                            {new Date(txn.date).getDate()}
                           </span>
                         </div>
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider truncate">Order #{order.id}</span>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider truncate">
+                              Ref #{txn.id}
+                            </span>
+
+                            {/* Product Line Badge */}
+                            <span className={`px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-md border ${
+                              txn.lineType === "Bags" 
+                                ? "bg-blue-500/15 text-blue-400 border-blue-500/30" 
+                                : "bg-purple-500/15 text-purple-400 border-purple-500/30"
+                            }`}>
+                              {txn.lineType}
+                            </span>
+
                             {/* Payment Status Badge */}
                             {isPaid ? (
                               <span className="px-2 py-0.5 text-[10px] font-semibold bg-[var(--color-app-success)]/15 text-[var(--color-app-success)] rounded-full">
@@ -289,21 +372,20 @@ export default function CustomerDetails() {
                               </span>
                             )}
                           </div>
-                          <p className="text-xs text-[var(--color-app-text-subtle)] mt-0.5">
-                            {(order.items || []).length > 0
-                              ? `${order.items.length} product type${order.items.length !== 1 ? 's' : ''}`
-                              : (order.notes || "Manual Balance Entry")}
+                          <p className="text-xs text-[var(--color-app-text-subtle)] mt-0.5 truncate">
+                            {txn.itemsSummary}
                           </p>
                         </div>
                       </div>
+
                       <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-5 border-t sm:border-t-0 sm:border-l border-[var(--color-app-border)] pt-2 sm:pt-0 sm:pl-4">
                         <div className="flex flex-col items-start sm:items-end">
                           <span className="text-[10px] font-semibold text-[var(--color-app-text-subtle)] uppercase tracking-wider mb-0.5">Total</span>
-                          <span className="font-mono font-bold text-sm sm:text-base text-[var(--color-app-text)]">{formatCurrency(order.final_total)}</span>
+                          <span className="font-mono font-bold text-sm sm:text-base text-[var(--color-app-text)]">{formatCurrency(txn.finalTotal)}</span>
                         </div>
                         <div className="flex flex-col items-start sm:items-end">
                           <span className="text-[10px] font-semibold text-[var(--color-app-text-subtle)] uppercase tracking-wider mb-0.5">Paid</span>
-                          <span className="font-mono font-semibold text-xs sm:text-sm text-[var(--color-app-text-muted)]">{formatCurrency(order.amount_paid ?? 0)}</span>
+                          <span className="font-mono font-semibold text-xs sm:text-sm text-[var(--color-app-text-muted)]">{formatCurrency(txn.amountPaid)}</span>
                         </div>
                         <div className="flex flex-col items-start sm:items-end">
                           <span className="text-[10px] font-semibold text-[var(--color-app-text-subtle)] uppercase tracking-wider mb-0.5">Due</span>
@@ -313,7 +395,7 @@ export default function CustomerDetails() {
                         </div>
                         <div className="flex flex-col items-end min-w-[60px]">
                           <span className="text-[10px] font-semibold text-[var(--color-app-text-subtle)] uppercase tracking-wider mb-0.5">Profit</span>
-                          <span className="font-mono text-xs sm:text-sm text-[var(--color-app-success)] font-semibold">+{formatCurrency(order.final_profit)}</span>
+                          <span className="font-mono text-xs sm:text-sm text-[var(--color-app-success)] font-semibold">+{formatCurrency(txn.profit)}</span>
                           <span className="text-[10px] font-mono font-medium text-[var(--color-app-success)] bg-[var(--color-app-success)]/10 px-1.5 rounded mt-0.5">{margin}% mgn</span>
                         </div>
                       </div>
@@ -321,111 +403,87 @@ export default function CustomerDetails() {
 
                     {/* Line Items */}
                     <div className="flex flex-col divide-y divide-[var(--color-app-border)]">
-                      {(order.items || []).length === 0 ? (
+                      {(txn.items || []).length === 0 ? (
                         <div className="flex items-center justify-between gap-4 px-4 py-3">
                           <div className="flex items-center gap-3">
                             <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-app-accent)] shrink-0" />
                             <div>
-                              <span className="text-sm font-medium text-[var(--color-app-text)]">{order.notes || "Manual Balance Entry"}</span>
+                              <span className="text-sm font-medium text-[var(--color-app-text)]">{txn.notes || "Manual Balance Entry"}</span>
                               <span className="block text-xs text-[var(--color-app-text-subtle)]">Manual Entry</span>
                             </div>
                           </div>
-                          <span className="font-mono text-sm font-semibold text-[var(--color-app-text)] shrink-0">{formatCurrency(order.final_total)}</span>
+                          <span className="font-mono text-sm font-semibold text-[var(--color-app-text)] shrink-0">{formatCurrency(txn.finalTotal)}</span>
                         </div>
                       ) : (
-                        order.items.map((item, idx) => {
-                          const product = mockProducts.find(p => p.id === item.product_id);
-                          return (
-                            <div key={idx} className="flex items-center justify-between gap-4 px-4 py-3">
-                              <div className="flex items-center gap-3">
-                                <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-app-border)] shrink-0" />
-                                <div>
-                                  <span className="text-sm font-medium text-[var(--color-app-text)]">{product ? product.name : "Unknown Product"}</span>
-                                  <span className="block text-xs text-[var(--color-app-text-subtle)]">
-                                    {item.quantity} {product?.unit || 'kilo'} @ {formatCurrency(item.sale_price)}/each
-                                  </span>
-                                </div>
+                        txn.items.map((item, idx) => (
+                          <div key={item.id || idx} className="flex items-center justify-between gap-4 px-4 py-3">
+                            <div className="flex items-center gap-3">
+                              <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${txn.lineType === "Bags" ? "bg-blue-400" : "bg-purple-400"}`} />
+                              <div>
+                                <span className="text-sm font-medium text-[var(--color-app-text)]">{item.name}</span>
+                                <span className="block text-xs font-mono text-[var(--color-app-text-muted)]">
+                                  {item.quantity} {item.unit} × {formatCurrency(item.price)}
+                                </span>
                               </div>
-                              <span className="font-mono text-sm font-semibold text-[var(--color-app-text)] shrink-0">{formatCurrency(item.line_total)}</span>
                             </div>
-                          );
-                        })
-                      )}
-
-                      {/* Discount row */}
-                      {discountAmount > 0 && (
-                        <div className="flex items-center justify-between gap-4 px-4 py-2 bg-[var(--color-app-warning)]/5">
-                          <span className="text-xs font-semibold text-[var(--color-app-warning)] uppercase tracking-wider pl-4">Order Discount</span>
-                          <span className="font-mono text-xs font-semibold text-[var(--color-app-warning)]">-{formatCurrency(discountAmount)}</span>
-                        </div>
+                            <span className="font-mono text-sm font-semibold text-[var(--color-app-text)] shrink-0">{formatCurrency(item.lineTotal)}</span>
+                          </div>
+                        ))
                       )}
                     </div>
                   </Card>
                 );
               })}
 
-              <Pagination
-                currentPage={currentPage}
-                totalItems={customerOrders.length}
-                pageSize={pageSize}
-                onPageChange={setCurrentPage}
-                onPageSizeChange={setPageSize}
-                pageSizeOptions={[5, 10, 20, 50]}
-              />
+              <div className="pt-2">
+                <Pagination
+                  currentPage={currentPage}
+                  totalCount={allTransactions.length}
+                  pageSize={pageSize}
+                  onPageChange={setCurrentPage}
+                  onPageSizeChange={(sz) => { setPageSize(sz); setCurrentPage(1); }}
+                />
+              </div>
             </div>
           )}
         </div>
       </div>
 
-      {/* ── Record Payment Modal ── */}
+      {/* Record Payment Modal */}
       <Modal
         isOpen={isPaymentModalOpen}
-        onClose={() => !isSubmitting && setIsPaymentModalOpen(false)}
+        onClose={() => setIsPaymentModalOpen(false)}
         title={`Record Payment — ${customer.name}`}
-        size="lg"
-        footer={
-          <div className="flex items-center justify-end gap-3 w-full">
-            <Button
-              variant="secondary"
-              onClick={() => setIsPaymentModalOpen(false)}
-              disabled={isSubmitting}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handleRecordPaymentSubmit}
-              disabled={isSubmitting || !paymentAmount || parseFloat(paymentAmount) <= 0 || parseFloat(paymentAmount) > totalOutstandingBalance + 0.001}
-            >
-              {isSubmitting ? "Recording..." : "Confirm Payment"}
-            </Button>
-          </div>
-        }
       >
-        <form onSubmit={handleRecordPaymentSubmit} className="flex flex-col gap-4">
-          <div className="p-3 bg-[var(--color-app-panel)] border border-[var(--color-app-border)] rounded-lg flex items-center justify-between">
-            <span className="text-xs font-medium text-[var(--color-app-text-muted)]">Total Outstanding Balance:</span>
-            <span className="text-lg font-mono font-bold text-[var(--color-app-warning)]">{formatCurrency(totalOutstandingBalance)}</span>
+        <form onSubmit={handleRecordPaymentSubmit} className="flex flex-col gap-6">
+          {modalError && (
+            <div className="px-4 py-3 rounded-lg bg-[var(--color-app-danger-muted)] text-[var(--color-app-danger)] text-sm font-medium border border-[var(--color-app-danger)]">
+              {modalError}
+            </div>
+          )}
+
+          <div className="p-4 rounded-xl bg-[var(--color-app-elevated)] border border-[var(--color-app-border)] flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-app-text-muted)]">Total Outstanding Balance</span>
+            <span className="text-xl font-mono font-bold text-[var(--color-app-warning)]">
+              {formatCurrency(totalOutstandingBalance)}
+            </span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
-              id="payment-amount"
-              label="Payment Amount"
+              label="Payment Amount (EGP)"
               type="number"
-              step="0.01"
               min="0.01"
+              step="0.01"
               max={totalOutstandingBalance}
-              placeholder="0.00"
               value={paymentAmount}
-              onChange={(e) => {
-                setPaymentAmount(e.target.value);
-                setModalError("");
-              }}
+              onChange={(e) => setPaymentAmount(e.target.value)}
+              placeholder="0.00"
               required
+              autoFocus
             />
+
             <Input
-              id="payment-date"
               label="Payment Date"
               type="date"
               value={paymentDate}
@@ -435,48 +493,36 @@ export default function CustomerDetails() {
           </div>
 
           <Input
-            id="payment-notes"
             label="Notes (Optional)"
             type="text"
-            placeholder="e.g. Bank transfer, cash payment..."
             value={paymentNotes}
             onChange={(e) => setPaymentNotes(e.target.value)}
+            placeholder="e.g. Bank Transfer, Cash receipt #"
           />
 
-          {modalError && (
-            <div className="p-3 bg-[var(--color-app-danger)]/10 border border-[var(--color-app-danger)]/20 rounded-lg text-xs font-medium text-[var(--color-app-danger)]">
-              {modalError}
-            </div>
-          )}
-
-          {/* FIFO Allocation Live Preview */}
+          {/* Live FIFO Allocation Preview */}
           {allocationPreview.length > 0 && (
-            <div className="flex flex-col gap-2 mt-2 p-3.5 bg-[var(--color-app-bg)] border border-[var(--color-app-border)] rounded-xl">
+            <div className="flex flex-col gap-3">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider">
-                  Payment Allocation Preview (Oldest First)
+                <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-app-text-muted)]">
+                  FIFO Payment Allocation Preview
                 </span>
-                <span className="text-[10px] font-mono text-[var(--color-app-text-subtle)]">
-                  {allocationPreview.length} order{allocationPreview.length !== 1 ? 's' : ''} affected
-                </span>
+                <span className="text-[11px] text-[var(--color-app-text-subtle)]">Oldest unpaid items first</span>
               </div>
-              <div className="flex flex-col divide-y divide-[var(--color-app-border)] mt-1">
-                {allocationPreview.map(({ order, allocated, newBalance, isFullyPaid }) => (
-                  <div key={order.id} className="flex items-center justify-between py-2 text-xs">
+              <div className="flex flex-col gap-2 max-h-48 overflow-y-auto pr-1">
+                {allocationPreview.map(({ txn, allocated, newBalance, isFullyPaid }) => (
+                  <div key={txn.id} className="flex items-center justify-between p-3 rounded-lg bg-[var(--color-app-elevated)] border border-[var(--color-app-border)] text-xs">
                     <div className="flex flex-col">
-                      <span className="font-medium text-[var(--color-app-text)]">
-                        Order #{order.id}
-                      </span>
-                      <span className="text-[10px] text-[var(--color-app-text-subtle)]">
-                        {new Date(order.order_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-semibold text-[var(--color-app-text)]">{new Date(txn.date).toLocaleDateString()}</span>
+                        <span className={`px-1.5 py-0.2 text-[9px] font-bold rounded ${txn.lineType === "Bags" ? "bg-blue-500/15 text-blue-400" : "bg-purple-500/15 text-purple-400"}`}>{txn.lineType}</span>
+                      </div>
+                      <span className="text-[var(--color-app-text-muted)] font-mono">Previous due: {formatCurrency(txn.balanceDue)}</span>
                     </div>
                     <div className="flex flex-col items-end">
-                      <span className="font-mono font-semibold text-[var(--color-app-success)]">
-                        +{formatCurrency(allocated)}
-                      </span>
-                      <span className={`text-[10px] font-mono ${isFullyPaid ? "text-[var(--color-app-success)] font-medium" : "text-[var(--color-app-text-muted)]"}`}>
-                        {isFullyPaid ? "Fully Paid" : `Remaining: ${formatCurrency(newBalance)}`}
+                      <span className="font-mono font-bold text-[var(--color-app-success)]">+{formatCurrency(allocated)}</span>
+                      <span className={`font-mono text-[11px] ${isFullyPaid ? "text-[var(--color-app-success)] font-semibold" : "text-[var(--color-app-warning)]"}`}>
+                        {isFullyPaid ? "✓ Fully settled" : `Remaining: ${formatCurrency(newBalance)}`}
                       </span>
                     </div>
                   </div>
@@ -484,9 +530,27 @@ export default function CustomerDetails() {
               </div>
             </div>
           )}
+
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-[var(--color-app-border)]">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setIsPaymentModalOpen(false)}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              loading={isSubmitting}
+              disabled={!paymentAmount || parseFloat(paymentAmount) <= 0}
+            >
+              Confirm & Record Payment
+            </Button>
+          </div>
         </form>
       </Modal>
     </PageContainer>
   );
 }
-

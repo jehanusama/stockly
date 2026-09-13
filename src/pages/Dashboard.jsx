@@ -23,11 +23,14 @@ const CustomTooltip = ({ active, payload, label }) => {
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { products: mockProducts, customers: mockCustomers, orders: mockOrders, isLoading, error, refreshData } = useAppData();
+  const { products: mockProducts, customers: mockCustomers, orders: mockOrders, printedSales = [], isLoading, error, refreshData } = useAppData();
 
   const totalRevenue = useMemo(() => mockOrders.reduce((sum, o) => sum + o.final_total, 0), [mockOrders]);
   const totalProfit = useMemo(() => mockOrders.reduce((sum, o) => sum + o.final_profit, 0), [mockOrders]);
-  const totalOutstanding = useMemo(() => mockOrders.reduce((sum, o) => sum + (o.balance_due ?? 0), 0), [mockOrders]);
+
+  const bagsOutstanding = useMemo(() => mockOrders.reduce((sum, o) => sum + (o.balance_due ?? 0), 0), [mockOrders]);
+  const printedOutstanding = useMemo(() => (printedSales || []).reduce((sum, s) => sum + (s.balance_due ?? 0), 0), [printedSales]);
+  const totalOutstanding = useMemo(() => bagsOutstanding + printedOutstanding, [bagsOutstanding, printedOutstanding]);
 
   const unpaidCustomers = useMemo(() => {
     const balances = {};
@@ -35,6 +38,13 @@ export default function Dashboard() {
       const due = o.balance_due ?? 0;
       if (due > 0 && o.customer_id) {
         balances[o.customer_id] = (balances[o.customer_id] || 0) + due;
+      }
+    });
+
+    (printedSales || []).forEach(s => {
+      const due = s.balance_due ?? 0;
+      if (due > 0 && s.customer_id) {
+        balances[s.customer_id] = (balances[s.customer_id] || 0) + due;
       }
     });
 
@@ -48,7 +58,7 @@ export default function Dashboard() {
         };
       })
       .sort((a, b) => b.balance - a.balance);
-  }, [mockOrders, mockCustomers]);
+  }, [mockOrders, printedSales, mockCustomers]);
 
   if (isLoading) {
     return (
@@ -208,6 +218,9 @@ export default function Dashboard() {
               <p className="text-xs text-[var(--color-app-text-muted)] uppercase tracking-wider mb-2">Outstanding Credit</p>
               <p className={`text-2xl font-mono font-bold ${totalOutstanding > 0 ? "text-[var(--color-app-warning)]" : "text-[var(--color-app-success)]"}`}>
                 {formatCurrency(totalOutstanding)}
+              </p>
+              <p className="text-[11px] text-[var(--color-app-text-subtle)] font-mono mt-1">
+                Bags: {formatCurrency(bagsOutstanding)} · Printed: {formatCurrency(printedOutstanding)}
               </p>
             </Card>
 

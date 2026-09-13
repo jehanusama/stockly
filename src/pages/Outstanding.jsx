@@ -55,7 +55,7 @@ function AgeBadge({ dateStr }) {
 // Main Component
 export default function Outstanding() {
   const navigate = useNavigate();
-  const { customers, orders, isLoading, error, refreshData, recordCustomerPayment, addManualOutstanding } = useAppData();
+  const { customers, orders, printedSales = [], isLoading, error, refreshData, recordCustomerPayment, addManualOutstanding } = useAppData();
 
   const [sortBy, setSortBy] = useState("balance"); // "balance" | "oldest"
   const [currentPage, setCurrentPage] = useState(1);
@@ -122,7 +122,7 @@ export default function Outstanding() {
     }
   };
 
-  // Build the unpaid customer list
+  // Build the unpaid customer list (Bags + Printed combined)
   const unpaidCustomers = useMemo(() => {
     const map = {};
 
@@ -148,6 +148,28 @@ export default function Outstanding() {
       }
     });
 
+    (printedSales || []).forEach((s) => {
+      const due = Number(s.balance_due ?? 0);
+      if (due < 0.01 || !s.customer_id) return;
+
+      if (!map[s.customer_id]) {
+        map[s.customer_id] = {
+          customerId: s.customer_id,
+          totalBalance: 0,
+          unpaidOrderCount: 0,
+          oldestUnpaidDate: s.sale_date,
+        };
+      }
+      map[s.customer_id].totalBalance += due;
+      map[s.customer_id].unpaidOrderCount += 1;
+
+      const existing = new Date(map[s.customer_id].oldestUnpaidDate);
+      const current = new Date(s.sale_date);
+      if (current < existing) {
+        map[s.customer_id].oldestUnpaidDate = s.sale_date;
+      }
+    });
+
     return Object.values(map)
       .map((entry) => {
         const cust = customers.find((c) => c.id === entry.customerId);
@@ -164,43 +186,55 @@ export default function Outstanding() {
         }
         return b.totalBalance - a.totalBalance;
       });
-  }, [orders, customers, sortBy]);
+  }, [orders, printedSales, customers, sortBy]);
 
   const totalOutstanding = useMemo(
     () => unpaidCustomers.reduce((sum, c) => sum + c.totalBalance, 0),
     [unpaidCustomers]
   );
 
-  // FIFO Allocation Preview
+  // FIFO Allocation Preview (Bags + Printed combined)
   const allocationPreview = useMemo(() => {
     if (!paymentTarget) return [];
     const val = parseFloat(paymentAmount);
     if (isNaN(val) || val <= 0) return [];
 
-    const unpaidOrders = orders
+    const unpaidBags = orders
       .filter(
         (o) =>
           o.customer_id === paymentTarget.customerId &&
           (o.balance_due ?? 0) >= 0.01
       )
-      .sort((a, b) => new Date(a.order_date) - new Date(b.order_date));
+      .map((o) => ({ ...o, date: o.order_date, lineType: "Bags" }));
+
+    const unpaidPrinted = (printedSales || [])
+      .filter(
+        (s) =>
+          s.customer_id === paymentTarget.customerId &&
+          (s.balance_due ?? 0) >= 0.01
+      )
+      .map((s) => ({ ...s, date: s.sale_date, lineType: "Printed" }));
+
+    const allUnpaid = [...unpaidBags, ...unpaidPrinted].sort(
+      (a, b) => new Date(a.date) - new Date(b.date)
+    );
 
     let remaining = val;
     const result = [];
-    for (const order of unpaidOrders) {
+    for (const item of allUnpaid) {
       if (remaining <= 0) break;
-      const allocated = Math.min(order.balance_due, remaining);
+      const allocated = Math.min(item.balance_due, remaining);
       remaining -= allocated;
-      const newBal = order.balance_due - allocated;
+      const newBal = item.balance_due - allocated;
       result.push({
-        order,
+        order: item,
         allocated,
         newBalance: newBal,
         isFullyPaid: newBal < 0.01,
       });
     }
     return result;
-  }, [paymentAmount, paymentTarget, orders]);
+  }, [paymentAmount, paymentTarget, orders, printedSales]);
 
   const openPaymentModal = (entry) => {
     setPaymentTarget(entry);
