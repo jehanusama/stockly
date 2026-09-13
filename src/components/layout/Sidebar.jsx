@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { Logo } from "@/components/ui";
 import { useAuth } from "@/context/AuthContext";
@@ -75,30 +75,97 @@ const NAV_ITEMS = [
       </svg>
     ),
   },
+  {
+    label: "New Printed Sale",
+    to: "/printed?action=new-sale",
+    sectionHeader: "PRINTED LINE",
+    isPrimaryAction: true,
+  },
+  {
+    label: "Printed Items",
+    to: "/printed",
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="6 9 6 2 18 2 18 9" />
+        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+        <rect x="6" y="14" width="12" height="8" />
+      </svg>
+    ),
+  },
+  {
+    label: "Printed Sales",
+    to: "/printed/history",
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+      </svg>
+    ),
+  },
 ];
 
-/* ── Single nav link ────────────────────────────────────────── */
+/* ── Single nav link component ──────────────────────────────── */
 function NavItem({ item, collapsed }) {
+  const location = useLocation();
+
+  const isLinkActive = useMemo(() => {
+    if (item.to.includes("?")) {
+      return (location.pathname + location.search) === item.to;
+    }
+    if (item.to === "/") {
+      return location.pathname === "/";
+    }
+    if (item.to === "/printed") {
+      return location.pathname === "/printed" && !location.search.includes("action=new-sale");
+    }
+    return location.pathname === item.to;
+  }, [item.to, location.pathname, location.search]);
+
   return (
-    <NavLink
-      to={item.to}
-      end={item.to === "/"}
-      title={collapsed ? item.label : undefined}
-      className={({ isActive }) =>
-        [
-          "group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium",
-          "transition-all duration-150 relative overflow-hidden",
-          "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-app-border-focus)]",
-          isActive
-            ? "text-[var(--color-app-accent)] bg-gradient-to-r from-[var(--color-app-accent)]/10 to-transparent"
-            : "text-[var(--color-app-text-muted)] hover:text-[var(--color-app-text)] hover:bg-[var(--color-app-elevated)]",
-        ].join(" ")
-      }
-    >
-      {/* Active indicator bar */}
-      {({ isActive }) => (
-        <>
-          {isActive && (
+    <>
+      {item.sectionHeader && (
+        <div className="pt-4 pb-1.5 px-1 border-t border-[var(--color-app-border)] mt-3">
+          {!collapsed ? (
+            <span className="text-[10px] font-bold tracking-wider text-[var(--color-app-text-muted)] uppercase px-2">
+              {item.sectionHeader}
+            </span>
+          ) : (
+            <div className="h-0.5 w-full bg-[var(--color-app-border)] my-1" />
+          )}
+        </div>
+      )}
+      {item.isPrimaryAction ? (
+        <div className="px-1 my-1.5">
+          <NavLink
+            to={item.to}
+            title={collapsed ? item.label : undefined}
+            className={[
+              "flex items-center justify-center gap-2 w-full h-10 rounded-lg text-sm font-bold shadow-sm transition-all duration-200",
+              collapsed ? "px-0" : "px-4",
+              isLinkActive 
+                ? "bg-[var(--color-app-accent)] text-white shadow-[0_0_12px_rgba(59,130,246,0.5)] ring-2 ring-[var(--color-app-accent)]/30 ring-offset-2 ring-offset-[var(--color-app-panel)]" 
+                : "bg-[var(--color-app-accent)] hover:bg-[var(--color-app-accent)]/90 text-white hover:-translate-y-0.5 hover:shadow-md",
+            ].join(" ")}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+              <line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            {!collapsed && <span className="truncate">{item.label}</span>}
+          </NavLink>
+        </div>
+      ) : (
+        <NavLink
+          to={item.to}
+          title={collapsed ? item.label : undefined}
+          className={[
+            "group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium",
+            "transition-all duration-150 relative overflow-hidden",
+            "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-app-border-focus)]",
+            isLinkActive
+              ? "text-[var(--color-app-accent)] bg-gradient-to-r from-[var(--color-app-accent)]/10 to-transparent font-semibold"
+              : "text-[var(--color-app-text-muted)] hover:text-[var(--color-app-text)] hover:bg-[var(--color-app-elevated)]",
+          ].join(" ")}
+        >
+          {isLinkActive && (
             <span className="absolute left-0 top-1 bottom-1 w-[3px] rounded-r-full bg-[var(--color-app-accent)] shadow-[0_0_8px_var(--color-app-accent)]" />
           )}
           <span className="flex-shrink-0 relative z-10">{item.icon}</span>
@@ -110,9 +177,9 @@ function NavItem({ item, collapsed }) {
           >
             {item.label}
           </span>
-        </>
+        </NavLink>
       )}
-    </NavLink>
+    </>
   );
 }
 
@@ -187,7 +254,7 @@ export function Sidebar({ mobileOpen, onMobileClose, collapsed: controlledCollap
       {/* Nav */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden py-4 px-3 flex flex-col gap-6">
         
-        {/* Primary Action */}
+        {/* Primary Action (Bags Line) */}
         <div className="px-1">
           <NavLink
             to="/new-sale"
@@ -342,4 +409,3 @@ export function Sidebar({ mobileOpen, onMobileClose, collapsed: controlledCollap
 }
 
 export default Sidebar;
-
