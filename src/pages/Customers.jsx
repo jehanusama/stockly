@@ -316,7 +316,7 @@ export default function Customers() {
                         {formatCurrency(customer.lifetimeSpend)}
                       </td>
                       <td className="px-4 py-3.5 text-right font-mono text-xs text-[var(--color-app-text-muted)]">
-                        {customer.totalOrders} {customer.totalOrders === 1 ? 'order' : 'orders'}
+                        {customer.totalOrders} {customer.totalOrders === 1 ? 'transaction' : 'transactions'}
                       </td>
                       <td className="px-4 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1">
@@ -446,7 +446,7 @@ export default function Customers() {
               <div className="px-4 py-3 rounded-lg bg-[var(--color-app-danger-muted)] text-[var(--color-app-danger)] text-sm font-medium border border-[var(--color-app-danger)] flex flex-col gap-1">
                 <span className="font-bold">Cannot Delete Customer</span>
                 <span>
-                  <strong>{deleteTarget.name}</strong> has {deleteTarget.totalOrders} existing order{deleteTarget.totalOrders === 1 ? '' : 's'}. Customers with order history cannot be deleted.
+                  <strong>{deleteTarget.name}</strong> has {deleteTarget.totalOrders} existing transaction{deleteTarget.totalOrders === 1 ? '' : 's'}. Customers with transaction history cannot be deleted.
                 </span>
               </div>
 
