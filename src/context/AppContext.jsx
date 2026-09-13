@@ -11,6 +11,10 @@ export function AppProvider({ children }) {
   const [orders, setOrders] = useState([]);
   const [payments, setPayments] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [printedItems, setPrintedItems] = useState([]);
+  const [printedBatches, setPrintedBatches] = useState([]);
+  const [printedSales, setPrintedSales] = useState([]);
+  const [printedPayments, setPrintedPayments] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -22,19 +26,38 @@ export function AppProvider({ children }) {
     setIsLoading(true);
     setError(null);
     try {
-      const [catRes, prodRes, custRes, ordRes, batchRes, payRes] = await Promise.all([
+      const [
+        catRes,
+        prodRes,
+        custRes,
+        ordRes,
+        batchRes,
+        payRes,
+        printedItemRes,
+        printedBatchRes,
+        printedSaleRes,
+        printedPayRes,
+      ] = await Promise.all([
         supabase.from("categories").select("*").order("name"),
         supabase.from("products").select("*, categories(*)").order("name"),
         supabase.from("customers").select("*").order("name"),
         supabase.from("orders").select("*, order_items(*)").order("order_date", { ascending: false }),
         supabase.from("product_batches").select("*").order("purchase_date", { ascending: false }).order("created_at", { ascending: false }),
         supabase.from("payments").select("*").order("payment_date", { ascending: false }).order("created_at", { ascending: false }),
+        supabase.from("printed_items").select("*").order("name"),
+        supabase.from("printed_batches").select("*").order("purchase_date", { ascending: false }).order("created_at", { ascending: false }),
+        supabase.from("printed_sales").select("*, customers(*), printed_items(*)").order("sale_date", { ascending: false }),
+        supabase.from("printed_payments").select("*").order("payment_date", { ascending: false }).order("created_at", { ascending: false }),
       ]);
 
       if (catRes.error) throw catRes.error;
       if (prodRes.error) throw prodRes.error;
       if (custRes.error) throw custRes.error;
       if (ordRes.error) throw ordRes.error;
+      if (printedItemRes.error) throw printedItemRes.error;
+      if (printedBatchRes.error) throw printedBatchRes.error;
+      if (printedSaleRes.error) throw printedSaleRes.error;
+      if (printedPayRes.error) throw printedPayRes.error;
 
       // Calculate total quantity sold per product across ALL order items ever created
       const totalSoldPerProduct = {};
@@ -114,6 +137,111 @@ export function AppProvider({ children }) {
         }
       });
 
+      // Process printed batches FIFO allocation
+      const totalSoldPerPrintedItem = {};
+      (printedSaleRes.data || []).forEach((s) => {
+        if (s.printed_item_id) {
+          totalSoldPerPrintedItem[s.printed_item_id] =
+            (totalSoldPerPrintedItem[s.printed_item_id] || 0) + Number(s.quantity ?? 0);
+        }
+      });
+
+      const rawPrintedBatches = (printedBatchRes.data || []).map((b) => ({
+        ...b,
+        cost_price: Number(b.cost_price ?? 0),
+        quantity_received: Number(b.quantity_received ?? 0),
+        quantity_remaining: Number(b.quantity_remaining ?? 0),
+      }));
+
+      const batchesByPrintedItem = {};
+      rawPrintedBatches.forEach((b) => {
+        if (!batchesByPrintedItem[b.printed_item_id]) {
+          batchesByPrintedItem[b.printed_item_id] = [];
+        }
+        batchesByPrintedItem[b.printed_item_id].push(b);
+      });
+
+      const calculatedPrintedBatchRemaining = {};
+      Object.keys(batchesByPrintedItem).forEach((itemId) => {
+        const pBatches = batchesByPrintedItem[itemId].sort((a, b) => {
+          const dateA = new Date(a.purchase_date || a.created_at).getTime();
+          const dateB = new Date(b.purchase_date || b.created_at).getTime();
+          return dateA - dateB;
+        });
+
+        let remainingToDeduct = totalSoldPerPrintedItem[itemId] || 0;
+        pBatches.forEach((batch) => {
+          const received = batch.quantity_received;
+          const take = Math.min(received, remainingToDeduct);
+          remainingToDeduct -= take;
+          calculatedPrintedBatchRemaining[batch.id] = Math.max(0, received - take);
+        });
+      });
+
+      const fetchedPrintedBatches = rawPrintedBatches.map((b) => {
+        const calculatedRemaining = calculatedPrintedBatchRemaining[b.id] !== undefined
+          ? calculatedPrintedBatchRemaining[b.id]
+          : b.quantity_remaining;
+
+        if (b.quantity_remaining !== calculatedRemaining) {
+          supabase
+            .from("printed_batches")
+            .update({ quantity_remaining: calculatedRemaining })
+            .eq("id", b.id)
+            .then(() => {});
+        }
+
+        return {
+          ...b,
+          quantity_remaining: calculatedRemaining,
+        };
+      });
+
+      const fetchedPrintedPayments = (printedPayRes.data || []).map((p) => ({
+        ...p,
+        amount: Number(p.amount ?? 0),
+      }));
+
+      const paymentsByPrintedSale = {};
+      fetchedPrintedPayments.forEach((p) => {
+        if (p.printed_sale_id) {
+          paymentsByPrintedSale[p.printed_sale_id] = (paymentsByPrintedSale[p.printed_sale_id] || 0) + p.amount;
+        }
+      });
+
+      const fetchedPrintedItems = (printedItemRes.data || []).map((p) => {
+        const pBatches = fetchedPrintedBatches.filter((b) => b.printed_item_id === p.id);
+        const sumRemainingInBatches = pBatches.reduce((sum, b) => sum + b.quantity_remaining, 0);
+        const latestBatchCost = pBatches.length > 0 ? pBatches[0].cost_price : Number(p.cost_price ?? 0);
+        const trueStock = sumRemainingInBatches;
+
+        return {
+          ...p,
+          cost_price: latestBatchCost,
+          stock_quantity: trueStock,
+          batches: pBatches,
+        };
+      });
+
+      const fetchedPrintedSales = (printedSaleRes.data || []).map((s) => {
+        const lineTot = Number(s.line_total ?? 0);
+        const amtPaid = paymentsByPrintedSale[s.id] !== undefined
+          ? paymentsByPrintedSale[s.id]
+          : Number(s.amount_paid ?? 0);
+        const balDue = Math.max(0, lineTot - amtPaid);
+
+        return {
+          ...s,
+          quantity: Number(s.quantity ?? 0),
+          sale_price: Number(s.sale_price ?? 0),
+          line_total: lineTot,
+          cost_basis: Number(s.cost_basis ?? 0),
+          line_profit: Number(s.line_profit ?? 0),
+          amount_paid: amtPaid,
+          balance_due: balDue,
+        };
+      });
+
       setCategories(catRes.data || []);
       setProducts(
         (prodRes.data || []).map((p) => {
@@ -168,6 +296,10 @@ export function AppProvider({ children }) {
         })
       );
       setPayments(fetchedPayments);
+      setPrintedItems(fetchedPrintedItems);
+      setPrintedBatches(fetchedPrintedBatches);
+      setPrintedSales(fetchedPrintedSales);
+      setPrintedPayments(fetchedPrintedPayments);
     } catch (err) {
       console.error("Error fetching data from Supabase:", err);
       setError(err.message || "Failed to load data from Supabase");
@@ -771,7 +903,20 @@ export function AppProvider({ children }) {
         }
       }
 
-      // 3. Delete order (cascade deletes items and consumptions)
+      // 3. Explicitly delete all payment rows for this order (belt-and-suspenders:
+      //    this ensures no orphaned payments remain even if the DB-level
+      //    ON DELETE CASCADE on payments.order_id is missing or misconfigured).
+      const { error: paymentsDelErr } = await supabase
+        .from("payments")
+        .delete()
+        .eq("order_id", id);
+
+      if (paymentsDelErr) {
+        // Non-fatal: log and continue — the order delete may still cascade.
+        console.error("Error explicitly deleting payments for order:", paymentsDelErr);
+      }
+
+      // 4. Delete order (DB cascade also removes order_items and consumptions)
       const { error } = await supabase
         .from("orders")
         .delete()
@@ -779,7 +924,7 @@ export function AppProvider({ children }) {
 
       if (error) throw error;
 
-      // 4. Refetch full state
+      // 5. Refetch full state
       await fetchData();
 
       return { success: true };
@@ -805,6 +950,39 @@ export function AppProvider({ children }) {
     } catch (err) {
       console.error("Error updating order date:", err);
       return { success: false, error: err.message || "Failed to update order date" };
+    }
+  };
+
+  const addManualOutstanding = async ({ customer_id, amount, date }) => {
+    try {
+      const amtNum = Number(amount || 0);
+      if (!customer_id || isNaN(amtNum) || amtNum <= 0) {
+        return { success: false, error: "Invalid customer or amount" };
+      }
+
+      const orderPayload = {
+        customer_id,
+        order_date: date ? new Date(date).toISOString() : new Date().toISOString(),
+        discount_type: "none",
+        discount_value: 0,
+        subtotal: amtNum,
+        final_total: amtNum,
+        final_profit: amtNum,
+      };
+
+      const { data: insertedOrders, error: orderError } = await supabase
+        .from("orders")
+        .insert([orderPayload])
+        .select();
+
+      if (orderError) throw orderError;
+
+      await fetchData();
+
+      return { success: true, data: insertedOrders[0] };
+    } catch (err) {
+      console.error("Error adding manual outstanding balance:", err);
+      return { success: false, error: err.message || "Failed to add manual outstanding balance" };
     }
   };
 
@@ -867,40 +1045,445 @@ export function AppProvider({ children }) {
     }
   };
 
-  const addManualOutstanding = async ({ customer_id, title, amount, date, notes }) => {
+  // -- Printed Items & Batches --
+  const addPrintedItem = async (item) => {
     try {
-      const amtNum = Number(amount);
-      if (!customer_id || isNaN(amtNum) || amtNum <= 0) {
-        return { success: false, error: "Please select a valid customer and amount greater than 0." };
-      }
-
-      const noteText = [title?.trim(), notes?.trim()].filter(Boolean).join(" - ") || "Manual Outstanding Balance";
-
-      const orderPayload = {
-        customer_id,
-        order_date: date ? (date.includes("T") ? date : `${date}T12:00:00Z`) : new Date().toISOString(),
-        discount_type: "none",
-        discount_value: 0,
-        subtotal: amtNum,
-        final_total: amtNum,
-        final_profit: 0,
-        notes: noteText,
+      const payload = {
+        name: item.name,
+        unit: item.unit || "piece",
       };
 
-      const { data, error: orderError } = await supabase
-        .from("orders")
-        .insert([orderPayload])
+      const { data, error } = await supabase
+        .from("printed_items")
+        .insert([payload])
         .select();
 
-      if (orderError) throw orderError;
+      if (error) throw error;
+      const created = data[0];
+
+      const initialQty = Number(item.stock_quantity ?? 0);
+      const initialCost = Number(item.cost_price ?? 0);
+
+      if (initialQty > 0) {
+        const batchPayload = {
+          printed_item_id: created.id,
+          cost_price: initialCost,
+          quantity_received: initialQty,
+          quantity_remaining: initialQty,
+          purchase_date: new Date().toISOString().split("T")[0],
+        };
+        const { error: batchErr } = await supabase
+          .from("printed_batches")
+          .insert([batchPayload]);
+        if (batchErr) {
+          console.error("Error inserting initial batch for printed item:", batchErr);
+        }
+      }
+
+      await fetchData();
+      return { success: true, data: created };
+    } catch (err) {
+      console.error("Error adding printed item:", err);
+      return { success: false, error: err.message || "Failed to add printed item" };
+    }
+  };
+
+  const updatePrintedItem = async (updatedItem) => {
+    try {
+      const payload = {
+        name: updatedItem.name,
+        unit: updatedItem.unit || "piece",
+      };
+
+      const { data, error } = await supabase
+        .from("printed_items")
+        .update(payload)
+        .eq("id", updatedItem.id)
+        .select();
+
+      if (error) throw error;
+      await fetchData();
+      return { success: true, data: data[0] };
+    } catch (err) {
+      console.error("Error updating printed item:", err);
+      return { success: false, error: err.message || "Failed to update printed item" };
+    }
+  };
+
+  const deletePrintedItem = async (id) => {
+    try {
+      const hasSales = printedSales.some((s) => s.printed_item_id === id);
+      if (hasSales) {
+        return { success: false, error: "Cannot delete printed item because it has sales history." };
+      }
+
+      const itemBatches = printedBatches.filter((b) => b.printed_item_id === id);
+      const hasTouchedBatch = itemBatches.some((b) => Number(b.quantity_remaining) < Number(b.quantity_received));
+      if (hasTouchedBatch) {
+        return { success: false, error: "Cannot delete printed item because its batches have sales history." };
+      }
+
+      const { error } = await supabase
+        .from("printed_items")
+        .delete()
+        .eq("id", id);
+
+      if (error) throw error;
+      await fetchData();
+      return { success: true };
+    } catch (err) {
+      console.error("Error deleting printed item:", err);
+      return { success: false, error: err.message || "Failed to delete printed item" };
+    }
+  };
+
+  const addPrintedBatch = async ({ printed_item_id, cost_price, quantity_received, purchase_date }) => {
+    try {
+      const qty = Number(quantity_received);
+      const cost = Number(cost_price);
+      if (!printed_item_id || isNaN(qty) || qty <= 0 || isNaN(cost) || cost < 0) {
+        return { success: false, error: "Invalid batch parameters" };
+      }
+
+      const payload = {
+        printed_item_id,
+        cost_price: cost,
+        quantity_received: qty,
+        quantity_remaining: qty,
+        purchase_date: purchase_date || new Date().toISOString().split("T")[0],
+      };
+
+      const { data, error } = await supabase
+        .from("printed_batches")
+        .insert([payload])
+        .select();
+
+      if (error) throw error;
 
       await fetchData();
       return { success: true, data: data[0] };
     } catch (err) {
-      console.error("Error adding manual outstanding:", err);
-      return { success: false, error: err.message || "Failed to add manual outstanding balance." };
+      console.error("Error adding printed batch:", err);
+      return { success: false, error: err.message || "Failed to add printed batch" };
     }
   };
+
+  const editPrintedBatch = async ({ id, cost_price, quantity_received, purchase_date }) => {
+    try {
+      const batch = printedBatches.find((b) => b.id === id);
+      if (batch && Number(batch.quantity_remaining) < Number(batch.quantity_received)) {
+        return { success: false, error: "Cannot edit batch because stock from this batch has already been sold." };
+      }
+
+      const qty = Number(quantity_received);
+      const cost = Number(cost_price);
+      if (!id || isNaN(qty) || qty <= 0 || isNaN(cost) || cost < 0) {
+        return { success: false, error: "Invalid batch parameters" };
+      }
+
+      const payload = {
+        cost_price: cost,
+        quantity_received: qty,
+        quantity_remaining: qty,
+        purchase_date: purchase_date || new Date().toISOString().split("T")[0],
+      };
+
+      const { data, error } = await supabase
+        .from("printed_batches")
+        .update(payload)
+        .eq("id", id)
+        .select();
+
+      if (error) throw error;
+
+      await fetchData();
+      return { success: true, data: data[0] };
+    } catch (err) {
+      console.error("Error editing printed batch:", err);
+      return { success: false, error: err.message || "Failed to edit printed batch" };
+    }
+  };
+
+  const deletePrintedBatch = async (id) => {
+    try {
+      const batch = printedBatches.find((b) => b.id === id);
+      if (batch && Number(batch.quantity_remaining) < Number(batch.quantity_received)) {
+        return { success: false, error: "Cannot delete batch because stock from this batch has already been sold." };
+      }
+
+      const { error } = await supabase
+        .from("printed_batches")
+        .delete()
+        .eq("id", id);
+
+      if (error) throw error;
+
+      await fetchData();
+      return { success: true };
+    } catch (err) {
+      console.error("Error deleting printed batch:", err);
+      return { success: false, error: err.message || "Failed to delete printed batch" };
+    }
+  };
+
+  // -- Printed Sales & Payments --
+  const addPrintedSale = async (sale) => {
+    try {
+      const { data: allBatches, error: fetchBatchesErr } = await supabase
+        .from("printed_batches")
+        .select("*")
+        .eq("printed_item_id", sale.printed_item_id)
+        .gt("quantity_remaining", 0)
+        .order("purchase_date", { ascending: true })
+        .order("created_at", { ascending: true });
+
+      if (fetchBatchesErr) throw fetchBatchesErr;
+
+      let localBatches = (allBatches || []).map((b) => ({
+        ...b,
+        cost_price: Number(b.cost_price ?? 0),
+        quantity_remaining: Number(b.quantity_remaining ?? 0),
+      }));
+
+      const totalStock = localBatches.reduce((sum, b) => sum + b.quantity_remaining, 0);
+      const qtyNeeded = Number(sale.quantity);
+      if (qtyNeeded > totalStock) {
+        return { success: false, error: `Insufficient stock. Requested: ${qtyNeeded}, Available: ${totalStock}` };
+      }
+
+      let remainingNeeded = qtyNeeded;
+      let lineCostBasis = 0;
+      const batchConsumptions = [];
+      const batchUpdates = {};
+
+      for (const batch of localBatches) {
+        if (remainingNeeded <= 0) break;
+        const takeQty = Math.min(batch.quantity_remaining, remainingNeeded);
+        batch.quantity_remaining -= takeQty;
+        remainingNeeded -= takeQty;
+
+        const consumedCost = takeQty * batch.cost_price;
+        lineCostBasis += consumedCost;
+
+        batchConsumptions.push({
+          batch_id: batch.id,
+          quantity_consumed: takeQty,
+        });
+
+        batchUpdates[batch.id] = batch.quantity_remaining;
+      }
+
+      const salePrice = Number(sale.sale_price);
+      const lineTotal = Number(sale.line_total ?? qtyNeeded * salePrice);
+      const lineProfit = lineTotal - lineCostBasis;
+
+      const salePayload = {
+        customer_id: sale.customer_id || null,
+        printed_item_id: sale.printed_item_id,
+        quantity: qtyNeeded,
+        sale_price: salePrice,
+        line_total: lineTotal,
+        cost_basis: lineCostBasis,
+        line_profit: lineProfit,
+        sale_date: sale.sale_date || new Date().toISOString(),
+        notes: sale.notes || null,
+      };
+
+      const { data: insertedSales, error: saleError } = await supabase
+        .from("printed_sales")
+        .insert([salePayload])
+        .select();
+
+      if (saleError) throw saleError;
+      const createdSale = insertedSales[0];
+
+      const consumptionPayload = batchConsumptions.map((c) => ({
+        printed_sale_id: createdSale.id,
+        batch_id: c.batch_id,
+        quantity_consumed: c.quantity_consumed,
+      }));
+
+      if (consumptionPayload.length > 0) {
+        const { error: consumeErr } = await supabase
+          .from("printed_sale_batch_consumptions")
+          .insert(consumptionPayload);
+
+        if (consumeErr) {
+          console.error("Error inserting printed batch consumptions:", consumeErr);
+        }
+      }
+
+      for (const [batchId, newQty] of Object.entries(batchUpdates)) {
+        const { error: batchUpdErr } = await supabase
+          .from("printed_batches")
+          .update({ quantity_remaining: newQty })
+          .eq("id", batchId);
+
+        if (batchUpdErr) {
+          console.error(`Error updating printed batch ${batchId} remaining qty:`, batchUpdErr);
+        }
+      }
+
+      const amountPaidNow = sale.amount_paid_now !== undefined
+        ? Number(sale.amount_paid_now)
+        : lineTotal;
+
+      if (amountPaidNow > 0 && createdSale.id && createdSale.customer_id) {
+        const paymentPayload = {
+          printed_sale_id: createdSale.id,
+          customer_id: createdSale.customer_id,
+          amount: amountPaidNow,
+          payment_date: (sale.sale_date || new Date().toISOString()).slice(0, 10),
+          notes: "Initial payment upon printed sale creation",
+        };
+        const { error: payErr } = await supabase
+          .from("printed_payments")
+          .insert([paymentPayload]);
+
+        if (payErr) {
+          console.error("Error inserting initial printed payment:", payErr);
+        }
+      }
+
+      await fetchData();
+      return { success: true, data: createdSale };
+    } catch (err) {
+      console.error("Error adding printed sale:", err);
+      return { success: false, error: err.message || "Failed to add printed sale" };
+    }
+  };
+
+  const deletePrintedSale = async (id) => {
+    try {
+      const { data: consumptions, error: consumeErr } = await supabase
+        .from("printed_sale_batch_consumptions")
+        .select("*")
+        .eq("printed_sale_id", id);
+
+      if (consumeErr) throw consumeErr;
+
+      if (consumptions && consumptions.length > 0) {
+        const batchRestorations = {};
+        for (const c of consumptions) {
+          const qty = Number(c.quantity_consumed);
+          batchRestorations[c.batch_id] = (batchRestorations[c.batch_id] || 0) + qty;
+        }
+
+        const batchIds = Object.keys(batchRestorations);
+        const { data: targetBatches, error: fetchTBatErr } = await supabase
+          .from("printed_batches")
+          .select("id, quantity_remaining")
+          .in("id", batchIds);
+
+        if (fetchTBatErr) throw fetchTBatErr;
+
+        for (const batch of targetBatches || []) {
+          const restoreQty = batchRestorations[batch.id] || 0;
+          const newRemaining = Number(batch.quantity_remaining ?? 0) + restoreQty;
+
+          const { error: restoreErr } = await supabase
+            .from("printed_batches")
+            .update({ quantity_remaining: newRemaining })
+            .eq("id", batch.id);
+
+          if (restoreErr) {
+            console.error("Error restoring printed batch remaining qty:", restoreErr);
+          }
+        }
+      }
+
+      // Explicitly delete all printed_payments rows for this sale (belt-and-suspenders:
+      // ensures no orphaned payment rows remain if DB-level cascade is misconfigured).
+      const { error: printedPayDelErr } = await supabase
+        .from("printed_payments")
+        .delete()
+        .eq("printed_sale_id", id);
+
+      if (printedPayDelErr) {
+        console.error("Error explicitly deleting printed_payments for sale:", printedPayDelErr);
+      }
+
+      const { error } = await supabase
+        .from("printed_sales")
+        .delete()
+        .eq("id", id);
+
+      if (error) throw error;
+
+      await fetchData();
+      return { success: true };
+    } catch (err) {
+      console.error("Error deleting printed sale:", err);
+      return { success: false, error: err.message || "Failed to delete printed sale" };
+    }
+  };
+
+  const recordPrintedPayment = async (customerId, amount, paymentDate, notes) => {
+    try {
+      const payAmount = Number(amount);
+      if (!customerId || isNaN(payAmount) || payAmount <= 0) {
+        return { success: false, error: "Invalid payment amount" };
+      }
+
+      const unpaidSales = printedSales
+        .filter((s) => s.customer_id === customerId && (s.balance_due ?? 0) > 0)
+        .sort((a, b) => new Date(a.sale_date).getTime() - new Date(b.sale_date).getTime());
+
+      const totalOutstanding = unpaidSales.reduce((sum, s) => sum + (s.balance_due ?? 0), 0);
+
+      if (payAmount > totalOutstanding + 0.001) {
+        return {
+          success: false,
+          error: `Payment amount (${payAmount}) exceeds total printed outstanding balance (${totalOutstanding.toFixed(2)}).`,
+        };
+      }
+
+      let remainingToAllocate = payAmount;
+      const paymentPayloads = [];
+
+      for (const sale of unpaidSales) {
+        if (remainingToAllocate <= 0) break;
+        const allocated = Math.min(sale.balance_due, remainingToAllocate);
+        remainingToAllocate -= allocated;
+
+        paymentPayloads.push({
+          printed_sale_id: sale.id,
+          customer_id: customerId,
+          amount: Number(allocated.toFixed(2)),
+          payment_date: paymentDate || new Date().toISOString().split("T")[0],
+          notes: notes || "FIFO printed payment allocation",
+        });
+      }
+
+      if (paymentPayloads.length === 0) {
+        return { success: false, error: "No unpaid printed sales found to apply payment to." };
+      }
+
+      const { data, error: payErr } = await supabase
+        .from("printed_payments")
+        .insert(paymentPayloads)
+        .select();
+
+      if (payErr) throw payErr;
+
+      await fetchData();
+      return { success: true, data };
+    } catch (err) {
+      console.error("Error recording printed payment:", err);
+      return { success: false, error: err.message || "Failed to record printed payment" };
+    }
+  };
+
+  const getCustomerTotalBalance = useCallback((customerId) => {
+    if (!customerId) return 0;
+    const bagsBalance = orders
+      .filter((o) => o.customer_id === customerId)
+      .reduce((sum, o) => sum + (o.balance_due ?? 0), 0);
+    const printedBalance = printedSales
+      .filter((s) => s.customer_id === customerId)
+      .reduce((sum, s) => sum + (s.balance_due ?? 0), 0);
+    return Math.round((bagsBalance + printedBalance) * 100) / 100;
+  }, [orders, printedSales]);
 
   const value = {
     products,
@@ -908,6 +1491,10 @@ export function AppProvider({ children }) {
     orders,
     payments,
     categories,
+    printedItems,
+    printedBatches,
+    printedSales,
+    printedPayments,
     isLoading,
     error,
     refreshData: fetchData,
@@ -927,7 +1514,17 @@ export function AppProvider({ children }) {
     recordCustomerPayment,
     addCategory,
     updateCategory,
-    deleteCategory
+    deleteCategory,
+    addPrintedItem,
+    updatePrintedItem,
+    deletePrintedItem,
+    addPrintedBatch,
+    editPrintedBatch,
+    deletePrintedBatch,
+    addPrintedSale,
+    deletePrintedSale,
+    recordPrintedPayment,
+    getCustomerTotalBalance,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
