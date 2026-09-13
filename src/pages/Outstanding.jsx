@@ -55,7 +55,7 @@ function AgeBadge({ dateStr }) {
 // Main Component
 export default function Outstanding() {
   const navigate = useNavigate();
-  const { customers, orders, isLoading, error, refreshData, recordCustomerPayment } = useAppData();
+  const { customers, orders, isLoading, error, refreshData, recordCustomerPayment, addManualOutstanding } = useAppData();
 
   const [sortBy, setSortBy] = useState("balance"); // "balance" | "oldest"
   const [currentPage, setCurrentPage] = useState(1);
@@ -66,6 +66,61 @@ export default function Outstanding() {
   const [paymentNotes, setPaymentNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [modalError, setModalError] = useState("");
+
+  // Add Manual Outstanding Modal state
+  const [isAddOutstandingOpen, setIsAddOutstandingOpen] = useState(false);
+  const [addCustomerId, setAddCustomerId] = useState("");
+  const [addTitle, setAddTitle] = useState("");
+  const [addAmount, setAddAmount] = useState("");
+  const [addDate, setAddDate] = useState(new Date().toISOString().split("T")[0]);
+  const [addNotes, setAddNotes] = useState("");
+  const [isAddSubmitting, setIsAddSubmitting] = useState(false);
+  const [addModalError, setAddModalError] = useState("");
+
+  const openAddOutstandingModal = () => {
+    setAddCustomerId("");
+    setAddTitle("");
+    setAddAmount("");
+    setAddDate(new Date().toISOString().split("T")[0]);
+    setAddNotes("");
+    setAddModalError("");
+    setIsAddOutstandingOpen(true);
+  };
+
+  const handleAddOutstandingSubmit = async (e) => {
+    if (e) e.preventDefault();
+    setAddModalError("");
+
+    if (!addCustomerId) {
+      setAddModalError("Please select a customer.");
+      return;
+    }
+    if (!addTitle.trim()) {
+      setAddModalError("Please enter a title/description (e.g. Opening Balance).");
+      return;
+    }
+    const amtNum = parseFloat(addAmount);
+    if (isNaN(amtNum) || amtNum <= 0) {
+      setAddModalError("Please enter a valid amount greater than 0.");
+      return;
+    }
+
+    setIsAddSubmitting(true);
+    const res = await addManualOutstanding({
+      customer_id: addCustomerId,
+      title: addTitle.trim(),
+      amount: amtNum,
+      date: addDate,
+      notes: addNotes.trim(),
+    });
+    setIsAddSubmitting(false);
+
+    if (res && res.success) {
+      setIsAddOutstandingOpen(false);
+    } else {
+      setAddModalError(res?.error || "Failed to add manual outstanding balance.");
+    }
+  };
 
   // Build the unpaid customer list
   const unpaidCustomers = useMemo(() => {
@@ -204,6 +259,11 @@ export default function Outstanding() {
     <PageContainer
       title="Outstanding Payments"
       subtitle="Customers who currently owe money — sorted by largest balance."
+      actions={
+        <Button variant="primary" onClick={openAddOutstandingModal}>
+          + Add Outstanding
+        </Button>
+      }
     >
       <div className="flex flex-col gap-6 pb-8">
 
@@ -547,6 +607,96 @@ export default function Outstanding() {
               </div>
             </div>
           )}
+        </form>
+      </Modal>
+
+      {/* ── Add Manual Outstanding Modal ── */}
+      <Modal
+        isOpen={isAddOutstandingOpen}
+        onClose={() => !isAddSubmitting && setIsAddOutstandingOpen(false)}
+        title="Add Manual Outstanding Balance"
+        size="md"
+        footer={
+          <div className="flex items-center justify-end gap-3 w-full">
+            <Button
+              variant="secondary"
+              type="button"
+              onClick={() => setIsAddOutstandingOpen(false)}
+              disabled={isAddSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              type="button"
+              onClick={handleAddOutstandingSubmit}
+              loading={isAddSubmitting}
+            >
+              Save Balance
+            </Button>
+          </div>
+        }
+      >
+        <form onSubmit={handleAddOutstandingSubmit} className="flex flex-col gap-4">
+          {addModalError && (
+            <div className="p-3 bg-[var(--color-app-danger)]/10 border border-[var(--color-app-danger)]/20 rounded-lg text-xs font-medium text-[var(--color-app-danger)]">
+              {addModalError}
+            </div>
+          )}
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-[var(--color-app-text-muted)]">
+              Customer <span className="text-[var(--color-app-danger)]">*</span>
+            </label>
+            <Select
+              value={addCustomerId}
+              onChange={(e) => setAddCustomerId(e.target.value)}
+              options={[
+                { value: "", label: "Select a customer..." },
+                ...customers.map((c) => ({ value: c.id, label: c.name })),
+              ]}
+              required
+            />
+          </div>
+
+          <Input
+            id="add-outstanding-title"
+            label="Title / Description *"
+            placeholder="e.g. Opening Balance, Previous Debt, Loan"
+            value={addTitle}
+            onChange={(e) => setAddTitle(e.target.value)}
+            required
+          />
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              id="add-outstanding-amount"
+              label="Amount (EGP) *"
+              type="number"
+              step="0.01"
+              min="0.01"
+              placeholder="0.00"
+              value={addAmount}
+              onChange={(e) => setAddAmount(e.target.value)}
+              required
+            />
+            <Input
+              id="add-outstanding-date"
+              label="Date *"
+              type="date"
+              value={addDate}
+              onChange={(e) => setAddDate(e.target.value)}
+              required
+            />
+          </div>
+
+          <Input
+            id="add-outstanding-notes"
+            label="Additional Notes (Optional)"
+            placeholder="e.g. Agreement details, manual adjustment notes"
+            value={addNotes}
+            onChange={(e) => setAddNotes(e.target.value)}
+          />
         </form>
       </Modal>
     </PageContainer>

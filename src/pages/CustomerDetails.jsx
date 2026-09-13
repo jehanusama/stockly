@@ -289,7 +289,11 @@ export default function CustomerDetails() {
                               </span>
                             )}
                           </div>
-                          <p className="text-xs text-[var(--color-app-text-subtle)] mt-0.5">{order.items.length} product type{order.items.length !== 1 ? 's' : ''}</p>
+                          <p className="text-xs text-[var(--color-app-text-subtle)] mt-0.5">
+                            {(order.items || []).length > 0
+                              ? `${order.items.length} product type${order.items.length !== 1 ? 's' : ''}`
+                              : (order.notes || "Manual Balance Entry")}
+                          </p>
                         </div>
                       </div>
                       <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-5 border-t sm:border-t-0 sm:border-l border-[var(--color-app-border)] pt-2 sm:pt-0 sm:pl-4">
@@ -317,23 +321,36 @@ export default function CustomerDetails() {
 
                     {/* Line Items */}
                     <div className="flex flex-col divide-y divide-[var(--color-app-border)]">
-                      {order.items.map((item, idx) => {
-                        const product = mockProducts.find(p => p.id === item.product_id);
-                        return (
-                          <div key={idx} className="flex items-center justify-between gap-4 px-4 py-3">
-                            <div className="flex items-center gap-3">
-                              <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-app-border)] shrink-0" />
-                              <div>
-                                <span className="text-sm font-medium text-[var(--color-app-text)]">{product ? product.name : "Unknown Product"}</span>
-                                <span className="block text-xs text-[var(--color-app-text-subtle)]">
-                                  {item.quantity} {product?.unit || 'kilo'} @ {formatCurrency(item.sale_price)}/each
-                                </span>
-                              </div>
+                      {(order.items || []).length === 0 ? (
+                        <div className="flex items-center justify-between gap-4 px-4 py-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-app-accent)] shrink-0" />
+                            <div>
+                              <span className="text-sm font-medium text-[var(--color-app-text)]">{order.notes || "Manual Balance Entry"}</span>
+                              <span className="block text-xs text-[var(--color-app-text-subtle)]">Manual Entry</span>
                             </div>
-                            <span className="font-mono text-sm font-semibold text-[var(--color-app-text)] shrink-0">{formatCurrency(item.line_total)}</span>
                           </div>
-                        );
-                      })}
+                          <span className="font-mono text-sm font-semibold text-[var(--color-app-text)] shrink-0">{formatCurrency(order.final_total)}</span>
+                        </div>
+                      ) : (
+                        order.items.map((item, idx) => {
+                          const product = mockProducts.find(p => p.id === item.product_id);
+                          return (
+                            <div key={idx} className="flex items-center justify-between gap-4 px-4 py-3">
+                              <div className="flex items-center gap-3">
+                                <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-app-border)] shrink-0" />
+                                <div>
+                                  <span className="text-sm font-medium text-[var(--color-app-text)]">{product ? product.name : "Unknown Product"}</span>
+                                  <span className="block text-xs text-[var(--color-app-text-subtle)]">
+                                    {item.quantity} {product?.unit || 'kilo'} @ {formatCurrency(item.sale_price)}/each
+                                  </span>
+                                </div>
+                              </div>
+                              <span className="font-mono text-sm font-semibold text-[var(--color-app-text)] shrink-0">{formatCurrency(item.line_total)}</span>
+                            </div>
+                          );
+                        })
+                      )}
 
                       {/* Discount row */}
                       {discountAmount > 0 && (

@@ -472,33 +472,54 @@ export default function SalesByDay() {
                         
                         return (
                           <div key={order.id} className="flex flex-col px-5 py-3.5 gap-2 hover:bg-[var(--color-app-panel-hover)] transition-colors">
-                            {order.items.map((item, idx) => {
-                              const product = mockProducts.find(p => p.id === item.product_id);
-                              const categoryName = product?.categories?.name || categories?.find(c => c.id === product?.category_id)?.name;
-                              return (
-                                <div key={idx} className="flex items-center justify-between gap-4">
-                                  <div className="flex items-center gap-3 min-w-0">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-app-border)] shrink-0 ml-1" />
-                                    <div className="min-w-0">
-                                      <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="text-sm font-medium text-[var(--color-app-text)] truncate">{product?.name || "Unknown Product"}</span>
-                                        {categoryName && (
-                                          <span className="text-[11px] font-semibold text-[var(--color-app-text-muted)] bg-[var(--color-app-elevated)] border border-[var(--color-app-border)] px-1.5 py-0.5 rounded-md">
-                                            {categoryName}
-                                          </span>
-                                        )}
-                                      </div>
-                                      <span className="text-xs text-[var(--color-app-text-subtle)]">
-                                        {item.quantity} × {formatCurrency(item.sale_price)}/unit
-                                      </span>
-                                    </div>
-                                  </div>
-                                  <div className="flex flex-col items-end shrink-0">
-                                    <span className="font-mono text-sm font-semibold text-[var(--color-app-text)]">{formatCurrency(item.line_total)}</span>
+                            {(order.items || []).length === 0 ? (
+                              <div className="flex items-center justify-between gap-4">
+                                <div className="flex items-center gap-3 min-w-0">
+                                  <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-app-accent)] shrink-0 ml-1" />
+                                  <div className="min-w-0">
+                                    <span className="text-sm font-medium text-[var(--color-app-text)] truncate">
+                                      {order.notes || "Manual Outstanding Balance"}
+                                    </span>
+                                    <span className="text-xs text-[var(--color-app-text-subtle)] block">
+                                      Manual Entry
+                                    </span>
                                   </div>
                                 </div>
-                              );
-                            })}
+                                <div className="flex flex-col items-end shrink-0">
+                                  <span className="font-mono text-sm font-semibold text-[var(--color-app-text)]">
+                                    {formatCurrency(order.final_total)}
+                                  </span>
+                                </div>
+                              </div>
+                            ) : (
+                              order.items.map((item, idx) => {
+                                const product = mockProducts.find(p => p.id === item.product_id);
+                                const categoryName = product?.categories?.name || categories?.find(c => c.id === product?.category_id)?.name;
+                                return (
+                                  <div key={idx} className="flex items-center justify-between gap-4">
+                                    <div className="flex items-center gap-3 min-w-0">
+                                      <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-app-border)] shrink-0 ml-1" />
+                                      <div className="min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <span className="text-sm font-medium text-[var(--color-app-text)] truncate">{product?.name || "Unknown Product"}</span>
+                                          {categoryName && (
+                                            <span className="text-[11px] font-semibold text-[var(--color-app-text-muted)] bg-[var(--color-app-elevated)] border border-[var(--color-app-border)] px-1.5 py-0.5 rounded-md">
+                                              {categoryName}
+                                            </span>
+                                          )}
+                                        </div>
+                                        <span className="text-xs text-[var(--color-app-text-subtle)]">
+                                          {item.quantity} × {formatCurrency(item.sale_price)}/unit
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <div className="flex flex-col items-end shrink-0">
+                                      <span className="font-mono text-sm font-semibold text-[var(--color-app-text)]">{formatCurrency(item.line_total)}</span>
+                                    </div>
+                                  </div>
+                                );
+                              })
+                            )}
 
                             {discountAmount > 0 && (
                               <div className="flex items-center justify-between gap-4 pt-2 mt-1 border-t border-dashed border-[var(--color-app-border)]">

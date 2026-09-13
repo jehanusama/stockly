@@ -155,12 +155,13 @@ export default function SalesHistory() {
     .map(order => {
       const customer = mockCustomers.find(c => c.id === order.customer_id);
       
-      let itemsSummary = "—";
-      if (order.items.length > 0) {
-        const firstProduct = mockProducts.find(p => p.id === order.items[0].product_id);
+      let itemsSummary = order.notes || "—";
+      const items = order.items || [];
+      if (items.length > 0) {
+        const firstProduct = mockProducts.find(p => p.id === items[0].product_id);
         itemsSummary = firstProduct?.name ?? "Unknown";
-        if (order.items.length > 1) {
-          itemsSummary += ` (+${order.items.length - 1} more)`;
+        if (items.length > 1) {
+          itemsSummary += ` (+${items.length - 1} more)`;
         }
       }
 

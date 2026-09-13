@@ -867,6 +867,41 @@ export function AppProvider({ children }) {
     }
   };
 
+  const addManualOutstanding = async ({ customer_id, title, amount, date, notes }) => {
+    try {
+      const amtNum = Number(amount);
+      if (!customer_id || isNaN(amtNum) || amtNum <= 0) {
+        return { success: false, error: "Please select a valid customer and amount greater than 0." };
+      }
+
+      const noteText = [title?.trim(), notes?.trim()].filter(Boolean).join(" - ") || "Manual Outstanding Balance";
+
+      const orderPayload = {
+        customer_id,
+        order_date: date ? (date.includes("T") ? date : `${date}T12:00:00Z`) : new Date().toISOString(),
+        discount_type: "none",
+        discount_value: 0,
+        subtotal: amtNum,
+        final_total: amtNum,
+        final_profit: 0,
+        notes: noteText,
+      };
+
+      const { data, error: orderError } = await supabase
+        .from("orders")
+        .insert([orderPayload])
+        .select();
+
+      if (orderError) throw orderError;
+
+      await fetchData();
+      return { success: true, data: data[0] };
+    } catch (err) {
+      console.error("Error adding manual outstanding:", err);
+      return { success: false, error: err.message || "Failed to add manual outstanding balance." };
+    }
+  };
+
   const value = {
     products,
     customers,
@@ -886,6 +921,7 @@ export function AppProvider({ children }) {
     updateCustomer,
     deleteCustomer,
     addOrder,
+    addManualOutstanding,
     deleteOrder,
     updateOrderDate,
     recordCustomerPayment,
