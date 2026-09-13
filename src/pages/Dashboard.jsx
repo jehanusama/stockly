@@ -25,8 +25,13 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { products: mockProducts, customers: mockCustomers, orders: mockOrders, printedSales = [], isLoading, error, refreshData } = useAppData();
 
-  const totalRevenue = useMemo(() => mockOrders.reduce((sum, o) => sum + o.final_total, 0), [mockOrders]);
-  const totalProfit = useMemo(() => mockOrders.reduce((sum, o) => sum + o.final_profit, 0), [mockOrders]);
+  const bagsRevenue = useMemo(() => mockOrders.reduce((sum, o) => sum + (o.final_total ?? 0), 0), [mockOrders]);
+  const printedRevenue = useMemo(() => (printedSales || []).reduce((sum, s) => sum + (s.line_total ?? 0), 0), [printedSales]);
+  const totalRevenue = useMemo(() => bagsRevenue + printedRevenue, [bagsRevenue, printedRevenue]);
+
+  const bagsProfit = useMemo(() => mockOrders.reduce((sum, o) => sum + (o.final_profit ?? 0), 0), [mockOrders]);
+  const printedProfit = useMemo(() => (printedSales || []).reduce((sum, s) => sum + (s.line_profit ?? 0), 0), [printedSales]);
+  const totalProfit = useMemo(() => bagsProfit + printedProfit, [bagsProfit, printedProfit]);
 
   const bagsOutstanding = useMemo(() => mockOrders.reduce((sum, o) => sum + (o.balance_due ?? 0), 0), [mockOrders]);
   const printedOutstanding = useMemo(() => (printedSales || []).reduce((sum, s) => sum + (s.balance_due ?? 0), 0), [printedSales]);
@@ -79,15 +84,26 @@ export default function Dashboard() {
   const productCount = mockProducts.length;
   const customerCount = mockCustomers.length;
 
-  // 3. Profit Per Month Chart & Trend (AreaChart)
+  // 3. Profit Per Month Chart & Trend (AreaChart) - combines bags orders & printed sales
   const monthlyProfitMap = {};
   mockOrders.forEach(order => {
     const date = new Date(order.order_date);
+    if (isNaN(date.getTime())) return;
     const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
     if (!monthlyProfitMap[key]) {
       monthlyProfitMap[key] = { name: date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }), profit: 0 };
     }
-    monthlyProfitMap[key].profit += order.final_profit;
+    monthlyProfitMap[key].profit += Number(order.final_profit ?? 0);
+  });
+
+  (printedSales || []).forEach(sale => {
+    const date = new Date(sale.sale_date);
+    if (isNaN(date.getTime())) return;
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    if (!monthlyProfitMap[key]) {
+      monthlyProfitMap[key] = { name: date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }), profit: 0 };
+    }
+    monthlyProfitMap[key].profit += Number(sale.line_profit ?? 0);
   });
 
   const sortedMonthKeys = Object.keys(monthlyProfitMap).sort();
@@ -114,28 +130,56 @@ export default function Dashboard() {
 
   const profitPerMonth = sortedMonthKeys.map(key => monthlyProfitMap[key]);
 
-  const lastOrders = [...mockOrders]
-    .sort((a, b) => new Date(b.order_date).getTime() - new Date(a.order_date).getTime())
-    .slice(0, 5)
-    .map(order => {
-      const customer = mockCustomers.find(c => c.id === order.customer_id);
-      const firstProduct = mockProducts.find(p => p.id === order.items[0]?.product_id);
-      const itemsSummary = order.items.length === 1
-        ? `${firstProduct?.name ?? "Product"} ×${order.items[0].quantity}`
-        : `${order.items.length} products`;
-      return {
-        ...order,
-        customerName: customer ? customer.name : "Unknown",
-        itemsSummary
-      };
-    });
+  // Combined Recent Transactions (Bags Orders + Printed Sales)
+  const formattedBagsOrders = mockOrders.map(order => {
+    const customer = mockCustomers.find(c => c.id === order.customer_id);
+    const firstProduct = mockProducts.find(p => p.id === order.items?.[0]?.product_id);
+    const itemsSummary = (order.items || []).length === 1
+      ? `${firstProduct?.name ?? "Product"} ×${order.items[0].quantity}`
+      : `${(order.items || []).length} products`;
+    return {
+      id: `bags-${order.id}`,
+      type: "Bags",
+      date: order.order_date,
+      customerName: customer ? customer.name : "Unknown",
+      itemsSummary,
+      total: Number(order.final_total ?? 0),
+      profit: Number(order.final_profit ?? 0)
+    };
+  });
+
+  const formattedPrintedSales = (printedSales || []).map(sale => {
+    const customer = mockCustomers.find(c => c.id === sale.customer_id);
+    return {
+      id: `printed-${sale.id}`,
+      type: "Printed",
+      date: sale.sale_date,
+      customerName: customer ? customer.name : "Unknown",
+      itemsSummary: `${sale.item_name} ×${sale.quantity}`,
+      total: Number(sale.line_total ?? 0),
+      profit: Number(sale.line_profit ?? 0)
+    };
+  });
+
+  const lastOrders = [...formattedBagsOrders, ...formattedPrintedSales]
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .slice(0, 5);
 
   const salesColumns = [
-    { key: "order_date", label: "Date", render: (val) => <span className="font-mono text-xs text-[var(--color-app-text-muted)]">{new Date(val).toLocaleDateString()}</span> },
+    { key: "date", label: "Date", render: (val) => <span className="font-mono text-xs text-[var(--color-app-text-muted)]">{new Date(val).toLocaleDateString()}</span> },
+    { 
+      key: "type", 
+      label: "Line", 
+      render: (val) => (
+        <span className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded border ${val === 'Bags' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'}`}>
+          {val}
+        </span>
+      ) 
+    },
     { key: "customerName", label: "Customer", render: (val) => <span className="font-medium text-[var(--color-app-text)]">{val}</span> },
     { key: "itemsSummary", label: "Items", render: (val) => <span className="text-[var(--color-app-text-subtle)]">{val}</span> },
-    { key: "final_total", label: "Total", align: "right", render: (val) => <span className="font-mono font-medium text-[var(--color-app-text)]">{formatCurrency(val)}</span> },
-    { key: "final_profit", label: "Profit", align: "right", render: (val) => <span className="font-mono font-semibold text-[var(--color-app-success)]">+{formatCurrency(val)}</span> }
+    { key: "total", label: "Total", align: "right", render: (val) => <span className="font-mono font-medium text-[var(--color-app-text)]">{formatCurrency(val)}</span> },
+    { key: "profit", label: "Profit", align: "right", render: (val) => <span className="font-mono font-semibold text-[var(--color-app-success)]">+{formatCurrency(val)}</span> }
   ];
 
   // 4. Low Stock Products
@@ -157,6 +201,9 @@ export default function Dashboard() {
                   </span>
                   {profitTrendNode}
                 </div>
+                <p className="text-xs text-[var(--color-app-text-subtle)] font-mono mt-1">
+                  Bags: {formatCurrency(bagsProfit)} · Printed: {formatCurrency(printedProfit)}
+                </p>
               </div>
             </div>
             
@@ -212,6 +259,9 @@ export default function Dashboard() {
             <Card padding="lg" className="flex-1 flex flex-col justify-center">
               <p className="text-xs text-[var(--color-app-text-muted)] uppercase tracking-wider mb-2">Gross Revenue</p>
               <p className="text-2xl font-mono font-medium text-[var(--color-app-text)]">{formatCurrency(totalRevenue)}</p>
+              <p className="text-[11px] text-[var(--color-app-text-subtle)] font-mono mt-1">
+                Bags: {formatCurrency(bagsRevenue)} · Printed: {formatCurrency(printedRevenue)}
+              </p>
             </Card>
 
             <Card padding="lg" className={`flex-1 flex flex-col justify-center border-l-4 ${totalOutstanding > 0 ? "border-l-[var(--color-app-warning)] bg-[var(--color-app-warning)]/5" : "border-l-[var(--color-app-success)]"}`}>
