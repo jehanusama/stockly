@@ -598,10 +598,14 @@ export function AppProvider({ children }) {
   };
 
   const deleteCustomer = async (id) => {
-    const isReferenced = orders.some((o) => o.customer_id === id);
-    if (isReferenced) {
-      const msg = "Cannot delete customer because they have existing order history.";
-      return { success: false, error: msg };
+    const hasBagsOrders = orders.some((o) => o.customer_id === id);
+    const hasPrintedSales = printedSales.some((s) => s.customer_id === id);
+
+    if (hasBagsOrders || hasPrintedSales) {
+      return {
+        success: false,
+        error: "This customer can't be deleted because they have existing transaction history.",
+      };
     }
 
     try {
@@ -614,7 +618,7 @@ export function AppProvider({ children }) {
         console.error("Supabase customer delete error:", error);
         return {
           success: false,
-          error: "Cannot delete customer because they have existing order history.",
+          error: "This customer can't be deleted because they have existing transaction history.",
         };
       }
 
@@ -624,7 +628,7 @@ export function AppProvider({ children }) {
       console.error("Error deleting customer:", err);
       return {
         success: false,
-        error: "Cannot delete customer because they have existing order history.",
+        error: "This customer can't be deleted because they have existing transaction history.",
       };
     }
   };
@@ -967,7 +971,7 @@ export function AppProvider({ children }) {
         discount_value: 0,
         subtotal: amtNum,
         final_total: amtNum,
-        final_profit: amtNum,
+        final_profit: 0, // Manual outstanding entries have no associated product cost/profit
       };
 
       const { data: insertedOrders, error: orderError } = await supabase
