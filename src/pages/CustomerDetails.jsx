@@ -374,6 +374,7 @@ export default function CustomerDetails() {
                           </div>
                           <p className="text-xs text-[var(--color-app-text-subtle)] mt-0.5 truncate">
                             {txn.itemsSummary}
+                            {txn.notes && <span className="ml-2 font-normal italic opacity-85 text-[var(--color-app-text-muted)]">— 📝 {txn.notes}</span>}
                           </p>
                         </div>
                       </div>

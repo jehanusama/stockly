@@ -351,10 +351,6 @@ export default function PrintedItems() {
       setFormError("Please enter a valid amount paid.");
       return;
     }
-    if (paidNow > calculatedTotal + 0.001) {
-      setFormError(`Amount paid cannot exceed total amount (${formatCurrency(calculatedTotal)}).`);
-      return;
-    }
 
     setIsSubmitting(true);
     setFormError("");

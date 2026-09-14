@@ -338,7 +338,7 @@ export default function NewSale() {
   const finalMargin = finalTotal > 0 ? ((finalProfit / finalTotal) * 100).toFixed(0) : 0;
 
   const effectiveAmountPaid = amountPaidInput !== "" ? parseFloat(amountPaidInput) || 0 : finalTotal;
-  const isPaidInputValid = effectiveAmountPaid >= 0 && effectiveAmountPaid <= finalTotal + 0.001;
+  const isPaidInputValid = effectiveAmountPaid >= 0;
   const balanceDue = Math.max(0, finalTotal - effectiveAmountPaid);
 
   const paymentBadge = useMemo(() => {
@@ -858,7 +858,6 @@ export default function NewSale() {
                       label="Amount Paid Now (EGP)"
                       type="number"
                       min="0"
-                      max={finalTotal}
                       step="0.01"
                       value={amountPaidInput === "" ? (finalTotal > 0 ? finalTotal.toString() : "0") : amountPaidInput}
                       onChange={e => setAmountPaidInput(e.target.value)}
@@ -867,7 +866,7 @@ export default function NewSale() {
 
                     {!isPaidInputValid && (
                       <span className="text-xs font-medium text-[var(--color-app-danger)] leading-snug">
-                        Amount paid cannot be negative or exceed total {formatCurrency(finalTotal)}.
+                        Amount paid cannot be negative.
                       </span>
                     )}
 

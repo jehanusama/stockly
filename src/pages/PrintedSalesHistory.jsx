@@ -259,8 +259,13 @@ export default function PrintedSalesHistory() {
                         <td className="px-4 py-3.5 font-medium text-[var(--color-app-text)]">
                           {sale.customerName}
                         </td>
-                        <td className="px-4 py-3.5 font-semibold text-[var(--color-app-text)]">
-                          {sale.itemName}
+                        <td className="px-4 py-3.5 text-[var(--color-app-text)]">
+                          <div className="font-semibold">{sale.itemName}</div>
+                          {sale.notes && (
+                            <div className="text-xs font-normal text-[var(--color-app-text-muted)] italic mt-0.5" dir="auto">
+                              📝 {sale.notes}
+                            </div>
+                          )}
                         </td>
                         <td className="px-4 py-3.5 text-right font-mono text-[var(--color-app-text)]">
                           {sale.quantity} <span className="text-xs text-[var(--color-app-text-muted)]">{sale.itemUnit}</span>
