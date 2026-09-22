@@ -1,6 +1,6 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Button, Card, Table, Input, Modal, StockBar, Select, LoadingState, ErrorState } from "@/components/ui";
+import { Button, Card, Table, Input, Modal, StockBar, Select, LoadingState, ErrorState, CustomerSelect } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { useAppData } from "@/context/AppContext";
 import { formatCurrency } from "@/utils/currency";
@@ -31,9 +31,6 @@ export default function PrintedItems() {
   } = useAppData();
 
   const [search, setSearch] = useState("");
-  const [customerSearch, setCustomerSearch] = useState("");
-  const [customerOpen, setCustomerOpen] = useState(false);
-  const customerRef = useRef(null);
 
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -108,8 +105,7 @@ export default function PrintedItems() {
       sale_date: new Date().toISOString().split("T")[0],
       notes: "",
     });
-    setCustomerSearch("");
-    setCustomerOpen(false);
+
     setFormError("");
   };
 
@@ -680,102 +676,14 @@ export default function PrintedItems() {
             </div>
           )}
 
-          {/* Searchable Customer Combobox */}
-          <div className="flex flex-col gap-1.5 relative" ref={customerRef}>
-            <label className="text-sm font-medium text-[var(--color-app-text-muted)]">
-              Customer (Optional)
-            </label>
-            <div
-              className={[
-                "flex items-center h-11 px-3 rounded-lg border bg-[var(--color-app-bg)] text-sm transition-colors cursor-text gap-2",
-                customerOpen
-                  ? "border-[var(--color-app-border-focus)] ring-1 ring-[var(--color-app-border-focus)]"
-                  : "border-[var(--color-app-border)]",
-              ].join(" ")}
-              onClick={() => setCustomerOpen(true)}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-[var(--color-app-text-muted)]">
-                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-              </svg>
-              <input
-                type="text"
-                className="flex-1 bg-transparent outline-none text-[var(--color-app-text)] placeholder-[var(--color-app-text-muted)] min-w-0"
-                placeholder={saleForm.customer_id && !customerOpen
-                  ? (customers.find(c => c.id === saleForm.customer_id)?.name ?? "Guest Customer (No Account)")
-                  : "Search by name or phone..."}
-                value={customerOpen
-                  ? customerSearch
-                  : (saleForm.customer_id ? (customers.find(c => c.id === saleForm.customer_id)?.name ?? "") : "")}
-                onChange={e => { setCustomerSearch(e.target.value); setCustomerOpen(true); }}
-                onFocus={() => { setCustomerOpen(true); setCustomerSearch(""); }}
-                onBlur={() => setTimeout(() => setCustomerOpen(false), 150)}
-                autoComplete="off"
-                dir="auto"
-              />
-              {saleForm.customer_id && (
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  onClick={e => { e.stopPropagation(); setSaleForm(prev => ({ ...prev, customer_id: "" })); setCustomerSearch(""); }}
-                  className="shrink-0 text-[var(--color-app-text-muted)] hover:text-[var(--color-app-danger)] transition-colors"
-                  aria-label="Clear customer"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                  </svg>
-                </button>
-              )}
-            </div>
-
-            {customerOpen && (() => {
-              const q = customerSearch.trim().toLowerCase();
-              const filtered = (customers || []).filter(c =>
-                !q ||
-                (c.name ?? "").toLowerCase().includes(q) ||
-                (c.phone ?? "").toLowerCase().includes(q)
-              );
-              return (
-                <div className="absolute top-full left-0 right-0 mt-1 z-50 rounded-xl border border-[var(--color-app-border)] bg-[var(--color-app-panel)] shadow-xl max-h-60 overflow-y-auto">
-                  {/* Guest customer option */}
-                  <button
-                    type="button"
-                    onMouseDown={() => { setSaleForm(prev => ({ ...prev, customer_id: "" })); setCustomerSearch(""); setCustomerOpen(false); }}
-                    className={[
-                      "w-full flex flex-col items-start px-4 py-2.5 text-sm transition-colors text-left border-b border-[var(--color-app-border)]",
-                      !saleForm.customer_id
-                        ? "bg-[var(--color-app-accent)]/15 text-[var(--color-app-accent)]"
-                        : "text-[var(--color-app-text-muted)] hover:bg-[var(--color-app-elevated)]",
-                    ].join(" ")}
-                  >
-                    <span className="font-medium">Guest Customer (No Account)</span>
-                  </button>
-
-                  {filtered.length === 0 ? (
-                    <div className="px-4 py-3 text-sm text-[var(--color-app-text-muted)] text-center italic">
-                      No customers match &ldquo;{customerSearch}&rdquo;
-                    </div>
-                  ) : (
-                    filtered.map(c => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onMouseDown={() => { setSaleForm(prev => ({ ...prev, customer_id: c.id })); setCustomerSearch(""); setCustomerOpen(false); }}
-                        className={[
-                          "w-full flex flex-col items-start px-4 py-2.5 text-sm transition-colors text-left border-b border-[var(--color-app-border)] last:border-0",
-                          c.id === saleForm.customer_id
-                            ? "bg-[var(--color-app-accent)]/15 text-[var(--color-app-accent)]"
-                            : "text-[var(--color-app-text)] hover:bg-[var(--color-app-elevated)]",
-                        ].join(" ")}
-                      >
-                        <span className="font-medium" dir="auto">{c.name}</span>
-                        {c.phone && <span className="text-xs text-[var(--color-app-text-muted)] font-mono">{c.phone}</span>}
-                      </button>
-                    ))
-                  )}
-                </div>
-              );
-            })()}
-          </div>
+          <CustomerSelect
+            label="Customer (Optional)"
+            value={saleForm.customer_id}
+            onChange={(val) => setSaleForm((prev) => ({ ...prev, customer_id: val }))}
+            customers={customers}
+            allowGuest
+            placeholder="Search by name or phone..."
+          />
 
           <Select
             label="Printed Item"

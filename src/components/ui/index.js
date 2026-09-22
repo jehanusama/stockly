@@ -11,3 +11,4 @@ export { StockBar }   from "./StockBar";
 export { DatePicker } from "./DatePicker";
 export { Pagination } from "./Pagination";
 export { LoadingState, ErrorState } from "./LoadingState";
+export { CustomerSelect } from "./CustomerSelect";

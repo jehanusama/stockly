@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Card, Select, Input, Modal, LoadingState, ErrorState, Pagination } from "@/components/ui";
+import { Button, Card, Select, Input, Modal, LoadingState, ErrorState, Pagination, CustomerSelect } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { useAppData } from "@/context/AppContext";
 import { formatCurrency } from "@/utils/currency";
@@ -678,20 +678,14 @@ export default function Outstanding() {
             </div>
           )}
 
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-[var(--color-app-text-muted)]">
-              Customer <span className="text-[var(--color-app-danger)]">*</span>
-            </label>
-            <Select
-              value={addCustomerId}
-              onChange={(e) => setAddCustomerId(e.target.value)}
-              options={[
-                { value: "", label: "Select a customer..." },
-                ...customers.map((c) => ({ value: c.id, label: c.name })),
-              ]}
-              required
-            />
-          </div>
+          <CustomerSelect
+            label="Customer"
+            value={addCustomerId}
+            onChange={(val) => setAddCustomerId(val)}
+            customers={customers}
+            required
+            placeholder="Search by name or phone..."
+          />
 
           <Input
             id="add-outstanding-title"

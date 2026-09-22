@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, Modal, Select, DatePicker, LoadingState, ErrorState, Pagination } from "@/components/ui";
+import { Button, Modal, Select, DatePicker, LoadingState, ErrorState, Pagination, CustomerSelect } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { formatCurrency } from "@/utils/currency";
 import { useAppData } from "@/context/AppContext";
@@ -13,13 +13,13 @@ function FilterToolbar({ filters, onChange, onClear, hasActiveFilters, customers
       </svg>
 
       {/* Customer Filter */}
-      <Select
+      <CustomerSelect
+        label=""
         value={filters.customerId}
-        onChange={e => onChange("customerId", e.target.value)}
-        options={[{ value: "", label: "All Customers" }, ...customers.map(c => ({ value: c.id, label: c.name }))]}
-        placeholder=""
-        className="flex-1 min-w-[130px]"
-        selectClassName="h-9 text-xs"
+        onChange={val => onChange("customerId", val)}
+        customers={customers}
+        placeholder="All Customers"
+        className="flex-1 min-w-[150px]"
       />
 
       {/* Payment Status Filter */}
