@@ -792,16 +792,23 @@ export function AppProvider({ children }) {
         }
       }
 
-      // 5b. Insert initial payment if amount_paid_now > 0
+      // 5b. Insert initial payment & handle excess payment
       const amountPaidNow = order.amount_paid_now !== undefined
         ? Number(order.amount_paid_now)
         : finalTotal;
 
-      if (amountPaidNow > 0 && createdOrder.id && createdOrder.customer_id) {
+      const customerId = createdOrder.customer_id;
+      const saleTotal = finalTotal;
+
+      const primaryPayment = Math.min(amountPaidNow, saleTotal);
+      const excessAmount = Math.max(0, amountPaidNow - saleTotal);
+
+      // Insert primary payment for this order
+      if (primaryPayment > 0 && createdOrder.id && customerId) {
         const paymentPayload = {
           order_id: createdOrder.id,
-          customer_id: createdOrder.customer_id,
-          amount: amountPaidNow,
+          customer_id: customerId,
+          amount: primaryPayment,
           payment_date: (order.order_date || new Date().toISOString()).slice(0, 10),
           notes: "Initial payment upon order creation",
         };
@@ -811,6 +818,60 @@ export function AppProvider({ children }) {
 
         if (payErr) {
           console.error("Error inserting initial payment:", payErr);
+        }
+      }
+
+      // Handle excess payment: allocate to existing debt or convert to extra profit
+      if (excessAmount > 0) {
+        let remainingExcess = excessAmount;
+
+        if (customerId) {
+          // Find unpaid bags orders and printed sales for this customer (excluding createdOrder)
+          const unpaidBags = orders
+            .filter((o) => o.customer_id === customerId && o.id !== createdOrder.id && (o.balance_due ?? 0) > 0)
+            .map((o) => ({ type: "bags", id: o.id, date: o.order_date, bal: o.balance_due }));
+
+          const unpaidPrinted = printedSales
+            .filter((s) => s.customer_id === customerId && (s.balance_due ?? 0) > 0)
+            .map((s) => ({ type: "printed", id: s.id, date: s.sale_date, bal: s.balance_due }));
+
+          const unpaidItems = [...unpaidBags, ...unpaidPrinted]
+            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+          for (const item of unpaidItems) {
+            if (remainingExcess <= 0) break;
+            const alloc = Math.min(item.bal, remainingExcess);
+            remainingExcess -= alloc;
+
+            const payDate = (order.order_date || new Date().toISOString()).slice(0, 10);
+            if (item.type === "bags") {
+              await supabase.from("payments").insert([{
+                order_id: item.id,
+                customer_id: customerId,
+                amount: Number(alloc.toFixed(2)),
+                payment_date: payDate,
+                notes: "Excess payment allocation from new order",
+              }]);
+            } else if (item.type === "printed") {
+              await supabase.from("printed_payments").insert([{
+                printed_sale_id: item.id,
+                customer_id: customerId,
+                amount: Number(alloc.toFixed(2)),
+                payment_date: payDate,
+                notes: "Excess payment allocation from new order",
+              }]);
+            }
+          }
+        }
+
+        // If excess remains after clearing all outstanding debt (or if no customer), add to profit
+        if (remainingExcess > 0) {
+          const extraProfit = remainingExcess;
+          const newProfit = Number(createdOrder.final_profit ?? 0) + extraProfit;
+          await supabase
+            .from("orders")
+            .update({ final_profit: newProfit })
+            .eq("id", createdOrder.id);
         }
       }
 
@@ -1332,13 +1393,20 @@ export function AppProvider({ children }) {
         ? Number(sale.amount_paid_now)
         : lineTotal;
 
-      if (amountPaidNow > 0 && createdSale.id && createdSale.customer_id) {
+      const customerId = createdSale.customer_id;
+      const saleTotal = lineTotal;
+
+      const primaryPayment = Math.min(amountPaidNow, saleTotal);
+      const excessAmount = Math.max(0, amountPaidNow - saleTotal);
+
+      // Insert primary payment for this printed sale
+      if (primaryPayment > 0 && createdSale.id && customerId) {
         const paymentPayload = {
           printed_sale_id: createdSale.id,
-          customer_id: createdSale.customer_id,
-          amount: amountPaidNow,
+          customer_id: customerId,
+          amount: primaryPayment,
           payment_date: (sale.sale_date || new Date().toISOString()).slice(0, 10),
-          notes: "Initial payment upon printed sale creation",
+          notes: sale.notes || "Initial payment upon printed sale creation",
         };
         const { error: payErr } = await supabase
           .from("printed_payments")
@@ -1346,6 +1414,60 @@ export function AppProvider({ children }) {
 
         if (payErr) {
           console.error("Error inserting initial printed payment:", payErr);
+        }
+      }
+
+      // Handle excess payment: allocate to existing debt or convert to extra profit
+      if (excessAmount > 0) {
+        let remainingExcess = excessAmount;
+
+        if (customerId) {
+          // Find unpaid bags orders and printed sales for this customer (excluding createdSale)
+          const unpaidBags = orders
+            .filter((o) => o.customer_id === customerId && (o.balance_due ?? 0) > 0)
+            .map((o) => ({ type: "bags", id: o.id, date: o.order_date, bal: o.balance_due }));
+
+          const unpaidPrinted = printedSales
+            .filter((s) => s.customer_id === customerId && s.id !== createdSale.id && (s.balance_due ?? 0) > 0)
+            .map((s) => ({ type: "printed", id: s.id, date: s.sale_date, bal: s.balance_due }));
+
+          const unpaidItems = [...unpaidBags, ...unpaidPrinted]
+            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+          for (const item of unpaidItems) {
+            if (remainingExcess <= 0) break;
+            const alloc = Math.min(item.bal, remainingExcess);
+            remainingExcess -= alloc;
+
+            const payDate = (sale.sale_date || new Date().toISOString()).slice(0, 10);
+            if (item.type === "bags") {
+              await supabase.from("payments").insert([{
+                order_id: item.id,
+                customer_id: customerId,
+                amount: Number(alloc.toFixed(2)),
+                payment_date: payDate,
+                notes: "Excess payment allocation from printed sale",
+              }]);
+            } else if (item.type === "printed") {
+              await supabase.from("printed_payments").insert([{
+                printed_sale_id: item.id,
+                customer_id: customerId,
+                amount: Number(alloc.toFixed(2)),
+                payment_date: payDate,
+                notes: "Excess payment allocation from printed sale",
+              }]);
+            }
+          }
+        }
+
+        // If excess remains after clearing all outstanding debt (or if no customer), add to profit
+        if (remainingExcess > 0) {
+          const extraProfit = remainingExcess;
+          const newProfit = Number(createdSale.line_profit ?? 0) + extraProfit;
+          await supabase
+            .from("printed_sales")
+            .update({ line_profit: newProfit })
+            .eq("id", createdSale.id);
         }
       }
 
