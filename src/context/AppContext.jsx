@@ -41,7 +41,7 @@ export function AppProvider({ children }) {
         supabase.from("categories").select("*").order("name"),
         supabase.from("products").select("*, categories(*)").order("name"),
         supabase.from("customers").select("*").order("name"),
-        supabase.from("orders").select("*, order_items(*)").order("order_date", { ascending: false }),
+        supabase.from("orders").select("*, order_items(*)").order("order_date", { ascending: false }).order("created_at", { ascending: false }),
         supabase.from("product_batches").select("*").order("purchase_date", { ascending: false }).order("created_at", { ascending: false }),
         supabase.from("payments").select("*").order("payment_date", { ascending: false }).order("created_at", { ascending: false }),
         supabase.from("printed_items").select("*").order("name"),

@@ -151,7 +151,12 @@ export default function SalesHistory() {
       if (filters.dateTo && new Date(order.order_date) > new Date(filters.dateTo + "T23:59:59Z")) return false;
       return true;
     })
-    .sort((a, b) => new Date(b.order_date) - new Date(a.order_date))
+    .sort((a, b) => {
+      const dateDiff = new Date(b.order_date) - new Date(a.order_date);
+      if (dateDiff !== 0) return dateDiff;
+      // Secondary sort: most recently created first
+      return new Date(b.created_at ?? 0) - new Date(a.created_at ?? 0);
+    })
     .map(order => {
       const customer = mockCustomers.find(c => c.id === order.customer_id);
       
@@ -192,11 +197,19 @@ export default function SalesHistory() {
     {
       key: "order_date",
       label: "Date",
-      render: (val) => (
-        <span className="font-mono text-xs text-[var(--color-app-text-muted)]">
-          {new Date(val).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
-        </span>
-      ),
+      render: (val) => {
+        const d = new Date(val);
+        return (
+          <div className="flex flex-col gap-0.5">
+            <span className="font-mono text-xs text-[var(--color-app-text-muted)]">
+              {d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+            </span>
+            <span className="font-mono text-[10px] text-[var(--color-app-text-subtle)]">
+              {d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+            </span>
+          </div>
+        );
+      },
     },
     {
       key: "customerName",
@@ -422,6 +435,10 @@ export default function SalesHistory() {
                       <span className="font-semibold text-sm text-[var(--color-app-text)]">{row.customerName}</span>
                       <span className="text-xs text-[var(--color-app-text-subtle)] font-mono">
                         {new Date(row.order_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+                        {" "}
+                        <span className="text-[10px] text-[var(--color-app-text-subtle)]">
+                          {new Date(row.order_date).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+                        </span>
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
