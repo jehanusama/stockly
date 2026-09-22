@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Button, Card, Table, Input, Modal, StockBar, Select, LoadingState, ErrorState } from "@/components/ui";
+import { Button, Card, Table, Input, Modal, StockBar, Select, LoadingState, ErrorState, DatePicker } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { useAppData } from "@/context/AppContext";
 import { formatCurrency } from "@/utils/currency";
@@ -883,11 +883,10 @@ export default function Products() {
             />
           </div>
 
-          <Input
+          <DatePicker
             label="Purchase Date"
-            type="date"
             value={restockForm.purchase_date}
-            onChange={(e) => setRestockForm({ ...restockForm, purchase_date: e.target.value })}
+            onChange={(iso) => setRestockForm({ ...restockForm, purchase_date: iso })}
             required
           />
 
@@ -939,11 +938,10 @@ export default function Products() {
             />
           </div>
 
-          <Input
+          <DatePicker
             label="Purchase Date"
-            type="date"
             value={editBatchData.purchase_date}
-            onChange={(e) => setEditBatchData({ ...editBatchData, purchase_date: e.target.value })}
+            onChange={(iso) => setEditBatchData({ ...editBatchData, purchase_date: iso })}
             required
           />
 

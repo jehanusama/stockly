@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Button, Card, LoadingState, ErrorState, Modal, Input, Pagination } from "@/components/ui";
+import { Button, Card, LoadingState, ErrorState, Modal, Input, Pagination, DatePicker } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { useAppData } from "@/context/AppContext";
 import { formatCurrency } from "@/utils/currency";
@@ -484,11 +484,10 @@ export default function CustomerDetails() {
               autoFocus
             />
 
-            <Input
+            <DatePicker
               label="Payment Date"
-              type="date"
               value={paymentDate}
-              onChange={(e) => setPaymentDate(e.target.value)}
+              onChange={(iso) => setPaymentDate(iso)}
               required
             />
           </div>

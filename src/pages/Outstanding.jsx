@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Card, Select, Input, Modal, LoadingState, ErrorState, Pagination, CustomerSelect } from "@/components/ui";
+import { Button, Card, Select, Input, Modal, LoadingState, ErrorState, Pagination, CustomerSelect, DatePicker } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { useAppData } from "@/context/AppContext";
 import { formatCurrency } from "@/utils/currency";
@@ -571,12 +571,11 @@ export default function Outstanding() {
               }}
               required
             />
-            <Input
+            <DatePicker
               id="outstanding-payment-date"
               label="Payment Date"
-              type="date"
               value={paymentDate}
-              onChange={(e) => setPaymentDate(e.target.value)}
+              onChange={(iso) => setPaymentDate(iso)}
               required
             />
           </div>
@@ -708,12 +707,11 @@ export default function Outstanding() {
               onChange={(e) => setAddAmount(e.target.value)}
               required
             />
-            <Input
+            <DatePicker
               id="add-outstanding-date"
               label="Date *"
-              type="date"
               value={addDate}
-              onChange={(e) => setAddDate(e.target.value)}
+              onChange={(iso) => setAddDate(iso)}
               required
             />
           </div>

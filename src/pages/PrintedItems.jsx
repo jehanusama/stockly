@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Button, Card, Table, Input, Modal, StockBar, Select, LoadingState, ErrorState, CustomerSelect } from "@/components/ui";
+import { Button, Card, Table, Input, Modal, StockBar, Select, LoadingState, ErrorState, CustomerSelect, DatePicker } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { useAppData } from "@/context/AppContext";
 import { formatCurrency } from "@/utils/currency";
@@ -775,11 +775,10 @@ export default function PrintedItems() {
               placeholder="Leave empty for full payment"
             />
 
-            <Input
+            <DatePicker
               label="Sale Date"
-              type="date"
               value={saleForm.sale_date}
-              onChange={(e) => setSaleForm({ ...saleForm, sale_date: e.target.value })}
+              onChange={(iso) => setSaleForm({ ...saleForm, sale_date: iso })}
               required
             />
           </div>
@@ -972,11 +971,10 @@ export default function PrintedItems() {
             />
           </div>
 
-          <Input
+          <DatePicker
             label="Purchase Date"
-            type="date"
             value={restockForm.purchase_date}
-            onChange={(e) => setRestockForm({ ...restockForm, purchase_date: e.target.value })}
+            onChange={(iso) => setRestockForm({ ...restockForm, purchase_date: iso })}
             required
           />
 
@@ -1037,11 +1035,10 @@ export default function PrintedItems() {
             />
           </div>
 
-          <Input
+          <DatePicker
             label="Purchase Date"
-            type="date"
             value={editBatchData.purchase_date}
-            onChange={(e) => setEditBatchData({ ...editBatchData, purchase_date: e.target.value })}
+            onChange={(iso) => setEditBatchData({ ...editBatchData, purchase_date: iso })}
             required
           />
 
