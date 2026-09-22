@@ -1339,7 +1339,8 @@ export function AppProvider({ children }) {
       }
 
       const salePrice = Number(sale.sale_price);
-      const lineTotal = Number(sale.line_total ?? qtyNeeded * salePrice);
+      const discount = Number(sale.discount ?? 0);
+      const lineTotal = Number(sale.line_total ?? Math.max(0, qtyNeeded * salePrice - discount));
       const lineProfit = lineTotal - lineCostBasis;
 
       const salePayload = {

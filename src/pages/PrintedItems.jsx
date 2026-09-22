@@ -73,6 +73,7 @@ export default function PrintedItems() {
     printed_item_id: "",
     quantity: "",
     sale_price: "",
+    discount: "",
     amount_paid_now: "",
     sale_date: new Date().toISOString().split("T")[0],
     notes: "",
@@ -101,6 +102,7 @@ export default function PrintedItems() {
       printed_item_id: "",
       quantity: "",
       sale_price: "",
+      discount: "",
       amount_paid_now: "",
       sale_date: new Date().toISOString().split("T")[0],
       notes: "",
@@ -176,6 +178,7 @@ export default function PrintedItems() {
       printed_item_id: targetItem ? targetItem.id : "",
       quantity: "",
       sale_price: targetItem && targetItem.cost_price ? (targetItem.cost_price * 1.2).toFixed(2) : "",
+      discount: "",
       amount_paid_now: "",
       sale_date: new Date().toISOString().split("T")[0],
       notes: "",
@@ -345,7 +348,13 @@ export default function PrintedItems() {
       return;
     }
 
-    const calculatedTotal = qty * price;
+    const discount = saleForm.discount !== "" ? parseFloat(saleForm.discount) : 0;
+    if (isNaN(discount) || discount < 0) {
+      setFormError("Please enter a valid discount amount.");
+      return;
+    }
+    const subtotal = qty * price;
+    const calculatedTotal = Math.max(0, subtotal - discount);
     const paidNow = saleForm.amount_paid_now !== "" ? parseFloat(saleForm.amount_paid_now) : calculatedTotal;
 
     if (isNaN(paidNow) || paidNow < 0) {
@@ -361,6 +370,7 @@ export default function PrintedItems() {
       printed_item_id: saleForm.printed_item_id,
       quantity: qty,
       sale_price: price,
+      discount: discount,
       line_total: calculatedTotal,
       amount_paid_now: paidNow,
       sale_date: saleForm.sale_date,
@@ -713,7 +723,9 @@ export default function PrintedItems() {
               onChange={(e) => {
                 const qtyVal = e.target.value;
                 const priceVal = parseFloat(saleForm.sale_price) || 0;
-                const totalVal = (parseFloat(qtyVal) || 0) * priceVal;
+                const discountVal = parseFloat(saleForm.discount) || 0;
+                const subtotalVal = (parseFloat(qtyVal) || 0) * priceVal;
+                const totalVal = Math.max(0, subtotalVal - discountVal);
                 setSaleForm({
                   ...saleForm,
                   quantity: qtyVal,
@@ -734,7 +746,9 @@ export default function PrintedItems() {
               onChange={(e) => {
                 const priceVal = e.target.value;
                 const qtyVal = parseFloat(saleForm.quantity) || 0;
-                const totalVal = qtyVal * (parseFloat(priceVal) || 0);
+                const discountVal = parseFloat(saleForm.discount) || 0;
+                const subtotalVal = qtyVal * (parseFloat(priceVal) || 0);
+                const totalVal = Math.max(0, subtotalVal - discountVal);
                 setSaleForm({
                   ...saleForm,
                   sale_price: priceVal,
@@ -750,19 +764,56 @@ export default function PrintedItems() {
           {(() => {
             const qtyNum = parseFloat(saleForm.quantity) || 0;
             const priceNum = parseFloat(saleForm.sale_price) || 0;
-            const totalNum = qtyNum * priceNum;
+            const discountNum = parseFloat(saleForm.discount) || 0;
+            const subtotalNum = qtyNum * priceNum;
+            const totalNum = Math.max(0, subtotalNum - discountNum);
             const itemObj = printedItems.find(p => p.id === saleForm.printed_item_id);
-            return totalNum > 0 ? (
-              <div className="p-3.5 rounded-xl bg-[var(--color-app-elevated)] border border-[var(--color-app-border)] flex items-center justify-between text-xs">
-                <span className="text-[var(--color-app-text-muted)] font-medium">
-                  {qtyNum} {itemObj?.unit || "piece"} × {formatCurrency(priceNum)}
-                </span>
-                <span className="font-mono text-sm font-bold text-[var(--color-app-accent)]">
-                  Total: {formatCurrency(totalNum)}
-                </span>
+            return subtotalNum > 0 ? (
+              <div className="p-3.5 rounded-xl bg-[var(--color-app-elevated)] border border-[var(--color-app-border)] flex flex-col gap-1.5 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-[var(--color-app-text-muted)] font-medium">
+                    {qtyNum} {itemObj?.unit || "piece"} × {formatCurrency(priceNum)}
+                  </span>
+                  <span className="font-mono font-semibold text-[var(--color-app-text)]">
+                    {formatCurrency(subtotalNum)}
+                  </span>
+                </div>
+                {discountNum > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-[var(--color-app-text-muted)]">Discount</span>
+                    <span className="font-mono text-[var(--color-app-danger)] font-semibold">− {formatCurrency(discountNum)}</span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between pt-1.5 border-t border-[var(--color-app-border)]">
+                  <span className="font-semibold text-[var(--color-app-text)]">{discountNum > 0 ? "Final Total" : "Total"}</span>
+                  <span className="font-mono text-sm font-bold text-[var(--color-app-accent)]">
+                    {formatCurrency(totalNum)}
+                  </span>
+                </div>
               </div>
             ) : null;
           })()}
+
+          <Input
+            label="Discount (EGP) — Optional"
+            type="number"
+            min="0"
+            step="0.01"
+            value={saleForm.discount}
+            onChange={(e) => {
+              const discountVal = e.target.value;
+              const qtyVal = parseFloat(saleForm.quantity) || 0;
+              const priceVal = parseFloat(saleForm.sale_price) || 0;
+              const subtotalVal = qtyVal * priceVal;
+              const totalVal = Math.max(0, subtotalVal - (parseFloat(discountVal) || 0));
+              setSaleForm({
+                ...saleForm,
+                discount: discountVal,
+                amount_paid_now: subtotalVal > 0 ? totalVal.toFixed(2) : "",
+              });
+            }}
+            placeholder="0.00"
+          />
 
           <div className="grid grid-cols-2 gap-4">
             <Input
