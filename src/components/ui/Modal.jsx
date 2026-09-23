@@ -17,6 +17,8 @@ export function Modal({
   footer,
 }) {
   const panelRef = useRef(null);
+  const backdropRef = useRef(null);
+  const overlayRef = useRef(null);
 
   // Close on Escape
   useEffect(() => {
@@ -40,19 +42,24 @@ export function Modal({
 
   if (!isOpen) return null;
 
+  const handleBackdropClick = (e) => {
+    if (e.target === backdropRef.current || e.target === overlayRef.current) {
+      onClose?.();
+    }
+  };
+
   return (
     /* Backdrop */
     <div
+      ref={backdropRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby="modal-title"
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4"
-      onClick={(e) => {
-        if (!panelRef.current?.contains(e.target)) onClose?.();
-      }}
+      onClick={handleBackdropClick}
     >
       {/* Dimmed background */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div ref={overlayRef} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
 
       {/* Panel */}
       <div
