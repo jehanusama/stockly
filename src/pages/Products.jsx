@@ -737,7 +737,7 @@ export default function Products() {
               label="Initial Cost Price (EGP)"
               type="number"
               min="0"
-              step="0.01"
+              step="0.5"
               value={addFormData.cost}
               onChange={(e) => setAddFormData({ ...addFormData, cost: e.target.value })}
               placeholder="0.00 (Optional)"
@@ -746,7 +746,7 @@ export default function Products() {
               label="Default Sale Price (EGP)"
               type="number"
               min="0"
-              step="0.01"
+              step="0.5"
               value={addFormData.sale_price}
               onChange={(e) => setAddFormData({ ...addFormData, sale_price: e.target.value })}
               placeholder="Leave blank = auto"
@@ -828,7 +828,7 @@ export default function Products() {
             label="Default Sale Price (EGP)"
             type="number"
             min="0"
-            step="0.01"
+            step="0.5"
             value={editFormData.sale_price}
             onChange={(e) => setEditFormData({ ...editFormData, sale_price: e.target.value })}
             placeholder="Leave blank = auto (cost × 1.2)"
@@ -863,7 +863,7 @@ export default function Products() {
             <Input
               label="Quantity Received"
               type="number"
-              min="0.01"
+              min="0.5"
               step="any"
               value={restockForm.quantity_received}
               onChange={(e) => setRestockForm({ ...restockForm, quantity_received: e.target.value })}
@@ -875,7 +875,7 @@ export default function Products() {
               label="Batch Cost Price (EGP)"
               type="number"
               min="0"
-              step="0.01"
+              step="0.5"
               value={restockForm.cost_price}
               onChange={(e) => setRestockForm({ ...restockForm, cost_price: e.target.value })}
               placeholder="0.00"
@@ -918,7 +918,7 @@ export default function Products() {
             <Input
               label="Quantity Received"
               type="number"
-              min="0.01"
+              min="0.5"
               step="any"
               value={editBatchData.quantity_received}
               onChange={(e) => setEditBatchData({ ...editBatchData, quantity_received: e.target.value })}
@@ -930,7 +930,7 @@ export default function Products() {
               label="Batch Cost Price (EGP)"
               type="number"
               min="0"
-              step="0.01"
+              step="0.5"
               value={editBatchData.cost_price}
               onChange={(e) => setEditBatchData({ ...editBatchData, cost_price: e.target.value })}
               placeholder="0.00"

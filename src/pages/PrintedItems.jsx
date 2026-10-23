@@ -717,8 +717,8 @@ export default function PrintedItems() {
             <Input
               label="Quantity"
               type="number"
-              min="0.01"
-              step="0.01"
+              min="0.5"
+              step="0.5"
               value={saleForm.quantity}
               onChange={(e) => {
                 const qtyVal = e.target.value;
@@ -741,7 +741,7 @@ export default function PrintedItems() {
               label="Sale Price Per Unit (EGP)"
               type="number"
               min="0"
-              step="0.01"
+              step="0.5"
               value={saleForm.sale_price}
               onChange={(e) => {
                 const priceVal = e.target.value;
@@ -798,7 +798,7 @@ export default function PrintedItems() {
             label="Discount (EGP) — Optional"
             type="number"
             min="0"
-            step="0.01"
+            step="0.5"
             value={saleForm.discount}
             onChange={(e) => {
               const discountVal = e.target.value;
@@ -820,7 +820,7 @@ export default function PrintedItems() {
               label="Amount Paid Now (EGP)"
               type="number"
               min="0"
-              step="0.01"
+              step="0.5"
               value={saleForm.amount_paid_now}
               onChange={(e) => setSaleForm({ ...saleForm, amount_paid_now: e.target.value })}
               placeholder="Leave empty for full payment"
@@ -897,7 +897,7 @@ export default function PrintedItems() {
               label="Initial Cost Price (EGP)"
               type="number"
               min="0"
-              step="0.01"
+              step="0.5"
               value={addFormData.cost}
               onChange={(e) => setAddFormData({ ...addFormData, cost: e.target.value })}
               placeholder="0.00 (Optional)"
@@ -906,7 +906,7 @@ export default function PrintedItems() {
               label="Initial Stock Quantity"
               type="number"
               min="0"
-              step="0.01"
+              step="0.5"
               value={addFormData.stock}
               onChange={(e) => setAddFormData({ ...addFormData, stock: e.target.value })}
               placeholder="0 (Optional)"
@@ -1002,8 +1002,8 @@ export default function PrintedItems() {
             <Input
               label="Quantity Received"
               type="number"
-              min="0.01"
-              step="0.01"
+              min="0.5"
+              step="0.5"
               value={restockForm.quantity_received}
               onChange={(e) => setRestockForm({ ...restockForm, quantity_received: e.target.value })}
               placeholder="e.g. 100"
@@ -1014,7 +1014,7 @@ export default function PrintedItems() {
               label="Cost Price Per Unit (EGP)"
               type="number"
               min="0"
-              step="0.01"
+              step="0.5"
               value={restockForm.cost_price}
               onChange={(e) => setRestockForm({ ...restockForm, cost_price: e.target.value })}
               placeholder="0.00"
@@ -1066,8 +1066,8 @@ export default function PrintedItems() {
             <Input
               label="Quantity Received"
               type="number"
-              min="0.01"
-              step="0.01"
+              min="0.5"
+              step="0.5"
               value={editBatchData.quantity_received}
               onChange={(e) => setEditBatchData({ ...editBatchData, quantity_received: e.target.value })}
               placeholder="e.g. 100"
@@ -1078,7 +1078,7 @@ export default function PrintedItems() {
               label="Cost Price Per Unit (EGP)"
               type="number"
               min="0"
-              step="0.01"
+              step="0.5"
               value={editBatchData.cost_price}
               onChange={(e) => setEditBatchData({ ...editBatchData, cost_price: e.target.value })}
               placeholder="0.00"

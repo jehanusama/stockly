@@ -180,8 +180,8 @@ function BatchPicker({ categories, products, onAddToCart }) {
                           <Input
                             label={`Qty (${product.unit})`}
                             type="number"
-                            min="0.01"
-                            step="0.01"
+                            min="0.5"
+                            step="0.5"
                             value={sel.quantity}
                             onChange={e => updateSelection(product.id, "quantity", e.target.value)}
                             required
@@ -199,7 +199,7 @@ function BatchPicker({ categories, products, onAddToCart }) {
                           label="Sale price / unit"
                           type="number"
                           min="0"
-                          step="0.01"
+                          step="0.5"
                           value={sel.customPrice}
                           onChange={e => updateSelection(product.id, "customPrice", e.target.value)}
                           required
@@ -518,7 +518,7 @@ export default function NewSale() {
 
         {/* Left Column */}
         <div className="lg:col-span-8 flex flex-col gap-6">
-          <form id="new-sale-form" onSubmit={handleSubmit} className="flex flex-col gap-6">
+          <form id="new-sale-form" onSubmit={handleSubmit} noValidate className="flex flex-col gap-6">
 
             {/* 1. Order Details */}
             <Card padding="lg" className="flex flex-col gap-6 bg-[var(--color-app-panel)] border-[var(--color-app-border)]">
@@ -620,8 +620,8 @@ export default function NewSale() {
                         <div className="flex flex-col gap-1.5">
                           <Input
                             type="number"
-                            min="0.01"
-                            step="0.01"
+                            min="0.5"
+                            step="0.5"
                             label={`Quantity (${item.product?.unit ?? "unit"})`}
                             value={item.quantity}
                             onChange={e => updateCartItem(item.id, "quantity", e.target.value)}
@@ -639,7 +639,7 @@ export default function NewSale() {
                         <Input
                           type="number"
                           min="0"
-                          step="0.01"
+                          step="0.5"
                           label="Sale Price (per unit)"
                           value={item.customPrice}
                           onChange={e => updateCartItem(item.id, "customPrice", e.target.value)}
@@ -781,7 +781,7 @@ export default function NewSale() {
                       label="Amount Paid Now (EGP)"
                       type="number"
                       min="0"
-                      step="0.01"
+                      step="0.5"
                       value={amountPaidInput === "" ? (finalTotal > 0 ? finalTotal.toString() : "0") : amountPaidInput}
                       onChange={e => setAmountPaidInput(e.target.value)}
                       placeholder={finalTotal.toString()}
