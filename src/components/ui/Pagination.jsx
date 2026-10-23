@@ -94,16 +94,17 @@ export function Pagination({
 
       {/* Right side: Page navigation controls */}
       {totalPages > 1 && (
-        <div className="flex items-center gap-1">
+        <nav aria-label="Pagination Navigation" className="flex items-center gap-1">
           {/* First Page */}
           <button
             type="button"
             onClick={() => onPageChange(1)}
             disabled={validPage === 1}
             title="First Page"
-            className="w-8 h-8 flex items-center justify-center rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] text-[var(--color-app-text-muted)] hover:text-[var(--color-app-text)] hover:bg-[var(--color-app-elevated)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            aria-label="Go to first page"
+            className="w-8 h-8 flex items-center justify-center rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] text-[var(--color-app-text-muted)] hover:text-[var(--color-app-text)] hover:bg-[var(--color-app-elevated)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-app-border-focus)]"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="11 17 6 12 11 7"></polyline><polyline points="18 17 13 12 18 7"></polyline></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="11 17 6 12 11 7"></polyline><polyline points="18 17 13 12 18 7"></polyline></svg>
           </button>
 
           {/* Previous Page */}
@@ -112,16 +113,17 @@ export function Pagination({
             onClick={() => onPageChange(validPage - 1)}
             disabled={validPage === 1}
             title="Previous Page"
-            className="w-8 h-8 flex items-center justify-center rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] text-[var(--color-app-text-muted)] hover:text-[var(--color-app-text)] hover:bg-[var(--color-app-elevated)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            aria-label="Go to previous page"
+            className="w-8 h-8 flex items-center justify-center rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] text-[var(--color-app-text-muted)] hover:text-[var(--color-app-text)] hover:bg-[var(--color-app-elevated)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-app-border-focus)]"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"></polyline></svg>
           </button>
 
           {/* Page numbers */}
           {pageNumbers.map((p, idx) => {
             if (p === "...") {
               return (
-                <span key={`dots-${idx}`} className="w-7 h-8 flex items-center justify-center text-xs text-[var(--color-app-text-muted)]">
+                <span key={`dots-${idx}`} aria-hidden="true" className="w-7 h-8 flex items-center justify-center text-xs text-[var(--color-app-text-muted)]">
                   ...
                 </span>
               );
@@ -133,8 +135,10 @@ export function Pagination({
                 key={p}
                 type="button"
                 onClick={() => onPageChange(p)}
+                aria-label={`Page ${p}`}
+                aria-current={isActive ? "page" : undefined}
                 className={[
-                  "h-8 min-w-[32px] px-2 rounded-lg text-xs font-semibold transition-all duration-150 flex items-center justify-center",
+                  "h-8 min-w-[32px] px-2 rounded-lg text-xs font-semibold transition-all duration-150 flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-app-border-focus)]",
                   isActive
                     ? "bg-[var(--color-app-accent)] text-white shadow-sm font-bold"
                     : "border border-[var(--color-app-border)] bg-[var(--color-app-panel)] text-[var(--color-app-text)] hover:bg-[var(--color-app-elevated)]",
@@ -151,9 +155,10 @@ export function Pagination({
             onClick={() => onPageChange(validPage + 1)}
             disabled={validPage === totalPages}
             title="Next Page"
-            className="w-8 h-8 flex items-center justify-center rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] text-[var(--color-app-text-muted)] hover:text-[var(--color-app-text)] hover:bg-[var(--color-app-elevated)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            aria-label="Go to next page"
+            className="w-8 h-8 flex items-center justify-center rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] text-[var(--color-app-text-muted)] hover:text-[var(--color-app-text)] hover:bg-[var(--color-app-elevated)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-app-border-focus)]"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>
           </button>
 
           {/* Last Page */}
@@ -162,11 +167,12 @@ export function Pagination({
             onClick={() => onPageChange(totalPages)}
             disabled={validPage === totalPages}
             title="Last Page"
-            className="w-8 h-8 flex items-center justify-center rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] text-[var(--color-app-text-muted)] hover:text-[var(--color-app-text)] hover:bg-[var(--color-app-elevated)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            aria-label="Go to last page"
+            className="w-8 h-8 flex items-center justify-center rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] text-[var(--color-app-text-muted)] hover:text-[var(--color-app-text)] hover:bg-[var(--color-app-elevated)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-app-border-focus)]"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="13 17 18 12 13 7"></polyline><polyline points="6 17 11 12 6 7"></polyline></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="13 17 18 12 13 7"></polyline><polyline points="6 17 11 12 6 7"></polyline></svg>
           </button>
-        </div>
+        </nav>
       )}
     </div>
   );

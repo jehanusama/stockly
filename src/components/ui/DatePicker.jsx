@@ -29,13 +29,16 @@ function CalendarPanel({ value, onChange, minDate, maxDate, markedDates = [], on
   const initDate = value ? parseISO(value) : new Date();
   const [viewYear, setViewYear] = useState(initDate.getFullYear());
   const [viewMonth, setViewMonth] = useState(initDate.getMonth());
+  const [focusedDay, setFocusedDay] = useState(initDate.getDate());
 
   const panelRef = useRef(null);
+  const dayRefs = useRef({});
 
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
   const firstDayOfWeek = new Date(viewYear, viewMonth, 1).getDay();
   const monthLabel = new Date(viewYear, viewMonth).toLocaleString("en-US", {
-    month: "long", year: "numeric",
+    month: "long",
+    year: "numeric",
   });
 
   // Calculate position: appear below anchor, flip up if it would overflow viewport
@@ -55,12 +58,21 @@ function CalendarPanel({ value, onChange, minDate, maxDate, markedDates = [], on
   })();
 
   const prevMonth = () => {
-    if (viewMonth === 0) { setViewYear(y => y - 1); setViewMonth(11); }
-    else setViewMonth(m => m - 1);
+    if (viewMonth === 0) {
+      setViewYear((y) => y - 1);
+      setViewMonth(11);
+    } else {
+      setViewMonth((m) => m - 1);
+    }
   };
+
   const nextMonth = () => {
-    if (viewMonth === 11) { setViewYear(y => y + 1); setViewMonth(0); }
-    else setViewMonth(m => m + 1);
+    if (viewMonth === 11) {
+      setViewYear((y) => y + 1);
+      setViewMonth(0);
+    } else {
+      setViewMonth((m) => m + 1);
+    }
   };
 
   // Close on outside click (panel itself or anchor handled by parent)
@@ -78,12 +90,93 @@ function CalendarPanel({ value, onChange, minDate, maxDate, markedDates = [], on
     };
   }, [onClose]);
 
+  // Focus the day button when focusedDay changes
+  useEffect(() => {
+    if (dayRefs.current[focusedDay]) {
+      dayRefs.current[focusedDay].focus();
+    }
+  }, [focusedDay, viewMonth, viewYear]);
+
   const handleDayClick = (day) => {
     const iso = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     if (minDate && iso < minDate) return;
     if (maxDate && iso > maxDate) return;
     onChange(iso);
     onClose();
+  };
+
+  // Keyboard navigation within the calendar grid
+  const handleKeyDown = (e) => {
+    switch (e.key) {
+      case "Escape":
+        e.preventDefault();
+        e.stopPropagation();
+        onClose();
+        break;
+      case "ArrowLeft":
+        e.preventDefault();
+        if (focusedDay > 1) {
+          setFocusedDay((d) => d - 1);
+        } else {
+          prevMonth();
+          const prevMonthDays = new Date(viewYear, viewMonth, 0).getDate();
+          setFocusedDay(prevMonthDays);
+        }
+        break;
+      case "ArrowRight":
+        e.preventDefault();
+        if (focusedDay < daysInMonth) {
+          setFocusedDay((d) => d + 1);
+        } else {
+          nextMonth();
+          setFocusedDay(1);
+        }
+        break;
+      case "ArrowUp":
+        e.preventDefault();
+        if (focusedDay - 7 >= 1) {
+          setFocusedDay((d) => d - 7);
+        } else {
+          prevMonth();
+          const prevMonthDays = new Date(viewYear, viewMonth, 0).getDate();
+          setFocusedDay(Math.max(1, prevMonthDays + (focusedDay - 7)));
+        }
+        break;
+      case "ArrowDown":
+        e.preventDefault();
+        if (focusedDay + 7 <= daysInMonth) {
+          setFocusedDay((d) => d + 7);
+        } else {
+          nextMonth();
+          setFocusedDay((focusedDay + 7) - daysInMonth);
+        }
+        break;
+      case "PageUp":
+        e.preventDefault();
+        prevMonth();
+        break;
+      case "PageDown":
+        e.preventDefault();
+        nextMonth();
+        break;
+      case "Home":
+        e.preventDefault();
+        setFocusedDay(1);
+        break;
+      case "End":
+        e.preventDefault();
+        setFocusedDay(daysInMonth);
+        break;
+      case "Enter":
+      case " ":
+        if (document.activeElement?.getAttribute?.("data-day")) {
+          e.preventDefault();
+          handleDayClick(focusedDay);
+        }
+        break;
+      default:
+        break;
+    }
   };
 
   const cells = [];
@@ -93,6 +186,10 @@ function CalendarPanel({ value, onChange, minDate, maxDate, markedDates = [], on
   return createPortal(
     <div
       ref={panelRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Calendar: ${monthLabel}`}
+      onKeyDown={handleKeyDown}
       style={{
         position: "fixed",
         top: style.top,
@@ -100,17 +197,17 @@ function CalendarPanel({ value, onChange, minDate, maxDate, markedDates = [], on
         width: style.width,
         zIndex: 9999,
       }}
-      className="rounded-2xl border border-[var(--color-app-border)] bg-[var(--color-app-panel)] shadow-2xl shadow-black/50 p-4 flex flex-col gap-3 select-none"
+      className="rounded-2xl border border-[var(--color-app-border)] bg-[var(--color-app-panel)] shadow-2xl shadow-black/50 p-4 flex flex-col gap-3 select-none outline-none"
     >
       {/* Month Nav */}
       <div className="flex items-center justify-between">
         <button
           type="button"
           onClick={prevMonth}
-          className="w-8 h-8 flex items-center justify-center rounded-lg text-[var(--color-app-text-muted)] hover:bg-[var(--color-app-elevated)] hover:text-[var(--color-app-text)] transition-colors"
+          className="w-8 h-8 flex items-center justify-center rounded-lg text-[var(--color-app-text-muted)] hover:bg-[var(--color-app-elevated)] hover:text-[var(--color-app-text)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-app-border-focus)]"
           aria-label="Previous month"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <polyline points="15 18 9 12 15 6" />
           </svg>
         </button>
@@ -120,48 +217,78 @@ function CalendarPanel({ value, onChange, minDate, maxDate, markedDates = [], on
         <button
           type="button"
           onClick={nextMonth}
-          className="w-8 h-8 flex items-center justify-center rounded-lg text-[var(--color-app-text-muted)] hover:bg-[var(--color-app-elevated)] hover:text-[var(--color-app-text)] transition-colors"
+          className="w-8 h-8 flex items-center justify-center rounded-lg text-[var(--color-app-text-muted)] hover:bg-[var(--color-app-elevated)] hover:text-[var(--color-app-text)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-app-border-focus)]"
           aria-label="Next month"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <polyline points="9 18 15 12 9 6" />
           </svg>
         </button>
       </div>
 
       {/* Day-of-week headers */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "2px" }}>
-        {DAYS.map(d => (
-          <div key={d} style={{ textAlign: "center", padding: "4px 0", fontSize: "10px", fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--color-app-text-muted)" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "2px" }} role="row">
+        {DAYS.map((d) => (
+          <div
+            key={d}
+            role="columnheader"
+            style={{
+              textAlign: "center",
+              padding: "4px 0",
+              fontSize: "10px",
+              fontWeight: 600,
+              letterSpacing: "0.05em",
+              textTransform: "uppercase",
+              color: "var(--color-app-text-muted)",
+            }}
+          >
             {d}
           </div>
         ))}
       </div>
 
-      {/* Day cells */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "3px" }}>
+      {/* Day cells grid */}
+      <div
+        role="grid"
+        aria-label={monthLabel}
+        style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "3px" }}
+      >
         {cells.map((day, i) => {
-          if (day === null) return <div key={`e-${i}`} />;
+          if (day === null) return <div key={`empty-${i}`} aria-hidden="true" />;
 
           const iso = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
           const isSelected = iso === value;
           const isToday = iso === today;
           const isDisabled = (minDate && iso < minDate) || (maxDate && iso > maxDate);
           const isMarked = markedSet.has(iso);
+          const isFocused = day === focusedDay;
 
           let bg = "transparent";
           let color = "var(--color-app-text)";
           let border = "none";
-          if (isSelected) { bg = "var(--color-app-accent)"; color = "#fff"; }
-          else if (isToday) { border = "1.5px solid var(--color-app-accent)"; color = "var(--color-app-accent)"; }
-          if (isDisabled) { color = "var(--color-app-text-muted)"; }
+          if (isSelected) {
+            bg = "var(--color-app-accent)";
+            color = "#fff";
+          } else if (isToday) {
+            border = "1.5px solid var(--color-app-accent)";
+            color = "var(--color-app-accent)";
+          }
+          if (isDisabled) {
+            color = "var(--color-app-text-muted)";
+          }
 
           return (
             <button
               key={iso}
+              ref={(el) => {
+                if (el) dayRefs.current[day] = el;
+              }}
+              data-day={day}
               type="button"
+              tabIndex={isFocused ? 0 : -1}
               disabled={isDisabled}
               onClick={() => handleDayClick(day)}
+              className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-app-border-focus)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-app-panel)]"
               style={{
                 position: "relative",
                 background: bg,
@@ -180,23 +307,25 @@ function CalendarPanel({ value, onChange, minDate, maxDate, markedDates = [], on
                 opacity: isDisabled ? 0.3 : 1,
                 transition: "background 0.1s",
               }}
-              onMouseEnter={e => { if (!isSelected && !isDisabled) e.currentTarget.style.background = "var(--color-app-elevated)"; }}
-              onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = bg; }}
-              aria-label={iso}
-              aria-pressed={isSelected}
+              aria-label={formatDisplay(iso)}
+              aria-selected={isSelected}
+              aria-current={isToday ? "date" : undefined}
             >
               {day}
               {isMarked && (
-                <span style={{
-                  position: "absolute",
-                  bottom: "3px",
-                  left: "50%",
-                  transform: "translateX(-50%)",
-                  width: "4px",
-                  height: "4px",
-                  borderRadius: "50%",
-                  background: isSelected ? "rgba(255,255,255,0.7)" : "var(--color-app-accent)",
-                }} />
+                <span
+                  style={{
+                    position: "absolute",
+                    bottom: "3px",
+                    left: "50%",
+                    transform: "translateX(-50%)",
+                    width: "4px",
+                    height: "4px",
+                    borderRadius: "50%",
+                    background: isSelected ? "rgba(255,255,255,0.7)" : "var(--color-app-accent)",
+                  }}
+                  aria-hidden="true"
+                />
               )}
             </button>
           );
@@ -204,34 +333,38 @@ function CalendarPanel({ value, onChange, minDate, maxDate, markedDates = [], on
       </div>
 
       {/* Quick Actions */}
-      <div style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        paddingTop: "8px",
-        borderTop: "1px solid var(--color-app-border)",
-      }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          paddingTop: "8px",
+          borderTop: "1px solid var(--color-app-border)",
+        }}
+      >
         <button
           type="button"
-          onClick={() => { onChange(""); onClose(); }}
-          style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-app-text-muted)", background: "none", border: "none", cursor: "pointer", transition: "color 0.15s" }}
-          onMouseEnter={e => e.currentTarget.style.color = "var(--color-app-danger)"}
-          onMouseLeave={e => e.currentTarget.style.color = "var(--color-app-text-muted)"}
+          onClick={() => {
+            onChange("");
+            onClose();
+          }}
+          className="px-2 py-1 rounded text-xs font-semibold text-[var(--color-app-text-muted)] hover:text-[var(--color-app-danger)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-app-border-focus)] transition-colors"
         >
           Clear
         </button>
         <button
           type="button"
-          onClick={() => { onChange(today); onClose(); }}
-          style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-app-accent)", background: "none", border: "none", cursor: "pointer", opacity: 1, transition: "opacity 0.15s" }}
-          onMouseEnter={e => e.currentTarget.style.opacity = "0.7"}
-          onMouseLeave={e => e.currentTarget.style.opacity = "1"}
+          onClick={() => {
+            onChange(today);
+            onClose();
+          }}
+          className="px-2 py-1 rounded text-xs font-semibold text-[var(--color-app-accent)] hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-app-border-focus)] transition-opacity"
         >
           Today
         </button>
       </div>
     </div>,
-    document.body,
+    document.body
   );
 }
 
@@ -258,15 +391,13 @@ export function DatePicker({
     if (!open && triggerRef.current) {
       setAnchorRect(triggerRef.current.getBoundingClientRect());
     }
-    setOpen(o => !o);
+    setOpen((o) => !o);
   };
 
-  // Close on Escape
-  useEffect(() => {
-    const handleKey = (e) => { if (e.key === "Escape") setOpen(false); };
-    document.addEventListener("keydown", handleKey);
-    return () => document.removeEventListener("keydown", handleKey);
-  }, []);
+  const handleClose = () => {
+    setOpen(false);
+    triggerRef.current?.focus?.();
+  };
 
   const displayValue = formatDisplay(value);
 
@@ -275,7 +406,11 @@ export function DatePicker({
       {label && (
         <label htmlFor={id} className="text-sm font-medium text-[var(--color-app-text-muted)]">
           {label}
-          {required && <span className="ml-0.5 text-[var(--color-app-danger)]" aria-hidden="true">*</span>}
+          {required && (
+            <span className="ml-0.5 text-[var(--color-app-danger)]" aria-hidden="true">
+              *
+            </span>
+          )}
         </label>
       )}
 
@@ -285,6 +420,12 @@ export function DatePicker({
         type="button"
         disabled={disabled}
         onClick={handleOpen}
+        onKeyDown={(e) => {
+          if ((e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") && !open) {
+            e.preventDefault();
+            handleOpen();
+          }
+        }}
         className={[
           "w-full h-10 px-3 rounded-lg text-sm text-left",
           "bg-[var(--color-app-bg)]",
@@ -293,7 +434,7 @@ export function DatePicker({
             ? "border-[var(--color-app-border-focus)] ring-2 ring-[var(--color-app-border-focus)] ring-offset-0"
             : "border-[var(--color-app-border)] hover:border-[var(--color-app-border-focus)]",
           disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer",
-          "flex items-center justify-between gap-2 outline-none",
+          "flex items-center justify-between gap-2 outline-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-app-border-focus)]",
         ].join(" ")}
         aria-haspopup="dialog"
         aria-expanded={open}
@@ -311,6 +452,7 @@ export function DatePicker({
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
+          aria-hidden="true"
           className={["shrink-0 text-[var(--color-app-text-muted)] transition-transform duration-200", open ? "rotate-180" : ""].join(" ")}
         >
           <polyline points="6 9 12 15 18 9" />
@@ -324,7 +466,7 @@ export function DatePicker({
           minDate={minDate}
           maxDate={maxDate}
           markedDates={markedDates}
-          onClose={() => setOpen(false)}
+          onClose={handleClose}
           anchorRect={anchorRect}
         />
       )}

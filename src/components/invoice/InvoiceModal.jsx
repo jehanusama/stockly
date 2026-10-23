@@ -88,7 +88,11 @@ export function InvoiceModal({ isOpen, onClose, invoiceData }) {
 
   const modalFooter = (
     <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 w-full">
-      <div className="text-xs text-[var(--color-app-text-muted)] text-center sm:text-left">
+      <div
+        role="status"
+        aria-live="polite"
+        className="text-xs text-[var(--color-app-text-muted)] text-center sm:text-left min-h-[1.25rem] flex items-center"
+      >
         {shareFeedback && (
           <span className="text-[var(--color-app-success)] font-medium animate-pulse">
             ✓ {shareFeedback}
@@ -120,6 +124,7 @@ export function InvoiceModal({ isOpen, onClose, invoiceData }) {
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
+            aria-hidden="true"
           >
             <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
             <circle cx="8.5" cy="8.5" r="1.5" />
@@ -146,6 +151,7 @@ export function InvoiceModal({ isOpen, onClose, invoiceData }) {
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
+            aria-hidden="true"
           >
             <polyline points="6 9 6 2 18 2 18 9" />
             <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
@@ -172,12 +178,17 @@ export function InvoiceModal({ isOpen, onClose, invoiceData }) {
             Invoice Language
           </span>
 
-          <div className="inline-flex rounded-lg p-0.5 bg-[var(--color-app-bg)] border border-[var(--color-app-border)]">
+          <div
+            role="group"
+            aria-label="Invoice Language"
+            className="inline-flex rounded-lg p-0.5 bg-[var(--color-app-bg)] border border-[var(--color-app-border)]"
+          >
             <button
               type="button"
+              aria-pressed={lang === "ar"}
               onClick={() => setLang("ar")}
               className={[
-                "px-3 py-1 text-xs font-semibold rounded-md transition-all",
+                "px-3 py-1 text-xs font-semibold rounded-md transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-app-border-focus)]",
                 lang === "ar"
                   ? "bg-[var(--color-app-accent)] text-white shadow-sm"
                   : "text-[var(--color-app-text-muted)] hover:text-[var(--color-app-text)]",
@@ -187,9 +198,10 @@ export function InvoiceModal({ isOpen, onClose, invoiceData }) {
             </button>
             <button
               type="button"
+              aria-pressed={lang === "en"}
               onClick={() => setLang("en")}
               className={[
-                "px-3 py-1 text-xs font-semibold rounded-md transition-all",
+                "px-3 py-1 text-xs font-semibold rounded-md transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-app-border-focus)]",
                 lang === "en"
                   ? "bg-[var(--color-app-accent)] text-white shadow-sm"
                   : "text-[var(--color-app-text-muted)] hover:text-[var(--color-app-text)]",

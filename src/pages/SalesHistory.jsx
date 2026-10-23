@@ -571,8 +571,17 @@ export default function SalesHistory() {
                 paginatedTableRows.map((row, idx) => (
                   <tr
                     key={row.id ?? idx}
+                    tabIndex={0}
+                    role="button"
+                    aria-label={`View sale details for ${row.customerName}`}
                     onClick={() => setDetailRow(row)}
-                    className="border-b border-[var(--color-app-border)] last:border-0 bg-[var(--color-app-panel)] hover:bg-[var(--color-app-panel-hover)] transition-colors duration-100 cursor-pointer"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setDetailRow(row);
+                      }
+                    }}
+                    className="border-b border-[var(--color-app-border)] last:border-0 bg-[var(--color-app-panel)] hover:bg-[var(--color-app-panel-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-app-border-focus)] transition-colors duration-100 cursor-pointer"
                   >
                     {columns.map(col => (
                       <td
@@ -605,8 +614,17 @@ export default function SalesHistory() {
               return (
                 <div
                   key={row.id ?? idx}
+                  tabIndex={0}
+                  role="button"
+                  aria-label={`View sale details for ${row.customerName}`}
                   onClick={() => setDetailRow(row)}
-                  className="bg-[var(--color-app-panel)] border border-[var(--color-app-border)] rounded-xl p-4 flex flex-col gap-2.5 shadow-sm cursor-pointer hover:border-[var(--color-app-border-focus)] transition-colors"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setDetailRow(row);
+                    }
+                  }}
+                  className="bg-[var(--color-app-panel)] border border-[var(--color-app-border)] rounded-xl p-4 flex flex-col gap-2.5 shadow-sm cursor-pointer hover:border-[var(--color-app-border-focus)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-app-border-focus)] transition-colors"
                 >
                   <div className="flex justify-between items-start">
                     <div className="flex flex-col">

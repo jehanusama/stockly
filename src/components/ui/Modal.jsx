@@ -1,12 +1,14 @@
 import { useEffect, useRef } from "react";
 
-
 const sizeMap = {
   sm: "max-w-sm",
   md: "max-w-md",
   lg: "max-w-lg",
   xl: "max-w-2xl",
 };
+
+const FOCUSABLE_SELECTOR =
+  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export function Modal({
   isOpen,
@@ -19,15 +21,76 @@ export function Modal({
   const panelRef = useRef(null);
   const backdropRef = useRef(null);
   const overlayRef = useRef(null);
+  const previousFocusRef = useRef(null);
 
-  // Close on Escape
+  // Store previously focused element and restore on unmount / close
+  useEffect(() => {
+    if (isOpen) {
+      previousFocusRef.current = document.activeElement;
+    } else if (previousFocusRef.current) {
+      previousFocusRef.current.focus?.();
+    }
+  }, [isOpen]);
+
+  // Focus trap and keyboard handling (Escape + Tab wrapping)
   useEffect(() => {
     if (!isOpen) return;
-    const handler = (e) => {
-      if (e.key === "Escape") onClose?.();
+
+    // Focus the first focusable element inside the modal on open
+    const timer = setTimeout(() => {
+      if (panelRef.current) {
+        const focusable = panelRef.current.querySelectorAll(FOCUSABLE_SELECTOR);
+        if (focusable.length > 0) {
+          focusable[0].focus();
+        } else {
+          panelRef.current.focus();
+        }
+      }
+    }, 50);
+
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onClose?.();
+        return;
+      }
+
+      if (e.key === "Tab" && panelRef.current) {
+        const focusable = Array.from(
+          panelRef.current.querySelectorAll(FOCUSABLE_SELECTOR)
+        ).filter(
+          (el) =>
+            el.offsetParent !== null &&
+            window.getComputedStyle(el).visibility !== "hidden"
+        );
+
+        if (focusable.length === 0) {
+          e.preventDefault();
+          return;
+        }
+
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+
+        if (e.shiftKey) {
+          if (document.activeElement === first || !panelRef.current.contains(document.activeElement)) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (document.activeElement === last || !panelRef.current.contains(document.activeElement)) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      }
     };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
   }, [isOpen, onClose]);
 
   // Lock body scroll while open
@@ -37,7 +100,9 @@ export function Modal({
     } else {
       document.body.style.overflow = "";
     }
-    return () => { document.body.style.overflow = ""; };
+    return () => {
+      document.body.style.overflow = "";
+    };
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -59,13 +124,18 @@ export function Modal({
       onClick={handleBackdropClick}
     >
       {/* Dimmed background */}
-      <div ref={overlayRef} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div
+        ref={overlayRef}
+        aria-hidden="true"
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+      />
 
       {/* Panel */}
       <div
         ref={panelRef}
+        tabIndex={-1}
         className={[
-          "relative w-full max-h-[90vh] flex flex-col rounded-2xl overflow-hidden",
+          "relative w-full max-h-[90vh] flex flex-col rounded-2xl overflow-hidden outline-none",
           "bg-[var(--color-app-elevated)] border border-[var(--color-app-border)]",
           "shadow-2xl",
           "animate-[fadeInScale_180ms_ease-out]",
@@ -87,7 +157,18 @@ export function Modal({
             aria-label="Close modal"
             className="flex items-center justify-center w-8 h-8 rounded-md text-[var(--color-app-text-muted)] hover:text-[var(--color-app-text)] hover:bg-[var(--color-app-border)] transition-colors duration-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-app-border-focus)] shrink-0"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />
             </svg>
