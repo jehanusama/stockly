@@ -3,6 +3,7 @@ import { Button, Modal, Select, DatePicker, LoadingState, ErrorState, Pagination
 import { PageContainer } from "@/components/layout/PageContainer";
 import { formatCurrency } from "@/utils/currency";
 import { useAppData } from "@/context/AppContext";
+import { InvoiceModal, normalizeBagsOrder } from "@/components/invoice";
 
 // Filter Toolbar 
 function FilterToolbar({ filters, onChange, onClear, hasActiveFilters, customers, products, categories }) {
@@ -105,7 +106,7 @@ function FilterToolbar({ filters, onChange, onClear, hasActiveFilters, customers
 }
 
 // Sale Detail Modal
-function SaleDetailModal({ row, products, categories, onClose, onDelete }) {
+function SaleDetailModal({ row, products, categories, onClose, onDelete, onOpenInvoice }) {
   if (!row) return null;
   const d = new Date(row.order_date);
   const due = row.balance_due ?? 0;
@@ -240,7 +241,18 @@ function SaleDetailModal({ row, products, categories, onClose, onDelete }) {
             </svg>
             Delete this sale
           </button>
-          <Button variant="secondary" onClick={onClose}>Close</Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                onClose();
+                onOpenInvoice?.(row);
+              }}
+            >
+              View Invoice
+            </Button>
+            <Button variant="secondary" onClick={onClose}>Close</Button>
+          </div>
         </div>
       </div>
     </Modal>
@@ -254,6 +266,7 @@ export default function SalesHistory() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [detailRow, setDetailRow] = useState(null);
+  const [invoiceOrder, setInvoiceOrder] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
@@ -416,19 +429,32 @@ export default function SalesHistory() {
       label: "",
       align: "right",
       render: (_val, row) => (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setDeleteTarget(row);
-          }}
-          className="text-[var(--color-app-text-subtle)] hover:text-[var(--color-app-error)] transition-colors p-1 rounded"
-          aria-label="Delete sale"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="3 6 5 6 21 6"></polyline>
-            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-          </svg>
-        </button>
+        <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              setInvoiceOrder(row);
+            }}
+            className="text-xs h-7 px-2.5 font-medium"
+          >
+            View Invoice
+          </Button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setDeleteTarget(row);
+            }}
+            className="text-[var(--color-app-text-subtle)] hover:text-[var(--color-app-error)] transition-colors p-1 rounded"
+            aria-label="Delete sale"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+          </button>
+        </div>
       ),
     },
   ];
@@ -617,9 +643,22 @@ export default function SalesHistory() {
                       </button>
                     </div>
                   </div>
-                  <div className="text-xs text-[var(--color-app-text-muted)] pt-1 border-t border-[var(--color-app-border)] flex justify-between items-center">
-                    <span>{row.itemsSummary} ({row.totalItemsCount} items)</span>
-                    <span className="font-mono text-[var(--color-app-success)] font-semibold">+{formatCurrency(row.final_profit)}</span>
+                  <div className="text-xs text-[var(--color-app-text-muted)] pt-2 border-t border-[var(--color-app-border)] flex justify-between items-center gap-2">
+                    <span className="truncate">{row.itemsSummary} ({row.totalItemsCount} items)</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="font-mono text-[var(--color-app-success)] font-semibold">+{formatCurrency(row.final_profit)}</span>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setInvoiceOrder(row);
+                        }}
+                        className="text-xs h-7 px-2.5"
+                      >
+                        View Invoice
+                      </Button>
+                    </div>
                   </div>
                 </div>
               );
@@ -645,6 +684,7 @@ export default function SalesHistory() {
         categories={categories}
         onClose={() => setDetailRow(null)}
         onDelete={(row) => setDeleteTarget(row)}
+        onOpenInvoice={(row) => setInvoiceOrder(row)}
       />
 
       {/* Delete Confirmation Modal */}
@@ -684,6 +724,21 @@ export default function SalesHistory() {
           </div>
         )}
       </Modal>
+
+      {/* Invoice Preview Modal */}
+      <InvoiceModal
+        isOpen={!!invoiceOrder}
+        onClose={() => setInvoiceOrder(null)}
+        invoiceData={
+          invoiceOrder
+            ? normalizeBagsOrder(
+                invoiceOrder,
+                mockProducts,
+                mockCustomers.find((c) => c.id === invoiceOrder.customer_id)
+              )
+            : null
+        }
+      />
     </PageContainer>
   );
 }

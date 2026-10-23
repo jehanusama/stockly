@@ -4,6 +4,7 @@ import { Button, Card, LoadingState, ErrorState, Modal, Input, Pagination, DateP
 import { PageContainer } from "@/components/layout/PageContainer";
 import { useAppData } from "@/context/AppContext";
 import { formatCurrency } from "@/utils/currency";
+import { InvoiceModal, normalizeLedgerTransaction } from "@/components/invoice";
 
 function getInitials(name) {
   if (!name) return "?";
@@ -41,6 +42,7 @@ export default function CustomerDetails() {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(5);
+  const [invoiceTxn, setInvoiceTxn] = useState(null);
 
   const customer = useMemo(() => mockCustomers.find(c => c.id === id), [mockCustomers, id]);
 
@@ -379,26 +381,37 @@ export default function CustomerDetails() {
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-5 border-t sm:border-t-0 sm:border-l border-[var(--color-app-border)] pt-2 sm:pt-0 sm:pl-4">
-                        <div className="flex flex-col items-start sm:items-end">
-                          <span className="text-[10px] font-semibold text-[var(--color-app-text-subtle)] uppercase tracking-wider mb-0.5">Total</span>
-                          <span className="font-mono font-bold text-sm sm:text-base text-[var(--color-app-text)]">{formatCurrency(txn.finalTotal)}</span>
+                      <div className="flex flex-wrap sm:flex-nowrap items-center justify-between sm:justify-end gap-3 sm:gap-4 border-t sm:border-t-0 sm:border-l border-[var(--color-app-border)] pt-2 sm:pt-0 sm:pl-4">
+                        <div className="flex items-center gap-3 sm:gap-4">
+                          <div className="flex flex-col items-start sm:items-end">
+                            <span className="text-[10px] font-semibold text-[var(--color-app-text-subtle)] uppercase tracking-wider mb-0.5">Total</span>
+                            <span className="font-mono font-bold text-sm sm:text-base text-[var(--color-app-text)]">{formatCurrency(txn.finalTotal)}</span>
+                          </div>
+                          <div className="flex flex-col items-start sm:items-end">
+                            <span className="text-[10px] font-semibold text-[var(--color-app-text-subtle)] uppercase tracking-wider mb-0.5">Paid</span>
+                            <span className="font-mono font-semibold text-xs sm:text-sm text-[var(--color-app-text-muted)]">{formatCurrency(txn.amountPaid)}</span>
+                          </div>
+                          <div className="flex flex-col items-start sm:items-end">
+                            <span className="text-[10px] font-semibold text-[var(--color-app-text-subtle)] uppercase tracking-wider mb-0.5">Due</span>
+                            <span className={`font-mono font-semibold text-xs sm:text-sm ${balDue > 0 ? "text-[var(--color-app-warning)] font-bold" : "text-[var(--color-app-success)]"}`}>
+                              {formatCurrency(balDue)}
+                            </span>
+                          </div>
+                          <div className="flex flex-col items-end min-w-[55px]">
+                            <span className="text-[10px] font-semibold text-[var(--color-app-text-subtle)] uppercase tracking-wider mb-0.5">Profit</span>
+                            <span className="font-mono text-xs sm:text-sm text-[var(--color-app-success)] font-semibold">+{formatCurrency(txn.profit)}</span>
+                            <span className="text-[10px] font-mono font-medium text-[var(--color-app-success)] bg-[var(--color-app-success)]/10 px-1.5 rounded mt-0.5">{margin}% mgn</span>
+                          </div>
                         </div>
-                        <div className="flex flex-col items-start sm:items-end">
-                          <span className="text-[10px] font-semibold text-[var(--color-app-text-subtle)] uppercase tracking-wider mb-0.5">Paid</span>
-                          <span className="font-mono font-semibold text-xs sm:text-sm text-[var(--color-app-text-muted)]">{formatCurrency(txn.amountPaid)}</span>
-                        </div>
-                        <div className="flex flex-col items-start sm:items-end">
-                          <span className="text-[10px] font-semibold text-[var(--color-app-text-subtle)] uppercase tracking-wider mb-0.5">Due</span>
-                          <span className={`font-mono font-semibold text-xs sm:text-sm ${balDue > 0 ? "text-[var(--color-app-warning)] font-bold" : "text-[var(--color-app-success)]"}`}>
-                            {formatCurrency(balDue)}
-                          </span>
-                        </div>
-                        <div className="flex flex-col items-end min-w-[60px]">
-                          <span className="text-[10px] font-semibold text-[var(--color-app-text-subtle)] uppercase tracking-wider mb-0.5">Profit</span>
-                          <span className="font-mono text-xs sm:text-sm text-[var(--color-app-success)] font-semibold">+{formatCurrency(txn.profit)}</span>
-                          <span className="text-[10px] font-mono font-medium text-[var(--color-app-success)] bg-[var(--color-app-success)]/10 px-1.5 rounded mt-0.5">{margin}% mgn</span>
-                        </div>
+
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => setInvoiceTxn(txn)}
+                          className="text-xs h-7 px-2.5 font-medium shrink-0"
+                        >
+                          View Invoice
+                        </Button>
                       </div>
                     </div>
 
@@ -551,6 +564,13 @@ export default function CustomerDetails() {
           </div>
         </form>
       </Modal>
+
+      {/* Invoice Preview Modal */}
+      <InvoiceModal
+        isOpen={!!invoiceTxn}
+        onClose={() => setInvoiceTxn(null)}
+        invoiceData={invoiceTxn ? normalizeLedgerTransaction(invoiceTxn, customer) : null}
+      />
     </PageContainer>
   );
 }

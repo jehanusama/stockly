@@ -69,3 +69,54 @@ body {
   from { transform: translateX(-100%); opacity: 0; }
   to   { transform: translateX(0);     opacity: 1; }
 }
+
+/* ── Print Styles (Invoice Printing & PDF) ────────── */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+
+  /* Hide entire page and modal chrome */
+  body * {
+    visibility: hidden !important;
+  }
+
+  body, html {
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #111827 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Isolate invoice sheet */
+  #stockly-invoice-sheet,
+  #stockly-invoice-sheet * {
+    visibility: visible !important;
+  }
+
+  #stockly-invoice-sheet {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+  }
+
+  /* Prevent page breaks inside rows and totals */
+  .break-inside-avoid,
+  tr,
+  td,
+  th {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+}
