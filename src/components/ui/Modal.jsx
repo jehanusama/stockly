@@ -22,6 +22,11 @@ export function Modal({
   const backdropRef = useRef(null);
   const overlayRef = useRef(null);
   const previousFocusRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   // Store previously focused element and restore on unmount / close
   useEffect(() => {
@@ -32,13 +37,33 @@ export function Modal({
     }
   }, [isOpen]);
 
-  // Focus trap and keyboard handling (Escape + Tab wrapping)
+  // Focus initial element only once when modal opens
   useEffect(() => {
     if (!isOpen) return;
 
-    // Focus the first focusable element inside the modal on open
     const timer = setTimeout(() => {
       if (panelRef.current) {
+        // If something inside already has focus (e.g. from React autoFocus), don't steal it
+        if (panelRef.current.contains(document.activeElement) && document.activeElement !== panelRef.current) {
+          return;
+        }
+
+        // Prioritize an autofocus element
+        const autoFocusEl = panelRef.current.querySelector("[autofocus]");
+        if (autoFocusEl) {
+          autoFocusEl.focus();
+          return;
+        }
+
+        // Prioritize first form control inside modal body over the close button
+        const formInput = panelRef.current.querySelector(
+          "input:not([disabled]), select:not([disabled]), textarea:not([disabled])"
+        );
+        if (formInput) {
+          formInput.focus();
+          return;
+        }
+
         const focusable = panelRef.current.querySelectorAll(FOCUSABLE_SELECTOR);
         if (focusable.length > 0) {
           focusable[0].focus();
@@ -48,10 +73,17 @@ export function Modal({
       }
     }, 50);
 
+    return () => clearTimeout(timer);
+  }, [isOpen]);
+
+  // Focus trap and keyboard handling (Escape + Tab wrapping)
+  useEffect(() => {
+    if (!isOpen) return;
+
     const handleKeyDown = (e) => {
       if (e.key === "Escape") {
         e.stopPropagation();
-        onClose?.();
+        onCloseRef.current?.();
         return;
       }
 
@@ -88,10 +120,9 @@ export function Modal({
 
     document.addEventListener("keydown", handleKeyDown);
     return () => {
-      clearTimeout(timer);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   // Lock body scroll while open
   useEffect(() => {
