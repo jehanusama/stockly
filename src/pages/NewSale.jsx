@@ -31,17 +31,14 @@ function StockBadge({ quantity, unit }) {
 
 function BatchPicker({ categories, products, onAddToCart }) {
   const [pickedCategoryId, setPickedCategoryId] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showSelectedOnly, setShowSelectedOnly] = useState(false);
   // { [productId]: { checked, quantity, customPrice } }
   const [selections, setSelections] = useState({});
 
-  const categoryProducts = useMemo(
-    () => (pickedCategoryId ? products.filter(p => p.category_id === pickedCategoryId) : []),
-    [pickedCategoryId, products]
-  );
-
   const handleCategoryChange = (catId) => {
     setPickedCategoryId(catId);
-    setSelections({});
+    setShowSelectedOnly(false);
   };
 
   const toggleProduct = (product) => {
@@ -69,156 +66,274 @@ function BatchPicker({ categories, products, onAddToCart }) {
     }));
   };
 
-  const checkedProducts = categoryProducts.filter(p => selections[p.id]?.checked);
+  // Checked products across the entire catalog (all categories)
+  const allCheckedProducts = useMemo(() => {
+    return products.filter(p => selections[p.id]?.checked);
+  }, [products, selections]);
 
-  const canAdd = checkedProducts.length > 0 && checkedProducts.every(p => {
+  // Number of distinct categories selected
+  const selectedCategoriesCount = useMemo(() => {
+    const catIds = new Set(allCheckedProducts.map(p => p.category_id).filter(Boolean));
+    return catIds.size;
+  }, [allCheckedProducts]);
+
+  // Filtered products list based on search, category filter, and "show selected only"
+  const filteredProducts = useMemo(() => {
+    let list = products;
+    if (showSelectedOnly) {
+      return list.filter(p => selections[p.id]?.checked);
+    }
+    if (pickedCategoryId) {
+      list = list.filter(p => p.category_id === pickedCategoryId);
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      list = list.filter(p => {
+        const nameMatch = (p.name || "").toLowerCase().includes(q);
+        const cat = categories.find(c => c.id === p.category_id);
+        const catMatch = (cat?.name || "").toLowerCase().includes(q);
+        return nameMatch || catMatch;
+      });
+    }
+    return list;
+  }, [products, showSelectedOnly, pickedCategoryId, searchQuery, selections, categories]);
+
+  const canAdd = allCheckedProducts.length > 0 && allCheckedProducts.every(p => {
     const s = selections[p.id];
     const qty = parseFloat(s.quantity) || 0;
     return qty > 0 && qty <= p.stock_quantity && parseFloat(s.customPrice) >= 0;
   });
 
   const handleAddToCart = () => {
-    const newItems = checkedProducts.map(p => ({
+    const newItems = allCheckedProducts.map(p => ({
       id: crypto.randomUUID(),
       productId: p.id,
       quantity: selections[p.id].quantity,
       customPrice: selections[p.id].customPrice,
     }));
     onAddToCart(newItems);
-    setPickedCategoryId("");
     setSelections({});
+    setShowSelectedOnly(false);
+    setSearchQuery("");
   };
 
   return (
     <Card padding="lg" className="flex flex-col gap-5 bg-[var(--color-app-panel)] border-[var(--color-app-border)]">
-      <h3 className="text-sm font-semibold text-[var(--color-app-text)] uppercase tracking-wider border-b border-[var(--color-app-border)] pb-3">
-        2. Add Products
-      </h3>
+      <div className="flex items-center justify-between border-b border-[var(--color-app-border)] pb-3">
+        <h3 className="text-sm font-semibold text-[var(--color-app-text)] uppercase tracking-wider">
+          2. Add Products
+        </h3>
+        {allCheckedProducts.length > 0 && (
+          <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[var(--color-app-accent)]/15 text-[var(--color-app-accent)] border border-[var(--color-app-accent)]/30">
+            {allCheckedProducts.length} selected
+            {selectedCategoriesCount > 1 ? ` (${selectedCategoriesCount} categories)` : ""}
+          </span>
+        )}
+      </div>
 
-      {/* Step 1: Category */}
-      <Select
-        label="Category"
-        value={pickedCategoryId}
-        onChange={e => handleCategoryChange(e.target.value)}
-        options={categories.map(c => ({ value: c.id, label: c.name }))}
-        placeholder="Select a category..."
-        selectClassName="h-11"
-      />
+      {/* Search and Category Filters */}
+      <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+        <div className="sm:col-span-7">
+          <Input
+            label="Search Products"
+            placeholder="Search by name or category..."
+            value={searchQuery}
+            onChange={e => {
+              setSearchQuery(e.target.value);
+              setShowSelectedOnly(false);
+            }}
+            className="w-full"
+            inputClassName="h-11"
+          />
+        </div>
+        <div className="sm:col-span-5">
+          <Select
+            label="Filter Category"
+            value={pickedCategoryId}
+            onChange={e => handleCategoryChange(e.target.value)}
+            options={[
+              { value: "", label: "All Categories" },
+              ...categories.map(c => ({ value: c.id, label: c.name })),
+            ]}
+            placeholder="All Categories"
+            selectClassName="h-11"
+          />
+        </div>
+      </div>
 
-      {/* Step 2: Product checkbox list */}
-      {pickedCategoryId && (
-        <div className="flex flex-col gap-3">
-          {categoryProducts.length === 0 ? (
-            <p className="text-sm text-[var(--color-app-text-muted)] italic py-4 text-center">
-              No products in this category yet.
-            </p>
-          ) : (
-            <div className="flex flex-col rounded-xl overflow-hidden border border-[var(--color-app-border)]">
-              {categoryProducts.map((product, idx) => {
-                const sel = selections[product.id];
-                const isChecked = !!sel?.checked;
-                const qty = parseFloat(sel?.quantity) || 0;
-                const isStockOk = qty <= product.stock_quantity;
-                const isOutOfStock = product.stock_quantity <= 0;
+      {/* Review Selected Tab / Quick Actions */}
+      {allCheckedProducts.length > 0 && (
+        <div className="flex items-center gap-2 text-xs flex-wrap">
+          <button
+            type="button"
+            onClick={() => setShowSelectedOnly(false)}
+            className={[
+              "px-3 py-1.5 rounded-lg border transition-colors cursor-pointer",
+              !showSelectedOnly
+                ? "bg-[var(--color-app-elevated)] border-[var(--color-app-border-focus)] text-[var(--color-app-text)] font-semibold"
+                : "border-[var(--color-app-border)] text-[var(--color-app-text-muted)] hover:text-[var(--color-app-text)]",
+            ].join(" ")}
+          >
+            All Products ({products.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowSelectedOnly(true)}
+            className={[
+              "px-3 py-1.5 rounded-lg border transition-colors cursor-pointer flex items-center gap-1.5",
+              showSelectedOnly
+                ? "bg-[var(--color-app-accent)]/15 border-[var(--color-app-accent)] text-[var(--color-app-accent)] font-semibold"
+                : "border-[var(--color-app-border)] text-[var(--color-app-text-muted)] hover:text-[var(--color-app-text)]",
+            ].join(" ")}
+          >
+            <span>Review Selected</span>
+            <span className="px-1.5 py-0.5 rounded-full bg-[var(--color-app-accent)] text-white text-[10px] font-bold">
+              {allCheckedProducts.length}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelections({})}
+            className="ml-auto text-xs text-[var(--color-app-text-muted)] hover:text-[var(--color-app-danger)] transition-colors cursor-pointer"
+          >
+            Clear selection ({allCheckedProducts.length})
+          </button>
+        </div>
+      )}
 
-                return (
-                  <div
-                    key={product.id}
+      {/* Product checkbox list */}
+      <div className="flex flex-col gap-3">
+        {filteredProducts.length === 0 ? (
+          <div className="py-8 text-center text-sm text-[var(--color-app-text-muted)] italic">
+            {showSelectedOnly
+              ? "No products currently selected."
+              : searchQuery || pickedCategoryId
+              ? "No products match your search or filter."
+              : "No products available."}
+          </div>
+        ) : (
+          <div className="flex flex-col rounded-xl overflow-hidden border border-[var(--color-app-border)] max-h-[460px] overflow-y-auto">
+            {filteredProducts.map((product, idx) => {
+              const sel = selections[product.id];
+              const isChecked = !!sel?.checked;
+              const qty = parseFloat(sel?.quantity) || 0;
+              const isStockOk = qty <= product.stock_quantity;
+              const isOutOfStock = product.stock_quantity <= 0;
+              const cat = categories.find(c => c.id === product.category_id);
+
+              return (
+                <div
+                  key={product.id}
+                  className={[
+                    "flex flex-col transition-all duration-200",
+                    idx > 0 ? "border-t border-[var(--color-app-border)]" : "",
+                    isChecked ? "bg-[var(--color-app-accent)]/[0.04]" : "bg-[var(--color-app-bg)]",
+                  ].join(" ")}
+                  style={{ borderLeft: isChecked ? "3px solid var(--color-app-accent)" : "3px solid transparent" }}
+                >
+                  {/* Clickable product row */}
+                  <button
+                    type="button"
+                    disabled={isOutOfStock}
+                    onClick={() => !isOutOfStock && toggleProduct(product)}
                     className={[
-                      "flex flex-col transition-all duration-200",
-                      idx > 0 ? "border-t border-[var(--color-app-border)]" : "",
-                      isChecked ? "bg-[var(--color-app-accent)]/[0.04]" : "bg-[var(--color-app-bg)]",
+                      "w-full flex items-center gap-3 px-4 py-3.5 text-left transition-colors",
+                      isOutOfStock
+                        ? "opacity-40 cursor-not-allowed"
+                        : "hover:bg-[var(--color-app-elevated)] cursor-pointer",
                     ].join(" ")}
-                    style={{ borderLeft: isChecked ? "3px solid var(--color-app-accent)" : "3px solid transparent" }}
                   >
-                    {/* Clickable product row */}
-                    <button
-                      type="button"
-                      disabled={isOutOfStock}
-                      onClick={() => !isOutOfStock && toggleProduct(product)}
-                      className={[
-                        "w-full flex items-center gap-3 px-4 py-3.5 text-left transition-colors",
-                        isOutOfStock
-                          ? "opacity-40 cursor-not-allowed"
-                          : "hover:bg-[var(--color-app-elevated)] cursor-pointer",
-                      ].join(" ")}
-                    >
-                      {/* Custom checkbox */}
-                      <span className={[
-                        "w-[18px] h-[18px] rounded border-2 flex items-center justify-center shrink-0 transition-all duration-150",
-                        isChecked
-                          ? "bg-[var(--color-app-accent)] border-[var(--color-app-accent)]"
-                          : "border-[var(--color-app-border)] bg-transparent",
-                      ].join(" ")}>
-                        {isChecked && (
-                          <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
-                            <polyline points="1.5,5.5 4,8 8.5,2" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                          </svg>
-                        )}
-                      </span>
+                    {/* Custom checkbox */}
+                    <span className={[
+                      "w-[18px] h-[18px] rounded border-2 flex items-center justify-center shrink-0 transition-all duration-150",
+                      isChecked
+                        ? "bg-[var(--color-app-accent)] border-[var(--color-app-accent)]"
+                        : "border-[var(--color-app-border)] bg-transparent",
+                    ].join(" ")}>
+                      {isChecked && (
+                        <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
+                          <polyline points="1.5,5.5 4,8 8.5,2" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      )}
+                    </span>
 
-                      {/* Name + pricing hint */}
-                      <div className="flex-1 min-w-0">
+                    {/* Name + category tag + pricing hint */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-sm font-semibold text-[var(--color-app-text)] truncate leading-snug">
                           {product.name}
                         </p>
-                        <p className="text-xs text-[var(--color-app-text-muted)] mt-0.5">
-                          Cost {formatCurrency(product.cost_price)}
-                          <span className="mx-1.5 opacity-30">·</span>
-                          Sale ~{formatCurrency(product.cost_price * 1.2)}
-                        </p>
+                        {cat && (
+                          <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-app-accent)] bg-[var(--color-app-accent)]/10 px-2 py-0.5 rounded-full shrink-0">
+                            {cat.name}
+                          </span>
+                        )}
                       </div>
+                      <p className="text-xs text-[var(--color-app-text-muted)] mt-0.5">
+                        Cost {formatCurrency(product.cost_price)}
+                        <span className="mx-1.5 opacity-30">·</span>
+                        Sale ~{formatCurrency(product.sale_price != null ? product.sale_price : product.cost_price * 1.2)}
+                      </p>
+                    </div>
 
-                      {/* Stock badge */}
-                      <StockBadge quantity={product.stock_quantity} unit={product.unit} />
-                    </button>
+                    {/* Stock badge */}
+                    <StockBadge quantity={product.stock_quantity} unit={product.unit} />
+                  </button>
 
-                    {/* Expanded qty + price inputs */}
-                    {isChecked && (
-                      <div className="px-4 pb-4 pt-2 grid grid-cols-2 gap-3 border-t border-dashed border-[var(--color-app-border)]/60">
-                        <div className="flex flex-col gap-1">
-                          <Input
-                            label={`Qty (${product.unit})`}
-                            type="number"
-                            min="0.5"
-                            step="0.5"
-                            value={sel.quantity}
-                            onChange={e => updateSelection(product.id, "quantity", e.target.value)}
-                            required
-                          />
-                          {!isStockOk && qty > 0 && (
-                            <span className="text-[11px] text-[var(--color-app-danger)] flex items-center gap-1 font-medium">
-                              <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-                              </svg>
-                              Max {product.stock_quantity} {product.unit}
-                            </span>
-                          )}
-                        </div>
+                  {/* Expanded qty + price inputs */}
+                  {isChecked && (
+                    <div className="px-4 pb-4 pt-2 grid grid-cols-2 gap-3 border-t border-dashed border-[var(--color-app-border)]/60">
+                      <div className="flex flex-col gap-1">
                         <Input
-                          label="Sale price / unit"
+                          label={`Qty (${product.unit})`}
                           type="number"
-                          min="0"
+                          min="0.5"
                           step="0.5"
-                          value={sel.customPrice}
-                          onChange={e => updateSelection(product.id, "customPrice", e.target.value)}
+                          value={sel.quantity}
+                          onChange={e => updateSelection(product.id, "quantity", e.target.value)}
                           required
                         />
+                        {!isStockOk && qty > 0 && (
+                          <span className="text-[11px] text-[var(--color-app-danger)] flex items-center gap-1 font-medium">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                            </svg>
+                            Max {product.stock_quantity} {product.unit}
+                          </span>
+                        )}
                       </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
+                      <Input
+                        label="Sale price / unit"
+                        type="number"
+                        min="0"
+                        step="0.5"
+                        value={sel.customPrice}
+                        onChange={e => updateSelection(product.id, "customPrice", e.target.value)}
+                        required
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
 
-          {checkedProducts.length > 0 && (
-            <Button type="button" variant="primary" disabled={!canAdd} onClick={handleAddToCart} className="w-full">
-              ＋ Add {checkedProducts.length} product{checkedProducts.length > 1 ? "s" : ""} to cart
+        {allCheckedProducts.length > 0 && (
+          <div className="flex flex-col gap-2 pt-2">
+            <Button
+              type="button"
+              variant="primary"
+              disabled={!canAdd}
+              onClick={handleAddToCart}
+              className="w-full h-11"
+            >
+              ＋ Add {allCheckedProducts.length} product{allCheckedProducts.length > 1 ? "s" : ""} to cart
+              {selectedCategoriesCount > 1 ? ` (${selectedCategoriesCount} categories)` : ""}
             </Button>
-          )}
-        </div>
-      )}
+          </div>
+        )}
+      </div>
     </Card>
   );
 }
