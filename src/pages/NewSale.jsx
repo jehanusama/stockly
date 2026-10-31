@@ -260,12 +260,10 @@ export default function NewSale() {
 
   const { customers: mockCustomers = [], products: mockProducts = [], categories = [], addOrder, isLoading, error, refreshData } = useAppData();
 
-  const [selectedCustomerId, setSelectedCustomerId] = useState("");
-
-  const urlCustomerId = searchParams.get("customer_id");
-  const validUrlCustomer = urlCustomerId && mockCustomers.some(c => c.id === urlCustomerId) ? urlCustomerId : "";
-  const customerId = selectedCustomerId || validUrlCustomer;
-  const setCustomerId = setSelectedCustomerId;
+  const urlCustomerId = searchParams.get("customer_id") || "";
+  const [userSelectedCustomerId, setUserSelectedCustomerId] = useState(null);
+  const customerId = userSelectedCustomerId !== null ? userSelectedCustomerId : urlCustomerId;
+  const setCustomerId = setUserSelectedCustomerId;
   const [orderDate, setOrderDate] = useState(() => {
     const urlDate = searchParams.get("date");
     if (urlDate && /^\d{4}-\d{2}-\d{2}$/.test(urlDate)) return urlDate;

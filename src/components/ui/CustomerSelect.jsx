@@ -39,10 +39,15 @@ export function CustomerSelect({
       if (containerRef.current && !containerRef.current.contains(e.target)) {
         setIsOpen(false);
         setActiveIndex(-1);
+        setSearch("");
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+    };
   }, []);
 
   // Scroll active option into view
@@ -64,21 +69,23 @@ export function CustomerSelect({
     return "";
   };
 
-  const handleSelect = (id) => {
+  const handleSelect = (id, shouldBlur = true) => {
     onChange(id);
     setSearch("");
     setIsOpen(false);
     setActiveIndex(-1);
-    const input = document.getElementById(`customer-input-${uniqueId}`);
-    input?.focus();
+    if (shouldBlur) {
+      const input = document.getElementById(`customer-input-${uniqueId}`);
+      input?.blur();
+    }
   };
 
   const handleClear = (e) => {
     e.stopPropagation();
     onChange("");
     setSearch("");
-    const input = document.getElementById(`customer-input-${uniqueId}`);
-    input?.focus();
+    setIsOpen(false);
+    setActiveIndex(-1);
   };
 
   const handleKeyDown = (e) => {
@@ -88,7 +95,8 @@ export function CustomerSelect({
       if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Enter") {
         e.preventDefault();
         setIsOpen(true);
-        setActiveIndex(0);
+        const selectedIdx = allOptions.findIndex((o) => o.id === value);
+        setActiveIndex(selectedIdx >= 0 ? selectedIdx : 0);
       }
       return;
     }
@@ -105,7 +113,7 @@ export function CustomerSelect({
       case "Enter":
         e.preventDefault();
         if (activeIndex >= 0 && activeIndex < allOptions.length) {
-          handleSelect(allOptions[activeIndex].id);
+          handleSelect(allOptions[activeIndex].id, false);
         }
         break;
       case "Escape":
@@ -148,9 +156,10 @@ export function CustomerSelect({
           disabled ? "opacity-50 cursor-not-allowed" : "",
         ].join(" ")}
         onClick={() => {
-          if (!disabled) {
+          if (!disabled && !isOpen) {
             setIsOpen(true);
-            setActiveIndex(0);
+            const selectedIdx = allOptions.findIndex((o) => o.id === value);
+            setActiveIndex(selectedIdx >= 0 ? selectedIdx : 0);
           }
         }}
       >
@@ -192,7 +201,8 @@ export function CustomerSelect({
           onFocus={() => {
             if (!disabled) {
               setIsOpen(true);
-              setActiveIndex(0);
+              const selectedIdx = allOptions.findIndex((o) => o.id === value);
+              setActiveIndex(selectedIdx >= 0 ? selectedIdx : 0);
               setSearch("");
             }
           }}
@@ -251,7 +261,7 @@ export function CustomerSelect({
                   id={optId}
                   role="option"
                   aria-selected={isSelected}
-                  onClick={() => handleSelect(opt.id)}
+                  onClick={() => handleSelect(opt.id, true)}
                   className={[
                     "w-full flex flex-col items-start px-4 py-2.5 text-sm transition-colors text-left border-b border-[var(--color-app-border)] last:border-0 cursor-pointer",
                     isHighlighted
