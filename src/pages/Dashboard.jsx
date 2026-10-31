@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, Table, StockBar, LoadingState, ErrorState } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
@@ -23,7 +23,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { products: mockProducts, customers: mockCustomers, orders: mockOrders, printedSales = [], isLoading, error, refreshData } = useAppData();
+  const { products: mockProducts = [], customers: mockCustomers = [], orders: mockOrders = [], printedSales = [], isLoading, error, refreshData } = useAppData();
 
   const bagsRevenue = useMemo(() => mockOrders.reduce((sum, o) => sum + (o.final_total ?? 0), 0), [mockOrders]);
   const printedRevenue = useMemo(() => (printedSales || []).reduce((sum, s) => sum + (s.line_total ?? 0), 0), [printedSales]);
@@ -65,70 +65,125 @@ export default function Dashboard() {
       .sort((a, b) => b.balance - a.balance);
   }, [mockOrders, printedSales, mockCustomers]);
 
-  if (isLoading) {
-    return (
-      <PageContainer title="Dashboard" subtitle="Your business at a glance">
-        <LoadingState message="Loading dashboard metrics..." />
-      </PageContainer>
-    );
-  }
-
-  if (error) {
-    return (
-      <PageContainer title="Dashboard" subtitle="Your business at a glance">
-        <ErrorState error={error} onRetry={refreshData} />
-      </PageContainer>
-    );
-  }
-
   const productCount = mockProducts.length;
   const customerCount = mockCustomers.length;
 
   // 3. Profit Per Month Chart & Trend (AreaChart) - combines bags orders & printed sales
-  const monthlyProfitMap = {};
-  mockOrders.forEach(order => {
-    const date = new Date(order.order_date);
-    if (isNaN(date.getTime())) return;
-    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-    if (!monthlyProfitMap[key]) {
-      monthlyProfitMap[key] = { name: date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }), profit: 0 };
-    }
-    monthlyProfitMap[key].profit += Number(order.final_profit ?? 0);
-  });
+  const now = new Date();
+  const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const currentMonthShort = now.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
 
-  (printedSales || []).forEach(sale => {
-    const date = new Date(sale.sale_date);
-    if (isNaN(date.getTime())) return;
-    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-    if (!monthlyProfitMap[key]) {
-      monthlyProfitMap[key] = { name: date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }), profit: 0 };
-    }
-    monthlyProfitMap[key].profit += Number(sale.line_profit ?? 0);
-  });
+  const monthlyProfitMap = useMemo(() => {
+    const map = {};
+    mockOrders.forEach(order => {
+      const date = new Date(order.order_date);
+      if (isNaN(date.getTime())) return;
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      if (!map[key]) {
+        map[key] = {
+          name: date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+          profit: 0,
+          bagsProfit: 0,
+          printedProfit: 0,
+        };
+      }
+      const p = Number(order.final_profit ?? 0);
+      map[key].profit += p;
+      map[key].bagsProfit += p;
+    });
 
-  const sortedMonthKeys = Object.keys(monthlyProfitMap).sort();
-  
-  let profitTrendNode;
-  if (sortedMonthKeys.length >= 2) {
-    const currentMonthProfit = monthlyProfitMap[sortedMonthKeys[sortedMonthKeys.length - 1]].profit;
-    const previousMonthProfit = monthlyProfitMap[sortedMonthKeys[sortedMonthKeys.length - 2]].profit;
-    
-    if (previousMonthProfit === 0) {
-      profitTrendNode = <span className="text-sm font-mono font-medium text-[var(--color-app-text-muted)] bg-[var(--color-app-elevated)] px-2 py-0.5 rounded">N/A</span>;
+    (printedSales || []).forEach(sale => {
+      const date = new Date(sale.sale_date);
+      if (isNaN(date.getTime())) return;
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      if (!map[key]) {
+        map[key] = {
+          name: date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+          profit: 0,
+          bagsProfit: 0,
+          printedProfit: 0,
+        };
+      }
+      const p = Number(sale.line_profit ?? 0);
+      map[key].profit += p;
+      map[key].printedProfit += p;
+    });
+
+    return map;
+  }, [mockOrders, printedSales]);
+
+  const sortedMonthKeys = useMemo(() => Object.keys(monthlyProfitMap).sort(), [monthlyProfitMap]);
+  const profitPerMonth = useMemo(() => sortedMonthKeys.map(key => monthlyProfitMap[key]), [sortedMonthKeys, monthlyProfitMap]);
+
+  // Selected period: defaults to "this-month"
+  const [selectedPeriod, setSelectedPeriod] = useState("this-month");
+
+  // Options for month filter dropdown
+  const monthOptions = useMemo(() => {
+    const options = [
+      { value: "this-month", label: `This Month (${currentMonthShort})` },
+    ];
+    // Add any other recorded months (newest first, skip current month key)
+    [...sortedMonthKeys].reverse().forEach(key => {
+      if (key !== currentMonthKey) {
+        options.push({
+          value: key,
+          label: monthlyProfitMap[key]?.name || key,
+        });
+      }
+    });
+    options.push({ value: "all", label: "All Time" });
+    return options;
+  }, [sortedMonthKeys, monthlyProfitMap, currentMonthKey, currentMonthShort]);
+
+  // Compute displayed metrics based on selected period
+  const { displayedProfit, displayedBagsProfit, displayedPrintedProfit, displayedPeriodLabel, profitTrendNode } = useMemo(() => {
+    if (selectedPeriod === "all") {
+      return {
+        displayedProfit: totalProfit,
+        displayedBagsProfit: bagsProfit,
+        displayedPrintedProfit: printedProfit,
+        displayedPeriodLabel: "All Time",
+        profitTrendNode: null,
+      };
+    }
+
+    const targetKey = selectedPeriod === "this-month" ? currentMonthKey : selectedPeriod;
+    const stats = monthlyProfitMap[targetKey] || { profit: 0, bagsProfit: 0, printedProfit: 0, name: currentMonthShort };
+    const label = selectedPeriod === "this-month" ? `This Month (${currentMonthShort})` : stats.name;
+
+    // Trend calculation vs previous month
+    let trend;
+    const idx = sortedMonthKeys.indexOf(targetKey);
+    let prevProfit = null;
+    if (idx > 0) {
+      prevProfit = monthlyProfitMap[sortedMonthKeys[idx - 1]]?.profit;
+    } else if (idx === -1 && sortedMonthKeys.length > 0) {
+      prevProfit = monthlyProfitMap[sortedMonthKeys[sortedMonthKeys.length - 1]]?.profit;
+    }
+
+    if (prevProfit == null) {
+      trend = <span className="text-sm font-mono font-medium text-[var(--color-app-text-muted)] bg-[var(--color-app-elevated)] px-2 py-0.5 rounded">New</span>;
+    } else if (prevProfit === 0) {
+      trend = <span className="text-sm font-mono font-medium text-[var(--color-app-text-muted)] bg-[var(--color-app-elevated)] px-2 py-0.5 rounded">N/A</span>;
     } else {
-      const pctChange = ((currentMonthProfit - previousMonthProfit) / previousMonthProfit) * 100;
+      const pctChange = ((stats.profit - prevProfit) / prevProfit) * 100;
       const isPositive = pctChange >= 0;
-      profitTrendNode = (
+      trend = (
         <span className={`text-sm font-mono font-medium px-2 py-0.5 rounded ${isPositive ? "text-[var(--color-app-success)] bg-[var(--color-app-success-muted)]" : "text-[var(--color-app-danger)] bg-[var(--color-app-danger-muted)]"}`}>
           {isPositive ? "+" : ""}{pctChange.toFixed(1)}%
         </span>
       );
     }
-  } else {
-    profitTrendNode = <span className="text-sm font-mono font-medium text-[var(--color-app-text-muted)] bg-[var(--color-app-elevated)] px-2 py-0.5 rounded">New</span>;
-  }
 
-  const profitPerMonth = sortedMonthKeys.map(key => monthlyProfitMap[key]);
+    return {
+      displayedProfit: stats.profit,
+      displayedBagsProfit: stats.bagsProfit,
+      displayedPrintedProfit: stats.printedProfit,
+      displayedPeriodLabel: label,
+      profitTrendNode: trend,
+    };
+  }, [selectedPeriod, currentMonthKey, currentMonthShort, monthlyProfitMap, sortedMonthKeys, totalProfit, bagsProfit, printedProfit]);
 
   // Combined Recent Transactions (Bags Orders + Printed Sales)
   const formattedBagsOrders = mockOrders.map(order => {
@@ -185,6 +240,22 @@ export default function Dashboard() {
   // 4. Low Stock Products
   const lowStockProducts = mockProducts.filter(p => p.stock_quantity < 10);
 
+  if (isLoading) {
+    return (
+      <PageContainer title="Dashboard" subtitle="Your business at a glance">
+        <LoadingState message="Loading dashboard metrics..." />
+      </PageContainer>
+    );
+  }
+
+  if (error) {
+    return (
+      <PageContainer title="Dashboard" subtitle="Your business at a glance">
+        <ErrorState error={error} onRetry={refreshData} />
+      </PageContainer>
+    );
+  }
+
   return (
     <PageContainer title="Dashboard" subtitle="Your business at a glance">
       <div className="flex flex-col gap-8 pb-8">
@@ -192,19 +263,43 @@ export default function Dashboard() {
           
           {/* Hero: Total Profit & Chart */}
           <div className="lg:col-span-8 flex flex-col gap-4 bg-[var(--color-app-panel)] rounded-2xl border border-[var(--color-app-border)] p-6">
-            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
               <div>
-                <h2 className="text-sm font-medium text-[var(--color-app-text-muted)] uppercase tracking-wider mb-2">Net Profit</h2>
+                <div className="flex items-center gap-2 mb-2">
+                  <h2 className="text-sm font-medium text-[var(--color-app-text-muted)] uppercase tracking-wider">
+                    Net Profit
+                  </h2>
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[var(--color-app-accent)]/15 text-[var(--color-app-accent)] border border-[var(--color-app-accent)]/30">
+                    {displayedPeriodLabel}
+                  </span>
+                </div>
                 <div className="flex items-baseline gap-3">
                   <span className="text-4xl sm:text-5xl font-mono font-semibold text-[var(--color-app-text)] tracking-tight">
-                    {formatCurrency(totalProfit)}
+                    {formatCurrency(displayedProfit)}
                   </span>
                   {profitTrendNode}
                 </div>
                 <p className="text-xs text-[var(--color-app-text-subtle)] font-mono mt-1">
-                  Bags: {formatCurrency(bagsProfit)} · Printed: {formatCurrency(printedProfit)}
+                  Bags: {formatCurrency(displayedBagsProfit)} · Printed: {formatCurrency(displayedPrintedProfit)}
                 </p>
               </div>
+
+              {monthOptions.length > 1 && (
+                <div className="flex items-center shrink-0">
+                  <select
+                    value={selectedPeriod}
+                    onChange={(e) => setSelectedPeriod(e.target.value)}
+                    aria-label="Filter profit by month"
+                    className="h-9 px-3 text-xs font-medium rounded-lg bg-[var(--color-app-bg)] text-[var(--color-app-text)] border border-[var(--color-app-border)] hover:border-[var(--color-app-border-focus)] focus:border-[var(--color-app-border-focus)] outline-none cursor-pointer transition-colors"
+                  >
+                    {monthOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value} className="bg-[#1f2937] text-white">
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
             
             {/* Smooth Area Chart */}
