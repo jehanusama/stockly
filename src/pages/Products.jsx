@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button, Card, Table, Input, Modal, StockBar, Select, LoadingState, ErrorState, DatePicker } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { useAppData } from "@/context/AppContext";
@@ -132,6 +133,7 @@ function ManageCategoriesModal({ isOpen, onClose }) {
 }
 
 export default function Products() {
+  const navigate = useNavigate();
   const { products, categories, addProduct, updateProduct, deleteProduct, addStockBatch, editBatch: editBatchFunc, deleteBatch: deleteBatchFunc, isLoading, error, refreshData } = useAppData();
   const [search, setSearch] = useState("");
   
@@ -478,6 +480,19 @@ export default function Products() {
       align: "right",
       render: (_, row) => (
         <div className="flex items-center justify-end gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => navigate(`/item-sales?itemId=${row.id}`)}
+            title="View who bought this item by day"
+            className="flex items-center gap-1.5 text-xs"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+            <span>Buyers</span>
+          </Button>
           <Button variant="secondary" size="sm" onClick={() => openRestockModal(row)}>
             + Add Stock
           </Button>

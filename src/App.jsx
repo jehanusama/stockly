@@ -84,6 +84,7 @@ function AppLayout() {
           <Route path="/new-sale"       element={<NewSale />} />
           <Route path="/sales"          element={<SalesHistory />} />
           <Route path="/sales-by-day"   element={<SalesByDay />} />
+          <Route path="/item-sales"     element={<SalesByDay defaultTab="item" />} />
           <Route path="/profit"         element={<ProfitReport />} />
           <Route path="/outstanding"    element={<Outstanding />} />
           <Route path="/printed"        element={<PrintedItems />} />
