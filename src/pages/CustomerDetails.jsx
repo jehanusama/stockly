@@ -487,8 +487,8 @@ export default function CustomerDetails() {
             <Input
               label="Payment Amount (EGP)"
               type="number"
-              min="0.5"
-              step="0.5"
+              min="0.01"
+              step="any"
               max={totalOutstandingBalance}
               value={paymentAmount}
               onChange={(e) => setPaymentAmount(e.target.value)}

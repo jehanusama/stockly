@@ -1,4 +1,4 @@
-﻿
+
 export function Input({
   id,
   label,
@@ -12,6 +12,7 @@ export function Input({
   required = false,
   className = "",
   inputClassName = "",
+  step,
   ...rest
 }) {
   return (
@@ -32,6 +33,7 @@ export function Input({
       <input
         id={id}
         type={type}
+        step={type === "number" ? (step ?? "any") : step}
         value={value}
         onChange={onChange}
         placeholder={placeholder}
