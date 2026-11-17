@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button, Card, Input, StockBar, Select, DatePicker, LoadingState, ErrorState, CustomerSelect } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { useAppData } from "@/context/AppContext";
-import { formatCurrency } from "@/utils/currency";
+import { formatCurrency, parseNumber, toEnglishDigits } from "@/utils/currency";
 
 
 function StockBadge({ quantity, unit }) {
@@ -88,10 +88,13 @@ function BatchPicker({ categories, products, onAddToCart }) {
     }
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
+      const qEng = toEnglishDigits(q);
       list = list.filter(p => {
-        const nameMatch = (p.name || "").toLowerCase().includes(q);
+        const pName = (p.name || "").toLowerCase();
+        const nameMatch = pName.includes(q) || pName.includes(qEng);
         const cat = categories.find(c => c.id === p.category_id);
-        const catMatch = (cat?.name || "").toLowerCase().includes(q);
+        const cName = (cat?.name || "").toLowerCase();
+        const catMatch = cName.includes(q) || cName.includes(qEng);
         return nameMatch || catMatch;
       });
     }
@@ -100,8 +103,8 @@ function BatchPicker({ categories, products, onAddToCart }) {
 
   const canAdd = allCheckedProducts.length > 0 && allCheckedProducts.every(p => {
     const s = selections[p.id];
-    const qty = parseFloat(s.quantity) || 0;
-    return qty > 0 && qty <= p.stock_quantity && parseFloat(s.customPrice) >= 0;
+    const qty = parseNumber(s.quantity);
+    return qty > 0 && qty <= p.stock_quantity && parseNumber(s.customPrice) >= 0;
   });
 
   const handleAddToCart = () => {
@@ -414,8 +417,8 @@ export default function NewSale() {
 
   const processedCart = cart.map(item => {
     const product = mockProducts.find(p => p.id === item.productId);
-    const qty = parseFloat(item.quantity) || 0;
-    const price = parseFloat(item.customPrice) || 0;
+    const qty = parseNumber(item.quantity);
+    const price = parseNumber(item.customPrice);
     const hasEnoughStock = product ? qty <= product.stock_quantity : false;
     const costBasis = calculateFifoCost(product, qty);
     return { ...item, product, qty, price, hasEnoughStock, costBasis };
@@ -437,7 +440,7 @@ export default function NewSale() {
 
   const discountAmount = useMemo(() => {
     if (discountType === "none" || !discountValue) return 0;
-    const val = parseFloat(discountValue) || 0;
+    const val = parseNumber(discountValue);
     if (discountType === "fixed") return Math.min(val, totalRevenue);
     if (discountType === "percentage") return totalRevenue * Math.min(val / 100, 1);
     return 0;
@@ -447,7 +450,7 @@ export default function NewSale() {
   const finalProfit = finalTotal - totalCost;
   const finalMargin = finalTotal > 0 ? ((finalProfit / finalTotal) * 100).toFixed(0) : 0;
 
-  const effectiveAmountPaid = amountPaidInput !== "" ? parseFloat(amountPaidInput) || 0 : finalTotal;
+  const effectiveAmountPaid = amountPaidInput !== "" ? parseNumber(amountPaidInput) : finalTotal;
   const isPaidInputValid = effectiveAmountPaid >= 0;
   const balanceDue = Math.max(0, finalTotal - effectiveAmountPaid);
 
@@ -478,7 +481,7 @@ export default function NewSale() {
       customer_id: customerId,
       order_date: orderDate.includes("T") ? orderDate : `${orderDate}T12:00:00Z`,
       discount_type: discountType,
-      discount_value: parseFloat(discountValue) || 0,
+      discount_value: parseNumber(discountValue),
       subtotal: totalRevenue,
       final_total: finalTotal,
       final_profit: finalProfit,

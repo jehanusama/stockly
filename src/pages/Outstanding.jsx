@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Button, Card, Select, Input, Modal, LoadingState, ErrorState, Pagination, CustomerSelect, DatePicker } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { useAppData } from "@/context/AppContext";
-import { formatCurrency } from "@/utils/currency";
+import { formatCurrency, parseNumber } from "@/utils/currency";
 
 // Helpers
 function getInitials(name) {
@@ -99,7 +99,7 @@ export default function Outstanding() {
       setAddModalError("Please enter a title/description (e.g. Opening Balance).");
       return;
     }
-    const amtNum = parseFloat(addAmount);
+    const amtNum = parseNumber(addAmount);
     if (isNaN(amtNum) || amtNum <= 0) {
       setAddModalError("Please enter a valid amount greater than 0.");
       return;
@@ -196,7 +196,7 @@ export default function Outstanding() {
   // FIFO Allocation Preview (Bags + Printed combined)
   const allocationPreview = useMemo(() => {
     if (!paymentTarget) return [];
-    const val = parseFloat(paymentAmount);
+    const val = parseNumber(paymentAmount);
     if (isNaN(val) || val <= 0) return [];
 
     const unpaidBags = orders
@@ -247,7 +247,7 @@ export default function Outstanding() {
   const handlePaymentSubmit = async (e) => {
     e.preventDefault();
     setModalError("");
-    const amountNum = parseFloat(paymentAmount);
+    const amountNum = parseNumber(paymentAmount);
     if (isNaN(amountNum) || amountNum <= 0) {
       setModalError("Please enter a valid amount greater than 0.");
       return;
@@ -536,8 +536,8 @@ export default function Outstanding() {
               disabled={
                 isSubmitting ||
                 !paymentAmount ||
-                parseFloat(paymentAmount) <= 0 ||
-                parseFloat(paymentAmount) > (paymentTarget?.totalBalance ?? 0) + 0.001
+                parseNumber(paymentAmount) <= 0 ||
+                parseNumber(paymentAmount) > (paymentTarget?.totalBalance ?? 0) + 0.001
               }
             >
               {isSubmitting ? "Recording..." : "Confirm Payment"}

@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { Button, Card, LoadingState, ErrorState, Modal, Input, Pagination, DatePicker } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { useAppData } from "@/context/AppContext";
-import { formatCurrency } from "@/utils/currency";
+import { formatCurrency, parseNumber } from "@/utils/currency";
 import { InvoiceModal, normalizeLedgerTransaction } from "@/components/invoice";
 
 function getInitials(name) {
@@ -128,7 +128,7 @@ export default function CustomerDetails() {
 
   // Live FIFO Allocation Preview computation
   const allocationPreview = useMemo(() => {
-    const val = parseFloat(paymentAmount);
+    const val = parseNumber(paymentAmount);
     if (isNaN(val) || val <= 0) return [];
 
     let remaining = val;
@@ -163,7 +163,7 @@ export default function CustomerDetails() {
     e.preventDefault();
     setModalError("");
 
-    const amountNum = parseFloat(paymentAmount);
+    const amountNum = parseNumber(paymentAmount);
     if (isNaN(amountNum) || amountNum <= 0) {
       setModalError("Please enter a valid payment amount greater than 0.");
       return;
@@ -557,7 +557,7 @@ export default function CustomerDetails() {
               type="submit"
               variant="primary"
               loading={isSubmitting}
-              disabled={!paymentAmount || parseFloat(paymentAmount) <= 0}
+              disabled={!paymentAmount || parseNumber(paymentAmount) <= 0}
             >
               Confirm & Record Payment
             </Button>

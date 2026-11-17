@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Button, Card, Table, Input, Modal, StockBar, Select, LoadingState, ErrorState, DatePicker } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { useAppData } from "@/context/AppContext";
-import { formatCurrency } from "@/utils/currency";
+import { formatCurrency, parseNumber, toEnglishDigits } from "@/utils/currency";
 
 function ManageCategoriesModal({ isOpen, onClose }) {
   const { categories, addCategory, updateCategory, deleteCategory } = useAppData();
@@ -257,9 +257,13 @@ export default function Products() {
     }));
 
     if (q) {
+      const qEng = toEnglishDigits(q);
       groups = groups.reduce((acc, g) => {
-        const catMatches = g.name.toLowerCase().includes(q);
-        const prodMatches = g.products.filter(p => p.name.toLowerCase().includes(q));
+        const catMatches = g.name.toLowerCase().includes(q) || g.name.toLowerCase().includes(qEng);
+        const prodMatches = g.products.filter(p => {
+          const pName = p.name.toLowerCase();
+          return pName.includes(q) || pName.includes(qEng);
+        });
         
         if (catMatches || prodMatches.length > 0) {
           acc.push({
@@ -284,9 +288,9 @@ export default function Products() {
     const newProduct = {
       category_id: addFormData.category_id,
       name: addFormData.name.trim(),
-      cost_price: addFormData.cost ? parseFloat(addFormData.cost) : 0,
-      sale_price: addFormData.sale_price !== "" ? parseFloat(addFormData.sale_price) : null,
-      stock_quantity: addFormData.stock ? parseFloat(addFormData.stock) : 0,
+      cost_price: addFormData.cost ? parseNumber(addFormData.cost) : 0,
+      sale_price: addFormData.sale_price !== "" ? parseNumber(addFormData.sale_price) : null,
+      stock_quantity: addFormData.stock ? parseNumber(addFormData.stock) : 0,
       unit: addFormData.unit || "kilo"
     };
     const res = await addProduct(newProduct);
@@ -311,7 +315,7 @@ export default function Products() {
       category_id: editFormData.category_id,
       name: editFormData.name.trim(),
       unit: editFormData.unit || "kilo",
-      sale_price: editFormData.sale_price !== "" ? parseFloat(editFormData.sale_price) : null,
+      sale_price: editFormData.sale_price !== "" ? parseNumber(editFormData.sale_price) : null,
     });
     setIsSubmitting(false);
     if (res && !res.success) {
@@ -324,8 +328,8 @@ export default function Products() {
 
   const handleRestockSubmit = async (e) => {
     e.preventDefault();
-    const qty = parseFloat(restockForm.quantity_received);
-    const cost = parseFloat(restockForm.cost_price);
+    const qty = parseNumber(restockForm.quantity_received);
+    const cost = parseNumber(restockForm.cost_price);
 
     if (isNaN(qty) || qty <= 0) {
       setFormError("Please enter a valid quantity greater than 0.");
@@ -357,8 +361,8 @@ export default function Products() {
 
   const handleEditBatchSubmit = async (e) => {
     e.preventDefault();
-    const qty = parseFloat(editBatchData.quantity_received);
-    const cost = parseFloat(editBatchData.cost_price);
+    const qty = parseNumber(editBatchData.quantity_received);
+    const cost = parseNumber(editBatchData.cost_price);
 
     if (isNaN(qty) || qty <= 0) {
       setFormError("Please enter a valid quantity greater than 0.");

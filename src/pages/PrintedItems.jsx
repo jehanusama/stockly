@@ -3,7 +3,7 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import { Button, Card, Table, Input, Modal, StockBar, Select, LoadingState, ErrorState, CustomerSelect, DatePicker } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { useAppData } from "@/context/AppContext";
-import { formatCurrency } from "@/utils/currency";
+import { formatCurrency, parseNumber, toEnglishDigits } from "@/utils/currency";
 
 const UNIT_OPTIONS = [
   { value: "piece", label: "Piece" },
@@ -208,7 +208,11 @@ export default function PrintedItems() {
   const filteredItems = useMemo(() => {
     const q = search.toLowerCase().trim();
     if (!q) return printedItems;
-    return printedItems.filter((item) => item.name.toLowerCase().includes(q));
+    const qEng = toEnglishDigits(q);
+    return printedItems.filter((item) => {
+      const name = item.name.toLowerCase();
+      return name.includes(q) || name.includes(qEng);
+    });
   }, [printedItems, search]);
 
   const handleAddItemSubmit = async (e) => {
@@ -220,8 +224,8 @@ export default function PrintedItems() {
 
     const newItem = {
       name: addFormData.name.trim(),
-      cost_price: addFormData.cost ? parseFloat(addFormData.cost) : 0,
-      stock_quantity: addFormData.stock ? parseFloat(addFormData.stock) : 0,
+      cost_price: addFormData.cost ? parseNumber(addFormData.cost) : 0,
+      stock_quantity: addFormData.stock ? parseNumber(addFormData.stock) : 0,
       unit: addFormData.unit || "piece",
     };
 
@@ -259,8 +263,8 @@ export default function PrintedItems() {
 
   const handleRestockSubmit = async (e) => {
     e.preventDefault();
-    const qty = parseFloat(restockForm.quantity_received);
-    const cost = parseFloat(restockForm.cost_price);
+    const qty = parseNumber(restockForm.quantity_received);
+    const cost = parseNumber(restockForm.cost_price);
 
     if (isNaN(qty) || qty <= 0) {
       setFormError("Please enter a valid quantity greater than 0.");
@@ -292,8 +296,8 @@ export default function PrintedItems() {
 
   const handleEditBatchSubmit = async (e) => {
     e.preventDefault();
-    const qty = parseFloat(editBatchData.quantity_received);
-    const cost = parseFloat(editBatchData.cost_price);
+    const qty = parseNumber(editBatchData.quantity_received);
+    const cost = parseNumber(editBatchData.cost_price);
 
     if (isNaN(qty) || qty <= 0) {
       setFormError("Please enter a valid quantity greater than 0.");
@@ -330,8 +334,8 @@ export default function PrintedItems() {
       return;
     }
 
-    const qty = parseFloat(saleForm.quantity);
-    const price = parseFloat(saleForm.sale_price);
+    const qty = parseNumber(saleForm.quantity);
+    const price = parseNumber(saleForm.sale_price);
 
     if (isNaN(qty) || qty <= 0) {
       setFormError("Please enter a valid quantity greater than 0.");
@@ -349,14 +353,14 @@ export default function PrintedItems() {
       return;
     }
 
-    const discount = saleForm.discount !== "" ? parseFloat(saleForm.discount) : 0;
+    const discount = saleForm.discount !== "" ? parseNumber(saleForm.discount) : 0;
     if (isNaN(discount) || discount < 0) {
       setFormError("Please enter a valid discount amount.");
       return;
     }
     const subtotal = qty * price;
     const calculatedTotal = Math.max(0, subtotal - discount);
-    const paidNow = saleForm.amount_paid_now !== "" ? parseFloat(saleForm.amount_paid_now) : calculatedTotal;
+    const paidNow = saleForm.amount_paid_now !== "" ? parseNumber(saleForm.amount_paid_now) : calculatedTotal;
 
     if (isNaN(paidNow) || paidNow < 0) {
       setFormError("Please enter a valid amount paid.");

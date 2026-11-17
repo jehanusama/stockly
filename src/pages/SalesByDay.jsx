@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { Button, Card, Modal, LoadingState, ErrorState, Pagination, Input, DatePicker } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
-import { formatCurrency } from "@/utils/currency";
+import { formatCurrency, toEnglishDigits } from "@/utils/currency";
 import { useAppData } from "@/context/AppContext";
 
 // ── Helpers ──────────────────────────────────────────────────────
@@ -589,7 +589,9 @@ export default function SalesByDay({ defaultTab = "daily" }) {
             const cust = mockCustomers.find(c => c.id === order.customer_id);
             const custName = cust?.name || "Walk-in Customer";
 
-            if (buyerQuery.trim() && !custName.toLowerCase().includes(buyerQuery.toLowerCase())) {
+            const bq = buyerQuery.trim().toLowerCase();
+            const bqEng = toEnglishDigits(bq);
+            if (bq && !custName.toLowerCase().includes(bq) && !custName.toLowerCase().includes(bqEng)) {
               return;
             }
 
@@ -637,7 +639,9 @@ export default function SalesByDay({ defaultTab = "daily" }) {
           const cust = mockCustomers.find(c => c.id === sale.customer_id);
           const custName = cust?.name || "Walk-in Customer";
 
-          if (buyerQuery.trim() && !custName.toLowerCase().includes(buyerQuery.toLowerCase())) {
+          const bq = buyerQuery.trim().toLowerCase();
+          const bqEng = toEnglishDigits(bq);
+          if (bq && !custName.toLowerCase().includes(bq) && !custName.toLowerCase().includes(bqEng)) {
             return;
           }
 

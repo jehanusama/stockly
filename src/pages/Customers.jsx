@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Button, Card, Input, Select, Modal, LoadingState, ErrorState, Pagination } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { useAppData } from "@/context/AppContext";
-import { formatCurrency } from "@/utils/currency";
+import { formatCurrency, toEnglishDigits } from "@/utils/currency";
 
 function getInitials(name) {
   if (!name) return "?";
@@ -89,11 +89,15 @@ export default function Customers() {
         lifetimeSpend: salesByCustomer[c.id]?.spend || 0,
         outstandingBalance: getCustomerTotalBalance(c.id),
       }))
-      .filter(c => 
-        (c.name ?? "").toLowerCase().includes(lowerSearch) || 
-        (c.phone ?? "").toLowerCase().includes(lowerSearch) ||
-        (c.notes ?? "").toLowerCase().includes(lowerSearch)
-      )
+      .filter(c => {
+        const searchEng = toEnglishDigits(lowerSearch);
+        return (
+          (c.name ?? "").toLowerCase().includes(lowerSearch) || 
+          (c.phone ?? "").toLowerCase().includes(lowerSearch) ||
+          (c.phone ?? "").toLowerCase().includes(searchEng) ||
+          (c.notes ?? "").toLowerCase().includes(lowerSearch)
+        );
+      })
       .sort((a, b) => {
         if (sortBy === "balance") return (b.outstandingBalance || 0) - (a.outstandingBalance || 0);
         if (sortBy === "spend") return (b.lifetimeSpend || 0) - (a.lifetimeSpend || 0);
@@ -174,7 +178,7 @@ export default function Customers() {
         <h4 className="text-xs font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider border-b border-[var(--color-app-border)] pb-2">Identity & Contact</h4>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input label="Full Name" placeholder="e.g. أحمد محمد" dir="auto" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required />
-          <Input label="Phone Number" placeholder="e.g. 555-0199" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
+          <Input label="Phone Number" type="tel" placeholder="e.g. 555-0199" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
         </div>
       </div>
 
