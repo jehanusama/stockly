@@ -1263,6 +1263,291 @@ export function AppProvider({ children }) {
     }
   };
 
+  const editOrder = async (id, updatedOrder) => {
+    try {
+      const existingOrder = orders.find((o) => o.id === id);
+      if (!existingOrder) {
+        return { success: false, error: "Order not found" };
+      }
+
+      if (existingOrder.returns && existingOrder.returns.length > 0) {
+        return {
+          success: false,
+          error: "This sale has recorded customer returns. Please delete the return records before editing the sale.",
+        };
+      }
+
+      if (!updatedOrder.items || updatedOrder.items.length === 0) {
+        return { success: false, error: "Order must contain at least one item." };
+      }
+
+      // 1. Fetch current order_items & consumptions for this order
+      const { data: oldItems, error: itemsErr } = await supabase
+        .from("order_items")
+        .select("id, product_id, quantity")
+        .eq("order_id", id);
+
+      if (itemsErr) throw itemsErr;
+
+      const oldItemIds = (oldItems || []).map((i) => i.id);
+      let oldConsumptions = [];
+      if (oldItemIds.length > 0) {
+        const { data: cData, error: cErr } = await supabase
+          .from("order_item_batch_consumptions")
+          .select("*")
+          .in("order_item_id", oldItemIds);
+        if (cErr) throw cErr;
+        oldConsumptions = cData || [];
+      }
+
+      // 2. Fetch current batches to calculate restored pool
+      const { data: allBatchesRaw, error: fetchBatchesErr } = await supabase
+        .from("product_batches")
+        .select("*")
+        .order("purchase_date", { ascending: true })
+        .order("created_at", { ascending: true });
+
+      if (fetchBatchesErr) throw fetchBatchesErr;
+
+      // Calculate batch quantities after restoring old order's consumptions
+      const restoredBatchesMap = {};
+      (allBatchesRaw || []).forEach((b) => {
+        restoredBatchesMap[b.id] = {
+          ...b,
+          cost_price: Number(b.cost_price ?? 0),
+          quantity_remaining: Number(b.quantity_remaining ?? 0),
+        };
+      });
+
+      for (const c of oldConsumptions) {
+        if (restoredBatchesMap[c.batch_id]) {
+          restoredBatchesMap[c.batch_id].quantity_remaining += Number(c.quantity_consumed ?? 0);
+        }
+      }
+
+      // 3. Pre-validate stock availability for all updated items against the restored pool
+      const newItemsNeeded = {};
+      for (const item of updatedOrder.items) {
+        const pId = item.product_id;
+        const q = Number(item.quantity ?? 0);
+        if (isNaN(q) || q <= 0) {
+          return { success: false, error: "Item quantity must be greater than 0." };
+        }
+        newItemsNeeded[pId] = (newItemsNeeded[pId] || 0) + q;
+      }
+
+      for (const [pId, neededQty] of Object.entries(newItemsNeeded)) {
+        const availableInRestoredPool = Object.values(restoredBatchesMap)
+          .filter((b) => b.product_id === pId)
+          .reduce((sum, b) => sum + b.quantity_remaining, 0);
+
+        if (neededQty > availableInRestoredPool) {
+          const prodObj = products.find((p) => p.id === pId);
+          const pName = prodObj?.name || "Selected product";
+          return {
+            success: false,
+            error: `Insufficient stock for "${pName}". Required: ${neededQty}, Available: ${availableInRestoredPool}`,
+          };
+        }
+      }
+
+      // 4. Stock validation passed! Now apply restoration of old consumptions to DB
+      if (oldConsumptions.length > 0) {
+        const batchRestorations = {};
+        for (const c of oldConsumptions) {
+          const qty = Number(c.quantity_consumed);
+          batchRestorations[c.batch_id] = (batchRestorations[c.batch_id] || 0) + qty;
+        }
+
+        for (const [bId, restoreQty] of Object.entries(batchRestorations)) {
+          const origBatch = (allBatchesRaw || []).find((b) => b.id === bId);
+          const newRemaining = Number(origBatch?.quantity_remaining ?? 0) + restoreQty;
+          await supabase
+            .from("product_batches")
+            .update({ quantity_remaining: newRemaining })
+            .eq("id", bId);
+        }
+
+        // Restore products table stock_quantity
+        for (const item of oldItems || []) {
+          const targetProduct = products.find((p) => p.id === item.product_id);
+          if (targetProduct) {
+            const currentStock = Number(targetProduct.stock_quantity ?? 0);
+            const restoredStock = currentStock + Number(item.quantity ?? 0);
+            await supabase
+              .from("products")
+              .update({ stock_quantity: restoredStock })
+              .eq("id", item.product_id);
+          }
+        }
+
+        // Delete old consumptions
+        await supabase
+          .from("order_item_batch_consumptions")
+          .delete()
+          .in("order_item_id", oldItemIds);
+      }
+
+      if (oldItemIds.length > 0) {
+        await supabase.from("order_items").delete().eq("order_id", id);
+      }
+
+      // 5. Run FIFO batch allocation on new items
+      const itemConsumptions = []; // { itemIdx, batch_id, quantity_consumed }
+      const batchUpdates = {}; // { batch_id: new_quantity_remaining }
+      let totalOrderCostBasis = 0;
+
+      const localBatches = Object.values(restoredBatchesMap).filter((b) => b.quantity_remaining > 0);
+
+      const processedItems = updatedOrder.items.map((item, itemIdx) => {
+        const qtyNeeded = Number(item.quantity);
+        let remainingNeeded = qtyNeeded;
+        let lineCostBasis = 0;
+
+        const pBatches = localBatches.filter(
+          (b) => b.product_id === item.product_id && b.quantity_remaining > 0
+        );
+
+        for (const batch of pBatches) {
+          if (remainingNeeded <= 0) break;
+          const takeQty = Math.min(batch.quantity_remaining, remainingNeeded);
+          batch.quantity_remaining -= takeQty;
+          remainingNeeded -= takeQty;
+
+          const consumedCost = takeQty * batch.cost_price;
+          lineCostBasis += consumedCost;
+
+          itemConsumptions.push({
+            itemIdx,
+            batch_id: batch.id,
+            quantity_consumed: takeQty,
+          });
+
+          batchUpdates[batch.id] = batch.quantity_remaining;
+        }
+
+        const salePrice = Number(item.sale_price);
+        const lineTotal = Number(item.line_total ?? qtyNeeded * salePrice);
+        const lineProfit = lineTotal - lineCostBasis;
+
+        totalOrderCostBasis += lineCostBasis;
+
+        return {
+          order_id: id,
+          product_id: item.product_id,
+          quantity: qtyNeeded,
+          sale_price: salePrice,
+          line_total: lineTotal,
+          cost_basis: lineCostBasis,
+          line_profit: lineProfit,
+        };
+      });
+
+      // 6. Insert new order_items
+      const { data: insertedItems, error: newItemsErr } = await supabase
+        .from("order_items")
+        .insert(processedItems)
+        .select();
+
+      if (newItemsErr) throw newItemsErr;
+
+      // 7. Insert new order_item_batch_consumptions
+      const consumptionPayload = itemConsumptions.map((c) => ({
+        order_item_id: insertedItems[c.itemIdx].id,
+        batch_id: c.batch_id,
+        quantity_consumed: c.quantity_consumed,
+      }));
+
+      if (consumptionPayload.length > 0) {
+        const { error: consumeErr } = await supabase
+          .from("order_item_batch_consumptions")
+          .insert(consumptionPayload);
+
+        if (consumeErr) {
+          console.error("Error inserting batch consumptions during edit:", consumeErr);
+        }
+      }
+
+      // 8. Update product_batches quantity_remaining
+      for (const [batchId, newQty] of Object.entries(batchUpdates)) {
+        await supabase
+          .from("product_batches")
+          .update({ quantity_remaining: newQty })
+          .eq("id", batchId);
+      }
+
+      // 9. Update products stock_quantity
+      for (const [pId] of Object.entries(newItemsNeeded)) {
+        const targetProduct = products.find((p) => p.id === pId);
+        if (targetProduct) {
+          const finalProductBatches = Object.values(restoredBatchesMap).filter((b) => b.product_id === pId);
+          const newStock = finalProductBatches.reduce((s, b) => s + b.quantity_remaining, 0);
+          await supabase
+            .from("products")
+            .update({ stock_quantity: newStock })
+            .eq("id", pId);
+        }
+      }
+
+      // 10. Recalculate totals
+      const subtotal = processedItems.reduce((s, it) => s + it.line_total, 0);
+      const discountType = updatedOrder.discount_type || "none";
+      const rawDiscountVal = Number(updatedOrder.discount_value || 0);
+      let discountVal = 0;
+      if (discountType === "percentage") {
+        discountVal = (subtotal * rawDiscountVal) / 100;
+      } else if (discountType === "fixed") {
+        discountVal = rawDiscountVal;
+      }
+      const finalTotal = Math.max(0, subtotal - discountVal);
+      const finalProfit = finalTotal - totalOrderCostBasis;
+
+      // 11. Payment / Overpayment reconciliation
+      const { data: currentPayments } = await supabase
+        .from("payments")
+        .select("amount")
+        .eq("order_id", id);
+      const amountPaid = (currentPayments || []).reduce((s, p) => s + Number(p.amount || 0), 0);
+
+      if (finalTotal < amountPaid && updatedOrder.overpayment_action === "cash_refund") {
+        const refundAmt = amountPaid - finalTotal;
+        await supabase.from("payments").insert([
+          {
+            order_id: id,
+            customer_id: updatedOrder.customer_id || existingOrder.customer_id,
+            amount: -refundAmt,
+            payment_date: new Date().toISOString().slice(0, 10),
+            notes: "Cash refund for order edit price reduction",
+          },
+        ]);
+      }
+
+      // 12. Update orders row
+      const { error: updateOrderErr } = await supabase
+        .from("orders")
+        .update({
+          customer_id: updatedOrder.customer_id !== undefined ? updatedOrder.customer_id : existingOrder.customer_id,
+          order_date: updatedOrder.order_date || existingOrder.order_date,
+          discount_type: discountType,
+          discount_value: discountVal,
+          subtotal,
+          final_total: finalTotal,
+          final_profit: finalProfit,
+          notes: updatedOrder.notes !== undefined ? updatedOrder.notes : existingOrder.notes,
+        })
+        .eq("id", id);
+
+      if (updateOrderErr) throw updateOrderErr;
+
+      // 13. Sync app context
+      await fetchData();
+      return { success: true };
+    } catch (err) {
+      console.error("Error editing order:", err);
+      return { success: false, error: err.message || "Failed to edit order" };
+    }
+  };
+
   const updateOrderDate = async (id, newDateISO) => {
     try {
       const { data, error } = await supabase
@@ -1916,6 +2201,194 @@ export function AppProvider({ children }) {
     }
   };
 
+  const editPrintedSale = async (id, updatedSale) => {
+    try {
+      const existingSale = (printedSales || []).find((s) => s.id === id);
+      if (!existingSale) {
+        return { success: false, error: "Printed sale not found" };
+      }
+
+      if (existingSale.returns && existingSale.returns.length > 0) {
+        return {
+          success: false,
+          error: "This sale has recorded customer returns. Please delete the return records before editing the sale.",
+        };
+      }
+
+      const newQty = Number(updatedSale.quantity);
+      const newPrice = Number(updatedSale.sale_price);
+      const newPrintedItemId = updatedSale.printed_item_id || existingSale.printed_item_id;
+
+      if (isNaN(newQty) || newQty <= 0) {
+        return { success: false, error: "Quantity must be greater than 0." };
+      }
+      if (isNaN(newPrice) || newPrice < 0) {
+        return { success: false, error: "Sale price must be non-negative." };
+      }
+
+      // 1. Fetch old consumptions
+      const { data: oldConsumptions, error: consumeErr } = await supabase
+        .from("printed_sale_batch_consumptions")
+        .select("*")
+        .eq("printed_sale_id", id);
+
+      if (consumeErr) throw consumeErr;
+
+      // 2. Fetch all printed batches
+      const { data: allBatchesRaw, error: fetchBatchesErr } = await supabase
+        .from("printed_batches")
+        .select("*")
+        .order("purchase_date", { ascending: true })
+        .order("created_at", { ascending: true });
+
+      if (fetchBatchesErr) throw fetchBatchesErr;
+
+      const restoredBatchesMap = {};
+      (allBatchesRaw || []).forEach((b) => {
+        restoredBatchesMap[b.id] = {
+          ...b,
+          cost_price: Number(b.cost_price ?? 0),
+          quantity_remaining: Number(b.quantity_remaining ?? 0),
+        };
+      });
+
+      for (const c of oldConsumptions || []) {
+        if (restoredBatchesMap[c.batch_id]) {
+          restoredBatchesMap[c.batch_id].quantity_remaining += Number(c.quantity_consumed ?? 0);
+        }
+      }
+
+      // 3. Pre-validate stock for the new item & quantity
+      const availableStock = Object.values(restoredBatchesMap)
+        .filter((b) => b.printed_item_id === newPrintedItemId)
+        .reduce((sum, b) => sum + b.quantity_remaining, 0);
+
+      if (newQty > availableStock) {
+        const itemObj = printedItems.find((p) => p.id === newPrintedItemId);
+        const itemName = itemObj?.name || "Printed item";
+        return {
+          success: false,
+          error: `Insufficient stock for "${itemName}". Required: ${newQty}, Available: ${availableStock}`,
+        };
+      }
+
+      // 4. Restore old batch quantities in DB & delete old consumptions
+      if (oldConsumptions && oldConsumptions.length > 0) {
+        for (const c of oldConsumptions) {
+          const origBatch = (allBatchesRaw || []).find((b) => b.id === c.batch_id);
+          const newRemaining = Number(origBatch?.quantity_remaining ?? 0) + Number(c.quantity_consumed ?? 0);
+          await supabase
+            .from("printed_batches")
+            .update({ quantity_remaining: newRemaining })
+            .eq("id", c.batch_id);
+        }
+
+        await supabase
+          .from("printed_sale_batch_consumptions")
+          .delete()
+          .eq("printed_sale_id", id);
+      }
+
+      // 5. FIFO consumption for new item
+      let remainingNeeded = newQty;
+      let lineCostBasis = 0;
+      const newConsumptions = [];
+      const batchUpdates = {};
+
+      const candidateBatches = Object.values(restoredBatchesMap).filter(
+        (b) => b.printed_item_id === newPrintedItemId && b.quantity_remaining > 0
+      );
+
+      for (const batch of candidateBatches) {
+        if (remainingNeeded <= 0) break;
+        const takeQty = Math.min(batch.quantity_remaining, remainingNeeded);
+        batch.quantity_remaining -= takeQty;
+        remainingNeeded -= takeQty;
+
+        const consumedCost = takeQty * batch.cost_price;
+        lineCostBasis += consumedCost;
+
+        newConsumptions.push({
+          printed_sale_id: id,
+          batch_id: batch.id,
+          quantity_consumed: takeQty,
+        });
+
+        batchUpdates[batch.id] = batch.quantity_remaining;
+      }
+
+      // 6. Insert new consumptions
+      if (newConsumptions.length > 0) {
+        const { error: insConsErr } = await supabase
+          .from("printed_sale_batch_consumptions")
+          .insert(newConsumptions);
+        if (insConsErr) {
+          console.error("Error inserting printed batch consumptions on edit:", insConsErr);
+        }
+      }
+
+      // 7. Update printed_batches
+      for (const [bId, qRem] of Object.entries(batchUpdates)) {
+        await supabase
+          .from("printed_batches")
+          .update({ quantity_remaining: qRem })
+          .eq("id", bId);
+      }
+
+      // 8. Calculate new totals
+      const lineTotal = newQty * newPrice;
+      const lineProfit = lineTotal - lineCostBasis;
+
+      // 9. Payment reconciliation
+      const { data: currentPayments } = await supabase
+        .from("printed_payments")
+        .select("amount")
+        .eq("printed_sale_id", id);
+      const amountPaid = (currentPayments || []).reduce((s, p) => s + Number(p.amount || 0), 0);
+
+      if (lineTotal < amountPaid && updatedSale.overpayment_action === "cash_refund") {
+        const refundAmt = amountPaid - lineTotal;
+        await supabase.from("printed_payments").insert([
+          {
+            printed_sale_id: id,
+            customer_id: updatedSale.customer_id || existingSale.customer_id,
+            amount: -refundAmt,
+            payment_date: new Date().toISOString().slice(0, 10),
+            notes: "Cash refund for printed sale edit price reduction",
+          },
+        ]);
+      }
+
+      const targetPrintedItem = printedItems.find((p) => p.id === newPrintedItemId);
+      const targetItemName = targetPrintedItem?.name || existingSale.item_name;
+
+      // 10. Update printed_sales row
+      const { error: updSaleErr } = await supabase
+        .from("printed_sales")
+        .update({
+          customer_id: updatedSale.customer_id !== undefined ? updatedSale.customer_id : existingSale.customer_id,
+          sale_date: updatedSale.sale_date || existingSale.sale_date,
+          printed_item_id: newPrintedItemId,
+          item_name: targetItemName,
+          quantity: newQty,
+          sale_price: newPrice,
+          line_total: lineTotal,
+          cost_basis: lineCostBasis,
+          line_profit: lineProfit,
+          notes: updatedSale.notes !== undefined ? updatedSale.notes : existingSale.notes,
+        })
+        .eq("id", id);
+
+      if (updSaleErr) throw updSaleErr;
+
+      await fetchData();
+      return { success: true };
+    } catch (err) {
+      console.error("Error editing printed sale:", err);
+      return { success: false, error: err.message || "Failed to edit printed sale" };
+    }
+  };
+
   const recordPrintedPayment = async (customerId, amount, paymentDate, notes) => {
     try {
       const payAmount = Number(amount);
@@ -2292,6 +2765,7 @@ export function AppProvider({ children }) {
     updateCustomer,
     deleteCustomer,
     addOrder,
+    editOrder,
     addManualOutstanding,
     deleteOrder,
     updateOrderDate,
@@ -2307,6 +2781,7 @@ export function AppProvider({ children }) {
     deletePrintedBatch,
     returnPrintedBatchToSupplier,
     addPrintedSale,
+    editPrintedSale,
     deletePrintedSale,
     recordPrintedPayment,
     recordSalesReturn,

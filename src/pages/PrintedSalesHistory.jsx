@@ -5,6 +5,7 @@ import { formatCurrency } from "@/utils/currency";
 import { useAppData } from "@/context/AppContext";
 import { InvoiceModal, normalizePrintedSale } from "@/components/invoice";
 import { ReturnModal } from "@/components/returns";
+import { EditSaleModal } from "@/components/sales";
 
 // Filter Toolbar for Printed Sales
 function FilterToolbar({ filters, onChange, onClear, hasActiveFilters, customers, printedItems }) {
@@ -109,6 +110,7 @@ export default function PrintedSalesHistory() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
   const [returnSaleModal, setReturnSaleModal] = useState(null);
+  const [editSaleModal, setEditSaleModal] = useState(null);
 
   const hasActiveFilters = Object.values(filters).some(v => v !== "");
 
@@ -306,6 +308,14 @@ export default function PrintedSalesHistory() {
                             <Button
                               variant="secondary"
                               size="sm"
+                              onClick={() => setEditSaleModal(sale)}
+                              className="text-xs h-7 px-2.5 font-medium text-[var(--color-app-accent)]"
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              variant="secondary"
+                              size="sm"
                               onClick={() => setReturnSaleModal(sale)}
                               className="text-xs h-7 px-2.5 font-medium text-[var(--color-app-warning)]"
                             >
@@ -417,6 +427,14 @@ export default function PrintedSalesHistory() {
                       <Button
                         variant="secondary"
                         size="sm"
+                        onClick={() => setEditSaleModal(sale)}
+                        className="text-xs h-7 px-2.5 font-medium text-[var(--color-app-accent)]"
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="sm"
                         onClick={() => setReturnSaleModal(sale)}
                         className="text-xs h-7 px-2.5 font-medium text-[var(--color-app-warning)]"
                       >
@@ -501,6 +519,14 @@ export default function PrintedSalesHistory() {
         isOpen={!!returnSaleModal}
         onClose={() => setReturnSaleModal(null)}
         sale={returnSaleModal}
+        type="printed"
+      />
+
+      {/* Edit Sale Modal */}
+      <EditSaleModal
+        isOpen={!!editSaleModal}
+        onClose={() => setEditSaleModal(null)}
+        sale={editSaleModal}
         type="printed"
       />
     </PageContainer>

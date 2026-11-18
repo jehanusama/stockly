@@ -5,6 +5,7 @@ import { formatCurrency } from "@/utils/currency";
 import { useAppData } from "@/context/AppContext";
 import { InvoiceModal, normalizeBagsOrder } from "@/components/invoice";
 import { ReturnModal } from "@/components/returns";
+import { EditSaleModal } from "@/components/sales";
 
 // Filter Toolbar 
 function FilterToolbar({ filters, onChange, onClear, hasActiveFilters, customers, products, categories }) {
@@ -107,7 +108,7 @@ function FilterToolbar({ filters, onChange, onClear, hasActiveFilters, customers
 }
 
 // Sale Detail Modal
-function SaleDetailModal({ row, products, categories, onClose, onDelete, onOpenInvoice, onOpenReturn }) {
+function SaleDetailModal({ row, products, categories, onClose, onDelete, onOpenInvoice, onOpenReturn, onOpenEdit }) {
   if (!row) return null;
   const d = new Date(row.order_date);
   const due = row.balance_due ?? 0;
@@ -312,6 +313,16 @@ function SaleDetailModal({ row, products, categories, onClose, onDelete, onOpenI
           <div className="flex items-center gap-2">
             <Button
               variant="secondary"
+              onClick={() => {
+                onClose();
+                onOpenEdit?.(row);
+              }}
+              className="text-[var(--color-app-accent)] hover:text-[var(--color-app-accent)]"
+            >
+              Edit Sale
+            </Button>
+            <Button
+              variant="secondary"
               disabled={items.every((i) => (i.available_to_return ?? i.quantity) <= 0)}
               onClick={() => {
                 onClose();
@@ -350,6 +361,7 @@ export default function SalesHistory() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
   const [returnOrderModal, setReturnOrderModal] = useState(null);
+  const [editSaleModal, setEditSaleModal] = useState(null);
 
   const hasActiveFilters = Object.values(filters).some(v => v !== "");
 
@@ -510,6 +522,17 @@ export default function SalesHistory() {
       align: "right",
       render: (_val, row) => (
         <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              setEditSaleModal(row);
+            }}
+            className="text-xs h-7 px-2.5 font-medium text-[var(--color-app-accent)]"
+          >
+            Edit
+          </Button>
           <Button
             variant="secondary"
             size="sm"
@@ -761,11 +784,33 @@ export default function SalesHistory() {
                         size="sm"
                         onClick={(e) => {
                           e.stopPropagation();
+                          setEditSaleModal(row);
+                        }}
+                        className="text-xs h-7 px-2 text-[var(--color-app-accent)]"
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setReturnOrderModal(row);
+                        }}
+                        className="text-xs h-7 px-2 text-[var(--color-app-warning)]"
+                      >
+                        Return
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
                           setInvoiceOrder(row);
                         }}
-                        className="text-xs h-7 px-2.5"
+                        className="text-xs h-7 px-2"
                       >
-                        View Invoice
+                        Invoice
                       </Button>
                     </div>
                   </div>
@@ -795,6 +840,7 @@ export default function SalesHistory() {
         onDelete={(row) => setDeleteTarget(row)}
         onOpenInvoice={(row) => setInvoiceOrder(row)}
         onOpenReturn={(row) => setReturnOrderModal(row)}
+        onOpenEdit={(row) => setEditSaleModal(row)}
       />
 
       {/* Delete Confirmation Modal */}
@@ -855,6 +901,14 @@ export default function SalesHistory() {
         isOpen={!!returnOrderModal}
         onClose={() => setReturnOrderModal(null)}
         sale={returnOrderModal}
+        type="bags"
+      />
+
+      {/* Edit Sale Modal */}
+      <EditSaleModal
+        isOpen={!!editSaleModal}
+        onClose={() => setEditSaleModal(null)}
+        sale={editSaleModal}
         type="bags"
       />
     </PageContainer>

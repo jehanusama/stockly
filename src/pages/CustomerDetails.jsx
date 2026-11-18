@@ -6,6 +6,7 @@ import { useAppData } from "@/context/AppContext";
 import { formatCurrency, parseNumber } from "@/utils/currency";
 import { InvoiceModal, normalizeLedgerTransaction } from "@/components/invoice";
 import { ReturnModal } from "@/components/returns";
+import { EditSaleModal } from "@/components/sales";
 
 function getInitials(name) {
   if (!name) return "?";
@@ -45,6 +46,7 @@ export default function CustomerDetails() {
   const [pageSize, setPageSize] = useState(5);
   const [invoiceTxn, setInvoiceTxn] = useState(null);
   const [returnTxnModal, setReturnTxnModal] = useState(null);
+  const [editSaleModal, setEditSaleModal] = useState(null);
 
   const customer = useMemo(() => mockCustomers.find(c => c.id === id), [mockCustomers, id]);
 
@@ -413,6 +415,14 @@ export default function CustomerDetails() {
                         <Button
                           variant="secondary"
                           size="sm"
+                          onClick={() => setEditSaleModal({ raw: txn.rawOrder, type: txn.rawType })}
+                          className="text-xs h-7 px-2.5 font-medium text-[var(--color-app-accent)] shrink-0"
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
                           onClick={() => setReturnTxnModal({ raw: txn.rawOrder, type: txn.rawType })}
                           className="text-xs h-7 px-2.5 font-medium text-[var(--color-app-warning)] shrink-0"
                         >
@@ -592,6 +602,14 @@ export default function CustomerDetails() {
         onClose={() => setReturnTxnModal(null)}
         sale={returnTxnModal?.raw}
         type={returnTxnModal?.type}
+      />
+
+      {/* Edit Sale Modal */}
+      <EditSaleModal
+        isOpen={!!editSaleModal}
+        onClose={() => setEditSaleModal(null)}
+        sale={editSaleModal?.raw}
+        type={editSaleModal?.type}
       />
     </PageContainer>
   );
