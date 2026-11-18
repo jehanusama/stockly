@@ -134,7 +134,20 @@ function ManageCategoriesModal({ isOpen, onClose }) {
 
 export default function Products() {
   const navigate = useNavigate();
-  const { products, categories, addProduct, updateProduct, deleteProduct, addStockBatch, editBatch: editBatchFunc, deleteBatch: deleteBatchFunc, isLoading, error, refreshData } = useAppData();
+  const {
+    products,
+    categories,
+    addProduct,
+    updateProduct,
+    deleteProduct,
+    addStockBatch,
+    editBatch: editBatchFunc,
+    deleteBatch: deleteBatchFunc,
+    returnBatchToSupplier,
+    isLoading,
+    error,
+    refreshData,
+  } = useAppData();
   const [search, setSearch] = useState("");
   
   // Modals state
@@ -143,6 +156,7 @@ export default function Products() {
   const [isRestockModalOpen, setIsRestockModalOpen] = useState(false);
   const [isManageCatsOpen, setIsManageCatsOpen] = useState(false);
   const [isEditBatchOpen, setIsEditBatchOpen] = useState(false);
+  const [isFactoryReturnOpen, setIsFactoryReturnOpen] = useState(false);
 
   // Expanded row IDs for batch history accordion
   const [expandedProductIds, setExpandedProductIds] = useState([]);
@@ -172,6 +186,20 @@ export default function Products() {
     cost_price: "",
     quantity_received: "",
     purchase_date: new Date().toISOString().split("T")[0],
+    alreadySold: 0,
+    currentRemaining: 0,
+    unit: "kilo",
+  });
+  const [factoryReturnData, setFactoryReturnData] = useState({
+    batch_id: "",
+    product_id: "",
+    productName: "",
+    unit: "kilo",
+    cost_price: 0,
+    max_quantity: 0,
+    quantity: "",
+    return_date: new Date().toISOString().split("T")[0],
+    reason: "",
   });
 
   const resetForms = () => {
@@ -191,6 +219,20 @@ export default function Products() {
       cost_price: "",
       quantity_received: "",
       purchase_date: new Date().toISOString().split("T")[0],
+      alreadySold: 0,
+      currentRemaining: 0,
+      unit: "kilo",
+    });
+    setFactoryReturnData({
+      batch_id: "",
+      product_id: "",
+      productName: "",
+      unit: "kilo",
+      cost_price: 0,
+      max_quantity: 0,
+      quantity: "",
+      return_date: new Date().toISOString().split("T")[0],
+      reason: "",
     });
     setFormError("");
   };
@@ -228,6 +270,10 @@ export default function Products() {
 
   const openEditBatchModal = (batch, product) => {
     resetForms();
+    const originalReceived = Number(batch.quantity_received ?? 0);
+    const currentRemaining = Number(batch.quantity_remaining ?? 0);
+    const alreadySold = Math.max(0, originalReceived - currentRemaining);
+
     setEditBatchData({
       id: batch.id,
       product_id: product.id,
@@ -235,8 +281,27 @@ export default function Products() {
       cost_price: batch.cost_price ? batch.cost_price.toString() : "",
       quantity_received: batch.quantity_received ? batch.quantity_received.toString() : "",
       purchase_date: batch.purchase_date || new Date().toISOString().split("T")[0],
+      alreadySold,
+      currentRemaining,
+      unit: product.unit || "kilo",
     });
     setIsEditBatchOpen(true);
+  };
+
+  const openFactoryReturnModal = (batch, product) => {
+    resetForms();
+    setFactoryReturnData({
+      batch_id: batch.id,
+      product_id: product.id,
+      productName: product.name,
+      unit: product.unit || "kilo",
+      cost_price: Number(batch.cost_price ?? 0),
+      max_quantity: Number(batch.quantity_remaining ?? 0),
+      quantity: "",
+      return_date: new Date().toISOString().split("T")[0],
+      reason: "",
+    });
+    setIsFactoryReturnOpen(true);
   };
 
   const toggleExpandProduct = (productId) => {
@@ -368,6 +433,10 @@ export default function Products() {
       setFormError("Please enter a valid quantity greater than 0.");
       return;
     }
+    if (editBatchData.alreadySold && qty < editBatchData.alreadySold) {
+      setFormError(`Cannot reduce quantity received below ${editBatchData.alreadySold} because ${editBatchData.alreadySold} units have already been sold or returned.`);
+      return;
+    }
     if (isNaN(cost) || cost < 0) {
       setFormError("Please enter a valid cost price.");
       return;
@@ -389,6 +458,37 @@ export default function Products() {
       return;
     }
     setIsEditBatchOpen(false);
+    resetForms();
+  };
+
+  const handleFactoryReturnSubmit = async (e) => {
+    e.preventDefault();
+    const qty = parseNumber(factoryReturnData.quantity);
+    if (isNaN(qty) || qty <= 0) {
+      setFormError("Please enter a valid quantity to return.");
+      return;
+    }
+    if (qty > factoryReturnData.max_quantity) {
+      setFormError(`Cannot return more than the remaining quantity (${factoryReturnData.max_quantity} ${factoryReturnData.unit}).`);
+      return;
+    }
+
+    setIsSubmitting(true);
+    setFormError("");
+
+    const res = await returnBatchToSupplier({
+      batch_id: factoryReturnData.batch_id,
+      quantity: qty,
+      return_date: factoryReturnData.return_date,
+      reason: factoryReturnData.reason,
+    });
+
+    setIsSubmitting(false);
+    if (res && !res.success) {
+      setFormError(res.error || "Failed to return batch stock to factory.");
+      return;
+    }
+    setIsFactoryReturnOpen(false);
     resetForms();
   };
 
@@ -556,14 +656,22 @@ export default function Products() {
             <tbody className="divide-y divide-[var(--color-app-border)] text-[var(--color-app-text)]">
               {batches.map((batch) => {
                 const isUntouched = Number(batch.quantity_remaining) === Number(batch.quantity_received);
-                const disabledTooltip = "Can't edit — some of this batch has already been sold";
-                const disabledDeleteTooltip = "Can't delete — some of this batch has already been sold";
+                const disabledDeleteTooltip = "Can't delete — some units have already been sold. You can return remaining stock to the factory instead.";
+                const totalReturned = (batch.supplier_returns || []).reduce((sum, sr) => sum + Number(sr.quantity_returned || 0), 0);
+                const canReturnToFactory = Number(batch.quantity_remaining) > 0;
 
                 return (
                   <tr key={batch.id} className="hover:bg-[var(--color-app-panel)] transition-colors">
                     <td className="px-3 py-2 font-mono">{batch.purchase_date ? new Date(batch.purchase_date).toLocaleDateString() : "—"}</td>
                     <td className="px-3 py-2 font-mono">{formatCurrency(batch.cost_price)}</td>
-                    <td className="px-3 py-2 font-mono">{batch.quantity_received} {product.unit || "kilo"}</td>
+                    <td className="px-3 py-2 font-mono">
+                      <span>{batch.quantity_received} {product.unit || "kilo"}</span>
+                      {totalReturned > 0 && (
+                        <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-[var(--color-app-warning-muted)] text-[var(--color-app-warning)] border border-[var(--color-app-warning)]/30" title={`${totalReturned} ${product.unit || "kilo"} returned to factory`}>
+                          -{totalReturned} returned
+                        </span>
+                      )}
+                    </td>
                     <td className="px-3 py-2 font-mono">
                       <span className={batch.quantity_remaining > 0 ? "text-[var(--color-app-success)] font-semibold" : "text-[var(--color-app-text-muted)]"}>
                         {batch.quantity_remaining} {product.unit || "kilo"}
@@ -573,13 +681,24 @@ export default function Products() {
                       <div className="flex items-center justify-end gap-1">
                         <button
                           type="button"
-                          disabled={!isUntouched}
-                          onClick={() => isUntouched && openEditBatchModal(batch, product)}
-                          className="p-1 rounded text-[var(--color-app-text-muted)] hover:text-[var(--color-app-text)] hover:bg-[var(--color-app-elevated)] transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed"
-                          title={isUntouched ? "Edit batch" : disabledTooltip}
+                          onClick={() => openEditBatchModal(batch, product)}
+                          className="p-1 rounded text-[var(--color-app-text-muted)] hover:text-[var(--color-app-text)] hover:bg-[var(--color-app-elevated)] transition-colors"
+                          title="Edit batch"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!canReturnToFactory}
+                          onClick={() => canReturnToFactory && openFactoryReturnModal(batch, product)}
+                          className="p-1 rounded text-[var(--color-app-warning)] hover:bg-[var(--color-app-warning-muted)] transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+                          title={canReturnToFactory ? "Return stock to factory" : "No stock remaining in this batch to return"}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="1 4 1 10 7 10"></polyline>
+                            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
                           </svg>
                         </button>
                         <button
@@ -933,11 +1052,27 @@ export default function Products() {
             </div>
           )}
 
+          {editBatchData.alreadySold > 0 && (
+            <div className="p-3 rounded-lg bg-[var(--color-app-elevated)] border border-[var(--color-app-border)] text-xs text-[var(--color-app-text-muted)] space-y-1">
+              <div className="flex justify-between">
+                <span>Sold / Consumed from this batch:</span>
+                <span className="font-semibold font-mono text-[var(--color-app-warning)]">{editBatchData.alreadySold} {editBatchData.unit}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Current remaining in this batch:</span>
+                <span className="font-semibold font-mono text-[var(--color-app-success)]">{editBatchData.currentRemaining} {editBatchData.unit}</span>
+              </div>
+              <p className="text-[11px] text-[var(--color-app-text-muted)] pt-1 border-t border-[var(--color-app-border)]/50">
+                Minimum allowed quantity received is <strong>{editBatchData.alreadySold}</strong> so that completed sales are protected.
+              </p>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-4">
             <Input
               label="Quantity Received"
               type="number"
-              min="0"
+              min={editBatchData.alreadySold || "0"}
               step="any"
               value={editBatchData.quantity_received}
               onChange={(e) => setEditBatchData({ ...editBatchData, quantity_received: e.target.value })}
@@ -970,6 +1105,75 @@ export default function Products() {
             </Button>
             <Button type="submit" variant="primary" loading={isSubmitting}>
               Save Batch Changes
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* ── Return to Factory Modal ── */}
+      <Modal
+        isOpen={isFactoryReturnOpen}
+        onClose={() => { setIsFactoryReturnOpen(false); resetForms(); }}
+        title={`Return to Factory - ${factoryReturnData.productName}`}
+      >
+        <form onSubmit={handleFactoryReturnSubmit} className="flex flex-col gap-5">
+          {formError && (
+            <div className="p-3 rounded-lg bg-[var(--color-app-danger-muted)] text-[var(--color-app-danger)] text-sm border border-[var(--color-app-danger)] font-medium">
+              {formError}
+            </div>
+          )}
+
+          <div className="p-3 rounded-lg bg-[var(--color-app-elevated)] border border-[var(--color-app-border)] text-xs text-[var(--color-app-text-muted)] space-y-1.5">
+            <div className="flex justify-between">
+              <span>Unit Cost Price:</span>
+              <span className="font-semibold font-mono text-[var(--color-app-text)]">{formatCurrency(factoryReturnData.cost_price)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Available Remaining to Return:</span>
+              <span className="font-semibold font-mono text-[var(--color-app-success)]">{factoryReturnData.max_quantity} {factoryReturnData.unit}</span>
+            </div>
+            {factoryReturnData.quantity && !isNaN(parseNumber(factoryReturnData.quantity)) && parseNumber(factoryReturnData.quantity) > 0 && (
+              <div className="flex justify-between border-t border-[var(--color-app-border)] pt-1.5 text-sm font-semibold text-[var(--color-app-warning)]">
+                <span>Total Refund / Credit Value:</span>
+                <span className="font-mono">{formatCurrency(parseNumber(factoryReturnData.quantity) * factoryReturnData.cost_price)}</span>
+              </div>
+            )}
+          </div>
+
+          <Input
+            label={`Quantity to Return (${factoryReturnData.unit})`}
+            type="number"
+            min="0.01"
+            max={factoryReturnData.max_quantity}
+            step="any"
+            value={factoryReturnData.quantity}
+            onChange={(e) => setFactoryReturnData({ ...factoryReturnData, quantity: e.target.value })}
+            placeholder={`Up to ${factoryReturnData.max_quantity}`}
+            required
+            autoFocus
+          />
+
+          <DatePicker
+            label="Return Date"
+            value={factoryReturnData.return_date}
+            onChange={(iso) => setFactoryReturnData({ ...factoryReturnData, return_date: iso })}
+            required
+          />
+
+          <Input
+            label="Reason / Notes (Optional)"
+            type="text"
+            value={factoryReturnData.reason}
+            onChange={(e) => setFactoryReturnData({ ...factoryReturnData, reason: e.target.value })}
+            placeholder="e.g. Defective stock, supplier excess return..."
+          />
+
+          <div className="flex justify-end gap-3 mt-4">
+            <Button type="button" variant="secondary" onClick={() => { setIsFactoryReturnOpen(false); resetForms(); }} disabled={isSubmitting}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" loading={isSubmitting}>
+              Confirm Factory Return
             </Button>
           </div>
         </form>

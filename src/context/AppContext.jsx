@@ -11,10 +11,12 @@ export function AppProvider({ children }) {
   const [orders, setOrders] = useState([]);
   const [payments, setPayments] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [productBatches, setProductBatches] = useState([]);
   const [printedItems, setPrintedItems] = useState([]);
   const [printedBatches, setPrintedBatches] = useState([]);
   const [printedSales, setPrintedSales] = useState([]);
   const [printedPayments, setPrintedPayments] = useState([]);
+  const [supplierReturns, setSupplierReturns] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -37,6 +39,7 @@ export function AppProvider({ children }) {
         printedBatchRes,
         printedSaleRes,
         printedPayRes,
+        supplierRetRes,
       ] = await Promise.all([
         supabase.from("categories").select("*").order("name"),
         supabase.from("products").select("*, categories(*)").order("name"),
@@ -48,6 +51,7 @@ export function AppProvider({ children }) {
         supabase.from("printed_batches").select("*").order("purchase_date", { ascending: false }).order("created_at", { ascending: false }),
         supabase.from("printed_sales").select("*, customers(*), printed_items(*)").order("sale_date", { ascending: false }),
         supabase.from("printed_payments").select("*").order("payment_date", { ascending: false }).order("created_at", { ascending: false }),
+        supabase.from("supplier_returns").select("*").order("return_date", { ascending: false }).catch(() => ({ data: [] })),
       ]);
 
       if (catRes.error) throw catRes.error;
@@ -58,6 +62,15 @@ export function AppProvider({ children }) {
       if (printedBatchRes.error) throw printedBatchRes.error;
       if (printedSaleRes.error) throw printedSaleRes.error;
       if (printedPayRes.error) throw printedPayRes.error;
+
+      // Process supplier returns
+      const rawSupplierReturns = (supplierRetRes?.data || []).map((r) => ({
+        ...r,
+        quantity_returned: Number(r.quantity_returned ?? 0),
+        unit_cost_price: Number(r.unit_cost_price ?? 0),
+        total_refund_value: Number(r.total_refund_value ?? 0),
+      }));
+      setSupplierReturns(rawSupplierReturns);
 
       // Calculate total quantity sold per product across ALL order items ever created
       const totalSoldPerProduct = {};
@@ -122,6 +135,7 @@ export function AppProvider({ children }) {
         return {
           ...b,
           quantity_remaining: calculatedRemaining,
+          supplier_returns: rawSupplierReturns.filter(sr => sr.product_batch_id === b.id),
         };
       });
 
@@ -194,6 +208,7 @@ export function AppProvider({ children }) {
         return {
           ...b,
           quantity_remaining: calculatedRemaining,
+          supplier_returns: rawSupplierReturns.filter(sr => sr.printed_batch_id === b.id),
         };
       });
 
@@ -243,6 +258,7 @@ export function AppProvider({ children }) {
       });
 
       setCategories(catRes.data || []);
+      setProductBatches(fetchedBatches);
       setProducts(
         (prodRes.data || []).map((p) => {
           const pBatches = fetchedBatches.filter((b) => b.product_id === p.id);
@@ -491,10 +507,28 @@ export function AppProvider({ children }) {
         return { success: false, error: "Invalid batch parameters" };
       }
 
+      const currentBatch = productBatches.find((b) => b.id === id);
+      if (!currentBatch) {
+        return { success: false, error: "Batch not found" };
+      }
+
+      const originalReceived = Number(currentBatch.quantity_received ?? 0);
+      const currentRemaining = Number(currentBatch.quantity_remaining ?? 0);
+      const alreadySoldOrConsumed = Math.max(0, originalReceived - currentRemaining);
+
+      if (qty < alreadySoldOrConsumed) {
+        return {
+          success: false,
+          error: `Cannot reduce quantity received below ${alreadySoldOrConsumed} because ${alreadySoldOrConsumed} units have already been sold or returned from this batch.`
+        };
+      }
+
+      const newRemaining = Math.max(0, qty - alreadySoldOrConsumed);
+
       const payload = {
         cost_price: cost,
         quantity_received: qty,
-        quantity_remaining: qty,
+        quantity_remaining: newRemaining,
         purchase_date: purchase_date || new Date().toISOString().split("T")[0],
       };
 
@@ -506,6 +540,19 @@ export function AppProvider({ children }) {
 
       if (error) throw error;
 
+      // Adjust products table stock_quantity by delta
+      const delta = qty - originalReceived;
+      if (delta !== 0 && currentBatch.product_id) {
+        const targetProd = products.find(p => p.id === currentBatch.product_id);
+        if (targetProd) {
+          const updatedStock = Math.max(0, Number(targetProd.stock_quantity ?? 0) + delta);
+          await supabase
+            .from("products")
+            .update({ stock_quantity: updatedStock })
+            .eq("id", currentBatch.product_id);
+        }
+      }
+
       await fetchData();
       return { success: true, data: data[0] };
     } catch (err) {
@@ -516,6 +563,14 @@ export function AppProvider({ children }) {
 
   const deleteBatch = async (id) => {
     try {
+      const currentBatch = productBatches.find((b) => b.id === id);
+      if (currentBatch && Number(currentBatch.quantity_remaining) < Number(currentBatch.quantity_received)) {
+        return {
+          success: false,
+          error: "Cannot delete this batch because some units have already been sold. You can return remaining units to the factory instead."
+        };
+      }
+
       const { error } = await supabase
         .from("product_batches")
         .delete()
@@ -528,6 +583,84 @@ export function AppProvider({ children }) {
     } catch (err) {
       console.error("Error deleting batch:", err);
       return { success: false, error: err.message || "Failed to delete batch" };
+    }
+  };
+
+  const returnBatchToSupplier = async ({ batch_id, quantity, return_date, reason }) => {
+    try {
+      const qtyToReturn = Number(quantity);
+      if (!batch_id || isNaN(qtyToReturn) || qtyToReturn <= 0) {
+        return { success: false, error: "Please enter a valid quantity to return." };
+      }
+
+      const batch = productBatches.find((b) => b.id === batch_id);
+      if (!batch) {
+        return { success: false, error: "Batch not found." };
+      }
+
+      const currentRemaining = Number(batch.quantity_remaining ?? 0);
+      if (qtyToReturn > currentRemaining) {
+        return {
+          success: false,
+          error: `Cannot return ${qtyToReturn} units. Only ${currentRemaining} units are remaining in this batch.`
+        };
+      }
+
+      const unitCost = Number(batch.cost_price ?? 0);
+      const totalRefundValue = qtyToReturn * unitCost;
+      const returnDate = return_date || new Date().toISOString().split("T")[0];
+
+      // 1. Insert into supplier_returns
+      const returnPayload = {
+        product_batch_id: batch.id,
+        product_id: batch.product_id,
+        quantity_returned: qtyToReturn,
+        unit_cost_price: unitCost,
+        total_refund_value: totalRefundValue,
+        return_date: returnDate,
+        reason: reason ? reason.trim() : null,
+      };
+
+      try {
+        const { error: insErr } = await supabase
+          .from("supplier_returns")
+          .insert([returnPayload]);
+        if (insErr) {
+          console.warn("Could not insert supplier_returns record:", insErr);
+        }
+      } catch (e) {
+        console.warn("supplier_returns insert error:", e);
+      }
+
+      // 2. Reduce batch quantity_remaining and quantity_received
+      const newRemaining = Math.max(0, currentRemaining - qtyToReturn);
+      const newReceived = Math.max(0, Number(batch.quantity_received ?? 0) - qtyToReturn);
+
+      const { error: batchErr } = await supabase
+        .from("product_batches")
+        .update({
+          quantity_remaining: newRemaining,
+          quantity_received: newReceived,
+        })
+        .eq("id", batch.id);
+
+      if (batchErr) throw batchErr;
+
+      // 3. Reduce product stock_quantity
+      const targetProd = products.find((p) => p.id === batch.product_id);
+      if (targetProd) {
+        const newStock = Math.max(0, Number(targetProd.stock_quantity ?? 0) - qtyToReturn);
+        await supabase
+          .from("products")
+          .update({ stock_quantity: newStock })
+          .eq("id", batch.product_id);
+      }
+
+      await fetchData();
+      return { success: true };
+    } catch (err) {
+      console.error("Error returning batch to supplier:", err);
+      return { success: false, error: err.message || "Failed to return batch to supplier" };
     }
   };
 
@@ -1235,21 +1368,34 @@ export function AppProvider({ children }) {
 
   const editPrintedBatch = async ({ id, cost_price, quantity_received, purchase_date }) => {
     try {
-      const batch = printedBatches.find((b) => b.id === id);
-      if (batch && Number(batch.quantity_remaining) < Number(batch.quantity_received)) {
-        return { success: false, error: "Cannot edit batch because stock from this batch has already been sold." };
-      }
-
       const qty = Number(quantity_received);
       const cost = Number(cost_price);
       if (!id || isNaN(qty) || qty <= 0 || isNaN(cost) || cost < 0) {
         return { success: false, error: "Invalid batch parameters" };
       }
 
+      const batch = printedBatches.find((b) => b.id === id);
+      if (!batch) {
+        return { success: false, error: "Printed batch not found" };
+      }
+
+      const originalReceived = Number(batch.quantity_received ?? 0);
+      const currentRemaining = Number(batch.quantity_remaining ?? 0);
+      const alreadySoldOrConsumed = Math.max(0, originalReceived - currentRemaining);
+
+      if (qty < alreadySoldOrConsumed) {
+        return {
+          success: false,
+          error: `Cannot reduce quantity received below ${alreadySoldOrConsumed} because ${alreadySoldOrConsumed} units have already been sold or returned from this batch.`
+        };
+      }
+
+      const newRemaining = Math.max(0, qty - alreadySoldOrConsumed);
+
       const payload = {
         cost_price: cost,
         quantity_received: qty,
-        quantity_remaining: qty,
+        quantity_remaining: newRemaining,
         purchase_date: purchase_date || new Date().toISOString().split("T")[0],
       };
 
@@ -1260,6 +1406,19 @@ export function AppProvider({ children }) {
         .select();
 
       if (error) throw error;
+
+      // Adjust printed_items table stock_quantity by delta
+      const delta = qty - originalReceived;
+      if (delta !== 0 && batch.printed_item_id) {
+        const targetItem = printedItems.find(p => p.id === batch.printed_item_id);
+        if (targetItem) {
+          const updatedStock = Math.max(0, Number(targetItem.stock_quantity ?? 0) + delta);
+          await supabase
+            .from("printed_items")
+            .update({ stock_quantity: updatedStock })
+            .eq("id", batch.printed_item_id);
+        }
+      }
 
       await fetchData();
       return { success: true, data: data[0] };
@@ -1273,7 +1432,10 @@ export function AppProvider({ children }) {
     try {
       const batch = printedBatches.find((b) => b.id === id);
       if (batch && Number(batch.quantity_remaining) < Number(batch.quantity_received)) {
-        return { success: false, error: "Cannot delete batch because stock from this batch has already been sold." };
+        return {
+          success: false,
+          error: "Cannot delete batch because some units have already been sold. You can return remaining units to the factory instead."
+        };
       }
 
       const { error } = await supabase
@@ -1288,6 +1450,84 @@ export function AppProvider({ children }) {
     } catch (err) {
       console.error("Error deleting printed batch:", err);
       return { success: false, error: err.message || "Failed to delete printed batch" };
+    }
+  };
+
+  const returnPrintedBatchToSupplier = async ({ batch_id, quantity, return_date, reason }) => {
+    try {
+      const qtyToReturn = Number(quantity);
+      if (!batch_id || isNaN(qtyToReturn) || qtyToReturn <= 0) {
+        return { success: false, error: "Please enter a valid quantity to return." };
+      }
+
+      const batch = printedBatches.find((b) => b.id === batch_id);
+      if (!batch) {
+        return { success: false, error: "Printed batch not found." };
+      }
+
+      const currentRemaining = Number(batch.quantity_remaining ?? 0);
+      if (qtyToReturn > currentRemaining) {
+        return {
+          success: false,
+          error: `Cannot return ${qtyToReturn} units. Only ${currentRemaining} units are remaining in this batch.`
+        };
+      }
+
+      const unitCost = Number(batch.cost_price ?? 0);
+      const totalRefundValue = qtyToReturn * unitCost;
+      const returnDate = return_date || new Date().toISOString().split("T")[0];
+
+      // 1. Insert into supplier_returns
+      const returnPayload = {
+        printed_batch_id: batch.id,
+        printed_item_id: batch.printed_item_id,
+        quantity_returned: qtyToReturn,
+        unit_cost_price: unitCost,
+        total_refund_value: totalRefundValue,
+        return_date: returnDate,
+        reason: reason ? reason.trim() : null,
+      };
+
+      try {
+        const { error: insErr } = await supabase
+          .from("supplier_returns")
+          .insert([returnPayload]);
+        if (insErr) {
+          console.warn("Could not insert supplier_returns record:", insErr);
+        }
+      } catch (e) {
+        console.warn("supplier_returns insert error:", e);
+      }
+
+      // 2. Reduce batch quantity_remaining and quantity_received
+      const newRemaining = Math.max(0, currentRemaining - qtyToReturn);
+      const newReceived = Math.max(0, Number(batch.quantity_received ?? 0) - qtyToReturn);
+
+      const { error: batchErr } = await supabase
+        .from("printed_batches")
+        .update({
+          quantity_remaining: newRemaining,
+          quantity_received: newReceived,
+        })
+        .eq("id", batch.id);
+
+      if (batchErr) throw batchErr;
+
+      // 3. Reduce printed_items stock_quantity
+      const targetItem = printedItems.find((p) => p.id === batch.printed_item_id);
+      if (targetItem) {
+        const newStock = Math.max(0, Number(targetItem.stock_quantity ?? 0) - qtyToReturn);
+        await supabase
+          .from("printed_items")
+          .update({ stock_quantity: newStock })
+          .eq("id", batch.printed_item_id);
+      }
+
+      await fetchData();
+      return { success: true };
+    } catch (err) {
+      console.error("Error returning printed batch to supplier:", err);
+      return { success: false, error: err.message || "Failed to return printed batch to supplier" };
     }
   };
 
@@ -1618,10 +1858,12 @@ export function AppProvider({ children }) {
     orders,
     payments,
     categories,
+    productBatches,
     printedItems,
     printedBatches,
     printedSales,
     printedPayments,
+    supplierReturns,
     isLoading,
     error,
     refreshData: fetchData,
@@ -1631,6 +1873,7 @@ export function AppProvider({ children }) {
     addStockBatch,
     editBatch,
     deleteBatch,
+    returnBatchToSupplier,
     addCustomer,
     updateCustomer,
     deleteCustomer,
@@ -1648,6 +1891,7 @@ export function AppProvider({ children }) {
     addPrintedBatch,
     editPrintedBatch,
     deletePrintedBatch,
+    returnPrintedBatchToSupplier,
     addPrintedSale,
     deletePrintedSale,
     recordPrintedPayment,
