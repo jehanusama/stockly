@@ -21,6 +21,20 @@ export function AppProvider({ children }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  // Helper to safely execute Supabase queries without throwing if tables have errors
+  const safeQuery = async (queryPromise) => {
+    try {
+      const res = await queryPromise;
+      if (res?.error) {
+        console.warn("Safe query non-fatal error:", res.error.message);
+        return { data: [] };
+      }
+      return res || { data: [] };
+    } catch {
+      return { data: [] };
+    }
+  };
+
   const fetchData = useCallback(async () => {
     if (!session) {
       return;
@@ -54,9 +68,9 @@ export function AppProvider({ children }) {
         supabase.from("printed_batches").select("*").order("purchase_date", { ascending: false }).order("created_at", { ascending: false }),
         supabase.from("printed_sales").select("*, customers(*), printed_items(*)").order("sale_date", { ascending: false }),
         supabase.from("printed_payments").select("*").order("payment_date", { ascending: false }).order("created_at", { ascending: false }),
-        supabase.from("supplier_returns").select("*").order("return_date", { ascending: false }).catch(() => ({ data: [] })),
-        supabase.from("sales_returns").select("*").order("return_date", { ascending: false }).catch(() => ({ data: [] })),
-        supabase.from("sales_return_items").select("*").catch(() => ({ data: [] })),
+        safeQuery(supabase.from("supplier_returns").select("*").order("return_date", { ascending: false })),
+        safeQuery(supabase.from("sales_returns").select("*").order("return_date", { ascending: false })),
+        safeQuery(supabase.from("sales_return_items").select("*")),
       ]);
 
       if (catRes.error) throw catRes.error;
