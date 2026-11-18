@@ -4,6 +4,7 @@ import { PageContainer } from "@/components/layout/PageContainer";
 import { formatCurrency } from "@/utils/currency";
 import { useAppData } from "@/context/AppContext";
 import { InvoiceModal, normalizePrintedSale } from "@/components/invoice";
+import { ReturnModal } from "@/components/returns";
 
 // Filter Toolbar for Printed Sales
 function FilterToolbar({ filters, onChange, onClear, hasActiveFilters, customers, printedItems }) {
@@ -107,6 +108,7 @@ export default function PrintedSalesHistory() {
   const [invoiceSale, setInvoiceSale] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const [returnSaleModal, setReturnSaleModal] = useState(null);
 
   const hasActiveFilters = Object.values(filters).some(v => v !== "");
 
@@ -304,6 +306,14 @@ export default function PrintedSalesHistory() {
                             <Button
                               variant="secondary"
                               size="sm"
+                              onClick={() => setReturnSaleModal(sale)}
+                              className="text-xs h-7 px-2.5 font-medium text-[var(--color-app-warning)]"
+                            >
+                              Return
+                            </Button>
+                            <Button
+                              variant="secondary"
+                              size="sm"
                               onClick={() => setInvoiceSale(sale)}
                               className="text-xs h-7 px-2.5 font-medium"
                             >
@@ -407,6 +417,14 @@ export default function PrintedSalesHistory() {
                       <Button
                         variant="secondary"
                         size="sm"
+                        onClick={() => setReturnSaleModal(sale)}
+                        className="text-xs h-7 px-2.5 font-medium text-[var(--color-app-warning)]"
+                      >
+                        Return
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="sm"
                         onClick={() => setInvoiceSale(sale)}
                         className="text-xs h-7 px-2.5 font-medium"
                       >
@@ -476,6 +494,14 @@ export default function PrintedSalesHistory() {
               )
             : null
         }
+      />
+
+      {/* Return Items Modal */}
+      <ReturnModal
+        isOpen={!!returnSaleModal}
+        onClose={() => setReturnSaleModal(null)}
+        sale={returnSaleModal}
+        type="printed"
       />
     </PageContainer>
   );

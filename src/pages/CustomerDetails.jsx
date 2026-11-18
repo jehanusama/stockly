@@ -5,6 +5,7 @@ import { PageContainer } from "@/components/layout/PageContainer";
 import { useAppData } from "@/context/AppContext";
 import { formatCurrency, parseNumber } from "@/utils/currency";
 import { InvoiceModal, normalizeLedgerTransaction } from "@/components/invoice";
+import { ReturnModal } from "@/components/returns";
 
 function getInitials(name) {
   if (!name) return "?";
@@ -43,6 +44,7 @@ export default function CustomerDetails() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(5);
   const [invoiceTxn, setInvoiceTxn] = useState(null);
+  const [returnTxnModal, setReturnTxnModal] = useState(null);
 
   const customer = useMemo(() => mockCustomers.find(c => c.id === id), [mockCustomers, id]);
 
@@ -53,6 +55,8 @@ export default function CustomerDetails() {
       .map(o => ({
         id: o.id,
         lineType: "Bags",
+        rawOrder: o,
+        rawType: "bags",
         date: o.order_date,
         itemsCount: (o.items || []).length,
         itemsSummary: (o.items || []).length > 0
@@ -87,6 +91,8 @@ export default function CustomerDetails() {
         return {
           id: s.id,
           lineType: "Printed",
+          rawOrder: s,
+          rawType: "printed",
           date: s.sale_date,
           itemsCount: 1,
           itemsSummary: itemName,
@@ -407,6 +413,14 @@ export default function CustomerDetails() {
                         <Button
                           variant="secondary"
                           size="sm"
+                          onClick={() => setReturnTxnModal({ raw: txn.rawOrder, type: txn.rawType })}
+                          className="text-xs h-7 px-2.5 font-medium text-[var(--color-app-warning)] shrink-0"
+                        >
+                          Return
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
                           onClick={() => setInvoiceTxn(txn)}
                           className="text-xs h-7 px-2.5 font-medium shrink-0"
                         >
@@ -570,6 +584,14 @@ export default function CustomerDetails() {
         isOpen={!!invoiceTxn}
         onClose={() => setInvoiceTxn(null)}
         invoiceData={invoiceTxn ? normalizeLedgerTransaction(invoiceTxn, customer) : null}
+      />
+
+      {/* Return Items Modal */}
+      <ReturnModal
+        isOpen={!!returnTxnModal}
+        onClose={() => setReturnTxnModal(null)}
+        sale={returnTxnModal?.raw}
+        type={returnTxnModal?.type}
       />
     </PageContainer>
   );

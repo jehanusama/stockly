@@ -4,6 +4,7 @@ import { PageContainer } from "@/components/layout/PageContainer";
 import { formatCurrency } from "@/utils/currency";
 import { useAppData } from "@/context/AppContext";
 import { InvoiceModal, normalizeBagsOrder } from "@/components/invoice";
+import { ReturnModal } from "@/components/returns";
 
 // Filter Toolbar 
 function FilterToolbar({ filters, onChange, onClear, hasActiveFilters, customers, products, categories }) {
@@ -106,14 +107,17 @@ function FilterToolbar({ filters, onChange, onClear, hasActiveFilters, customers
 }
 
 // Sale Detail Modal
-function SaleDetailModal({ row, products, categories, onClose, onDelete, onOpenInvoice }) {
+function SaleDetailModal({ row, products, categories, onClose, onDelete, onOpenInvoice, onOpenReturn }) {
   if (!row) return null;
   const d = new Date(row.order_date);
   const due = row.balance_due ?? 0;
   const items = row.items || [];
+  const returns = row.returns || [];
+  const hasReturns = Number(row.total_returned_amount ?? 0) > 0;
+  const isAllReturned = hasReturns && items.every((i) => (i.available_to_return ?? i.quantity) <= 0);
 
   return (
-    <Modal isOpen={!!row} onClose={onClose} title="Sale Details">
+    <Modal isOpen={!!row} onClose={onClose} title="Sale Details" maxWidth="max-w-2xl">
       <div className="flex flex-col gap-5">
         {/* Header info cards */}
         <div className="flex flex-wrap gap-3">
@@ -132,7 +136,16 @@ function SaleDetailModal({ row, products, categories, onClose, onDelete, onOpenI
           </div>
           <div className="flex-1 min-w-[140px] bg-[var(--color-app-elevated)] rounded-xl p-3 flex flex-col gap-0.5 border border-[var(--color-app-border)]">
             <span className="text-[10px] font-semibold uppercase tracking-widest text-[var(--color-app-text-muted)]">Status</span>
-            {due > 0 ? (
+            {isAllReturned ? (
+              <span className="text-sm font-bold text-[var(--color-app-warning)]">Fully Returned</span>
+            ) : hasReturns ? (
+              <>
+                <span className="text-sm font-bold text-[var(--color-app-warning)]">Partially Returned</span>
+                <span className="font-mono text-xs text-[var(--color-app-text-muted)]">
+                  {due > 0 ? `${formatCurrency(due)} due` : "Paid"}
+                </span>
+              </>
+            ) : due > 0 ? (
               <>
                 <span className="text-sm font-bold text-[var(--color-app-warning)]">Balance Due</span>
                 <span className="font-mono text-xs text-[var(--color-app-warning)]">{formatCurrency(due)} remaining</span>
@@ -170,8 +183,13 @@ function SaleDetailModal({ row, products, categories, onClose, onDelete, onOpenI
                     return (
                       <tr key={idx} className="border-b border-[var(--color-app-border)] last:border-0 bg-[var(--color-app-panel)]">
                         <td className="px-3 py-2.5 font-medium text-[var(--color-app-text)]">
-                          {product?.name ?? "Unknown"}
+                          <span>{product?.name ?? "Unknown"}</span>
                           {product?.unit && <span className="ml-1 text-[10px] text-[var(--color-app-text-muted)] font-normal">({product.unit})</span>}
+                          {item.returned_quantity > 0 && (
+                            <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-[var(--color-app-warning-muted)] text-[var(--color-app-warning)] border border-[var(--color-app-warning)]/30">
+                              -{item.returned_quantity} returned
+                            </span>
+                          )}
                         </td>
                         <td className="px-3 py-2.5 text-xs text-[var(--color-app-text-muted)]">
                           {category?.name ? (
@@ -192,11 +210,61 @@ function SaleDetailModal({ row, products, categories, onClose, onDelete, onOpenI
           </div>
         </div>
 
+        {/* Returns History Card (if order has returns) */}
+        {returns.length > 0 && (
+          <div className="bg-[var(--color-app-panel)] rounded-xl border border-[var(--color-app-warning)]/30 p-3.5 flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-app-warning)]">
+                Returns Log ({returns.length})
+              </span>
+              <span className="font-mono text-xs font-bold text-[var(--color-app-warning)]">
+                Total Returned: -{formatCurrency(row.total_returned_amount)}
+              </span>
+            </div>
+            <div className="divide-y divide-[var(--color-app-border)]">
+              {returns.map((ret, rIdx) => (
+                <div key={ret.id || rIdx} className="py-2 flex items-center justify-between text-xs">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="font-mono text-[var(--color-app-text-muted)]">
+                      {ret.return_date ? new Date(ret.return_date).toLocaleDateString() : "—"}
+                    </span>
+                    {ret.notes && <span className="text-[11px] text-[var(--color-app-text)] italic">"{ret.notes}"</span>}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-1.5 py-0.5 rounded text-[10px] bg-[var(--color-app-elevated)] border border-[var(--color-app-border)] text-[var(--color-app-text-muted)]">
+                      {ret.refund_method === "cash_refund" ? "Cash Refund" : "Balance Deduction"}
+                    </span>
+                    <span className="font-mono font-bold text-[var(--color-app-warning)]">
+                      -{formatCurrency(ret.total_return_amount)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Payment Summary */}
         <div className="bg-[var(--color-app-elevated)] rounded-xl border border-[var(--color-app-border)] p-4 flex flex-col gap-2.5">
           <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--color-app-text-muted)] mb-1">Payment Summary</p>
+          {hasReturns && (
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-[var(--color-app-text-muted)]">Original Order Total</span>
+              <span className="font-mono text-[var(--color-app-text-muted)] line-through">
+                {formatCurrency(row.original_final_total || (row.final_total + (row.total_returned_amount || 0)))}
+              </span>
+            </div>
+          )}
+          {hasReturns && (
+            <div className="flex justify-between items-center text-sm text-[var(--color-app-warning)]">
+              <span>Returned Value</span>
+              <span className="font-mono font-semibold">-{formatCurrency(row.total_returned_amount)}</span>
+            </div>
+          )}
           <div className="flex justify-between items-center text-sm">
-            <span className="text-[var(--color-app-text-muted)]">Order Total</span>
+            <span className={hasReturns ? "font-semibold text-[var(--color-app-text)]" : "text-[var(--color-app-text-muted)]"}>
+              {hasReturns ? "Net Order Bill" : "Order Total"}
+            </span>
             <span className="font-mono font-semibold text-[var(--color-app-text)]">{formatCurrency(row.final_total)}</span>
           </div>
           <div className="flex justify-between items-center text-sm">
@@ -210,7 +278,7 @@ function SaleDetailModal({ row, products, categories, onClose, onDelete, onOpenI
             </div>
           )}
           <div className="flex justify-between items-center text-sm border-t border-[var(--color-app-border)] pt-2">
-            <span className="font-semibold text-[var(--color-app-success)]">Profit</span>
+            <span className="font-semibold text-[var(--color-app-success)]">Net Profit</span>
             <div className="flex items-center gap-2">
               <span className="font-mono font-bold text-[var(--color-app-success)]">+{formatCurrency(row.final_profit)}</span>
               <span className="text-[10px] font-mono font-medium text-[var(--color-app-success)] bg-[var(--color-app-success)]/10 px-1.5 py-0.5 rounded-full">
@@ -244,6 +312,17 @@ function SaleDetailModal({ row, products, categories, onClose, onDelete, onOpenI
           <div className="flex items-center gap-2">
             <Button
               variant="secondary"
+              disabled={items.every((i) => (i.available_to_return ?? i.quantity) <= 0)}
+              onClick={() => {
+                onClose();
+                onOpenReturn?.(row);
+              }}
+              className="text-[var(--color-app-warning)] hover:text-[var(--color-app-warning)]"
+            >
+              Return Items
+            </Button>
+            <Button
+              variant="secondary"
               onClick={() => {
                 onClose();
                 onOpenInvoice?.(row);
@@ -270,6 +349,7 @@ export default function SalesHistory() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const [returnOrderModal, setReturnOrderModal] = useState(null);
 
   const hasActiveFilters = Object.values(filters).some(v => v !== "");
 
@@ -430,6 +510,17 @@ export default function SalesHistory() {
       align: "right",
       render: (_val, row) => (
         <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              setReturnOrderModal(row);
+            }}
+            className="text-xs h-7 px-2.5 font-medium text-[var(--color-app-warning)]"
+          >
+            Return
+          </Button>
           <Button
             variant="secondary"
             size="sm"
@@ -703,6 +794,7 @@ export default function SalesHistory() {
         onClose={() => setDetailRow(null)}
         onDelete={(row) => setDeleteTarget(row)}
         onOpenInvoice={(row) => setInvoiceOrder(row)}
+        onOpenReturn={(row) => setReturnOrderModal(row)}
       />
 
       {/* Delete Confirmation Modal */}
@@ -756,6 +848,14 @@ export default function SalesHistory() {
               )
             : null
         }
+      />
+
+      {/* Return Items Modal */}
+      <ReturnModal
+        isOpen={!!returnOrderModal}
+        onClose={() => setReturnOrderModal(null)}
+        sale={returnOrderModal}
+        type="bags"
       />
     </PageContainer>
   );
