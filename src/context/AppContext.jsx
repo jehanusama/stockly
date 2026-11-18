@@ -17,6 +17,7 @@ export function AppProvider({ children }) {
   const [printedSales, setPrintedSales] = useState([]);
   const [printedPayments, setPrintedPayments] = useState([]);
   const [supplierReturns, setSupplierReturns] = useState([]);
+  const [salesReturns, setSalesReturns] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -40,6 +41,8 @@ export function AppProvider({ children }) {
         printedSaleRes,
         printedPayRes,
         supplierRetRes,
+        salesRetRes,
+        salesRetItemsRes,
       ] = await Promise.all([
         supabase.from("categories").select("*").order("name"),
         supabase.from("products").select("*, categories(*)").order("name"),
@@ -52,6 +55,8 @@ export function AppProvider({ children }) {
         supabase.from("printed_sales").select("*, customers(*), printed_items(*)").order("sale_date", { ascending: false }),
         supabase.from("printed_payments").select("*").order("payment_date", { ascending: false }).order("created_at", { ascending: false }),
         supabase.from("supplier_returns").select("*").order("return_date", { ascending: false }).catch(() => ({ data: [] })),
+        supabase.from("sales_returns").select("*").order("return_date", { ascending: false }).catch(() => ({ data: [] })),
+        supabase.from("sales_return_items").select("*").catch(() => ({ data: [] })),
       ]);
 
       if (catRes.error) throw catRes.error;
@@ -72,6 +77,72 @@ export function AppProvider({ children }) {
       }));
       setSupplierReturns(rawSupplierReturns);
 
+      // Process customer sales returns & items
+      const rawSalesReturns = (salesRetRes?.data || []).map((r) => ({
+        ...r,
+        total_return_amount: Number(r.total_return_amount ?? 0),
+        total_cost_basis: Number(r.total_cost_basis ?? 0),
+      }));
+
+      const rawSalesReturnItems = (salesRetItemsRes?.data || []).map((ri) => ({
+        ...ri,
+        quantity_returned: Number(ri.quantity_returned ?? 0),
+        unit_sale_price: Number(ri.unit_sale_price ?? 0),
+        unit_cost_price: Number(ri.unit_cost_price ?? 0),
+        line_return_total: Number(ri.line_return_total ?? 0),
+      }));
+
+      const returnItemsByReturnId = {};
+      rawSalesReturnItems.forEach((ri) => {
+        if (!returnItemsByReturnId[ri.return_id]) {
+          returnItemsByReturnId[ri.return_id] = [];
+        }
+        returnItemsByReturnId[ri.return_id].push(ri);
+      });
+
+      const fetchedSalesReturns = rawSalesReturns.map((r) => ({
+        ...r,
+        items: returnItemsByReturnId[r.id] || [],
+      }));
+      setSalesReturns(fetchedSalesReturns);
+
+      // Pre-compute maps for orders and printed sales returns
+      const returnsByOrder = {};
+      const returnedQtyByOrderItem = {};
+      const returnedQtyByOrderProduct = {};
+
+      const returnsByPrintedSale = {};
+      const returnedQtyByPrintedSale = {};
+
+      fetchedSalesReturns.forEach((sr) => {
+        if (sr.order_id) {
+          if (!returnsByOrder[sr.order_id]) returnsByOrder[sr.order_id] = [];
+          returnsByOrder[sr.order_id].push(sr);
+
+          (sr.items || []).forEach((ri) => {
+            if (ri.order_item_id) {
+              returnedQtyByOrderItem[ri.order_item_id] =
+                (returnedQtyByOrderItem[ri.order_item_id] || 0) + ri.quantity_returned;
+            }
+            if (ri.product_id) {
+              const key = `${sr.order_id}_${ri.product_id}`;
+              returnedQtyByOrderProduct[key] =
+                (returnedQtyByOrderProduct[key] || 0) + ri.quantity_returned;
+            }
+          });
+        }
+
+        if (sr.printed_sale_id) {
+          if (!returnsByPrintedSale[sr.printed_sale_id]) returnsByPrintedSale[sr.printed_sale_id] = [];
+          returnsByPrintedSale[sr.printed_sale_id].push(sr);
+
+          (sr.items || []).forEach((ri) => {
+            returnedQtyByPrintedSale[sr.printed_sale_id] =
+              (returnedQtyByPrintedSale[sr.printed_sale_id] || 0) + ri.quantity_returned;
+          });
+        }
+      });
+
       // Calculate total quantity sold per product across ALL order items ever created
       const totalSoldPerProduct = {};
       (ordRes.data || []).forEach((o) => {
@@ -81,6 +152,15 @@ export function AppProvider({ children }) {
               (totalSoldPerProduct[item.product_id] || 0) + Number(item.quantity ?? 0);
           }
         });
+      });
+      // Deduct customer returned quantities so inventory is restored via FIFO
+      rawSalesReturnItems.forEach((ri) => {
+        if (ri.product_id) {
+          totalSoldPerProduct[ri.product_id] = Math.max(
+            0,
+            (totalSoldPerProduct[ri.product_id] || 0) - ri.quantity_returned
+          );
+        }
       });
 
       // Process batches per product using FIFO allocation from totalSoldPerProduct
@@ -157,6 +237,15 @@ export function AppProvider({ children }) {
         if (s.printed_item_id) {
           totalSoldPerPrintedItem[s.printed_item_id] =
             (totalSoldPerPrintedItem[s.printed_item_id] || 0) + Number(s.quantity ?? 0);
+        }
+      });
+      // Deduct customer returned quantities so inventory is restored via FIFO
+      rawSalesReturnItems.forEach((ri) => {
+        if (ri.printed_item_id) {
+          totalSoldPerPrintedItem[ri.printed_item_id] = Math.max(
+            0,
+            (totalSoldPerPrintedItem[ri.printed_item_id] || 0) - ri.quantity_returned
+          );
         }
       });
 
@@ -239,21 +328,37 @@ export function AppProvider({ children }) {
       });
 
       const fetchedPrintedSales = (printedSaleRes.data || []).map((s) => {
-        const lineTot = Number(s.line_total ?? 0);
+        const originalLineTotal = Number(s.line_total ?? 0);
+        const originalProfit = Number(s.line_profit ?? 0);
+
+        const saleReturns = returnsByPrintedSale[s.id] || [];
+        const totalReturnedAmount = saleReturns.reduce((sum, r) => sum + r.total_return_amount, 0);
+        const totalReturnedCostBasis = saleReturns.reduce((sum, r) => sum + r.total_cost_basis, 0);
+        const returnedQty = returnedQtyByPrintedSale[s.id] || 0;
+
+        const netLineTotal = Math.max(0, originalLineTotal - totalReturnedAmount);
+        const netProfit = originalProfit - (totalReturnedAmount - totalReturnedCostBasis);
+
         const amtPaid = paymentsByPrintedSale[s.id] !== undefined
           ? paymentsByPrintedSale[s.id]
           : Number(s.amount_paid ?? 0);
-        const balDue = Math.max(0, lineTot - amtPaid);
+        const balDue = Math.max(0, netLineTotal - amtPaid);
 
         return {
           ...s,
           quantity: Number(s.quantity ?? 0),
+          returned_quantity: returnedQty,
+          available_to_return: Math.max(0, Number(s.quantity ?? 0) - returnedQty),
           sale_price: Number(s.sale_price ?? 0),
-          line_total: lineTot,
+          line_total: netLineTotal,
+          original_line_total: originalLineTotal,
           cost_basis: Number(s.cost_basis ?? 0),
-          line_profit: Number(s.line_profit ?? 0),
+          line_profit: netProfit,
+          original_profit: originalProfit,
+          total_returned_amount: totalReturnedAmount,
           amount_paid: amtPaid,
           balance_due: balDue,
+          returns: saleReturns,
         };
       });
 
@@ -288,26 +393,52 @@ export function AppProvider({ children }) {
       setCustomers(custRes.data || []);
       setOrders(
         (ordRes.data || []).map((o) => {
-          const finalTot = Number(o.final_total ?? 0);
+          const originalFinalTotal = Number(o.final_total ?? 0);
+          const originalProfit = Number(o.final_profit ?? 0);
+
+          const orderReturns = returnsByOrder[o.id] || [];
+          const totalReturnedAmount = orderReturns.reduce((sum, r) => sum + r.total_return_amount, 0);
+          const totalReturnedCostBasis = orderReturns.reduce((sum, r) => sum + r.total_cost_basis, 0);
+
+          const netFinalTotal = Math.max(0, originalFinalTotal - totalReturnedAmount);
+          const netProfit = originalProfit - (totalReturnedAmount - totalReturnedCostBasis);
+
           const amtPaid = paymentsByOrder[o.id] !== undefined
             ? paymentsByOrder[o.id]
             : Number(o.amount_paid ?? 0);
-          const balDue = Math.max(0, finalTot - amtPaid);
-          return {
-            ...o,
-            subtotal: Number(o.subtotal ?? 0),
-            discount_value: Number(o.discount_value ?? 0),
-            final_total: finalTot,
-            final_profit: Number(o.final_profit ?? 0),
-            amount_paid: amtPaid,
-            balance_due: balDue,
-            items: (o.order_items || []).map((item) => ({
+          const balDue = Math.max(0, netFinalTotal - amtPaid);
+
+          const items = (o.order_items || []).map((item) => {
+            const itemReturnedQty = returnedQtyByOrderItem[item.id] !== undefined
+              ? returnedQtyByOrderItem[item.id]
+              : (returnedQtyByOrderProduct[`${o.id}_${item.product_id}`] || 0);
+            const availableToReturn = Math.max(0, Number(item.quantity ?? 0) - itemReturnedQty);
+
+            return {
               ...item,
               quantity: Number(item.quantity ?? 0),
               sale_price: Number(item.sale_price ?? 0),
               line_total: Number(item.line_total ?? 0),
+              cost_basis: Number(item.cost_basis ?? 0),
               line_profit: Number(item.line_profit ?? 0),
-            })),
+              returned_quantity: itemReturnedQty,
+              available_to_return: availableToReturn,
+            };
+          });
+
+          return {
+            ...o,
+            subtotal: Number(o.subtotal ?? 0),
+            discount_value: Number(o.discount_value ?? 0),
+            final_total: netFinalTotal,
+            original_final_total: originalFinalTotal,
+            final_profit: netProfit,
+            original_profit: originalProfit,
+            total_returned_amount: totalReturnedAmount,
+            amount_paid: amtPaid,
+            balance_due: balDue,
+            returns: orderReturns,
+            items,
           };
         })
       );
@@ -1841,6 +1972,288 @@ export function AppProvider({ children }) {
     }
   };
 
+  // -- Customer Sales Returns --
+  const recordSalesReturn = async ({
+    order_id,
+    printed_sale_id,
+    customer_id,
+    return_date,
+    items,
+    refund_method = "balance_deduction",
+    notes,
+  }) => {
+    try {
+      if (!order_id && !printed_sale_id) {
+        return { success: false, error: "Return must be associated with an order or printed sale." };
+      }
+      if (!Array.isArray(items) || items.length === 0) {
+        return { success: false, error: "Please specify at least one item to return." };
+      }
+
+      const validItems = items
+        .map((it) => ({
+          ...it,
+          quantity: Number(it.quantity),
+          unit_sale_price: Number(it.unit_sale_price ?? 0),
+          unit_cost_price: Number(it.unit_cost_price ?? 0),
+        }))
+        .filter((it) => !isNaN(it.quantity) && it.quantity > 0);
+
+      if (validItems.length === 0) {
+        return { success: false, error: "Return quantity must be greater than 0." };
+      }
+
+      let totalReturnAmount = 0;
+      let totalCostBasis = 0;
+      const computedItems = [];
+
+      let custId = customer_id;
+
+      if (order_id) {
+        const order = orders.find((o) => o.id === order_id);
+        if (!order) return { success: false, error: "Order not found." };
+        if (!custId) custId = order.customer_id;
+
+        const subtotal = Number(order.subtotal || 0);
+        const originalFinal = Number(order.original_final_total || order.final_total || 0);
+        const discountRatio = subtotal > 0 && originalFinal < subtotal
+          ? (subtotal - originalFinal) / subtotal
+          : 0;
+
+        for (const it of validItems) {
+          const orderItem = (order.items || []).find(
+            (oi) => (it.order_item_id && oi.id === it.order_item_id) || (oi.product_id === it.product_id)
+          );
+          if (!orderItem) {
+            return { success: false, error: "Returned item not found in order." };
+          }
+
+          const available = orderItem.available_to_return !== undefined
+            ? orderItem.available_to_return
+            : orderItem.quantity;
+
+          if (it.quantity > available + 0.0001) {
+            return {
+              success: false,
+              error: `Cannot return ${it.quantity} units. Only ${available} units are eligible for return.`
+            };
+          }
+
+          const salePrice = Number(orderItem.sale_price ?? it.unit_sale_price);
+          const effectivePrice = Math.max(0, salePrice * (1 - discountRatio));
+          const lineReturnTotal = Math.round(it.quantity * effectivePrice * 100) / 100;
+
+          const unitCost = orderItem.cost_basis && orderItem.quantity > 0
+            ? (orderItem.cost_basis / orderItem.quantity)
+            : (it.unit_cost_price || 0);
+          const lineCostBasis = Math.round(it.quantity * unitCost * 100) / 100;
+
+          totalReturnAmount += lineReturnTotal;
+          totalCostBasis += lineCostBasis;
+
+          computedItems.push({
+            order_item_id: orderItem.id,
+            product_id: orderItem.product_id,
+            quantity_returned: it.quantity,
+            unit_sale_price: salePrice,
+            unit_cost_price: unitCost,
+            line_return_total: lineReturnTotal,
+          });
+        }
+      } else if (printed_sale_id) {
+        const sale = printedSales.find((s) => s.id === printed_sale_id);
+        if (!sale) return { success: false, error: "Printed sale not found." };
+        if (!custId) custId = sale.customer_id;
+
+        const available = sale.available_to_return !== undefined
+          ? sale.available_to_return
+          : sale.quantity;
+
+        const it = validItems[0];
+        if (it.quantity > available + 0.0001) {
+          return {
+            success: false,
+            error: `Cannot return ${it.quantity} units. Only ${available} units are eligible for return.`
+          };
+        }
+
+        const salePrice = Number(sale.sale_price ?? it.unit_sale_price);
+        const lineReturnTotal = Math.round(it.quantity * salePrice * 100) / 100;
+        const unitCost = sale.cost_basis && sale.quantity > 0
+          ? (sale.cost_basis / sale.quantity)
+          : (it.unit_cost_price || 0);
+        const lineCostBasis = Math.round(it.quantity * unitCost * 100) / 100;
+
+        totalReturnAmount = lineReturnTotal;
+        totalCostBasis = lineCostBasis;
+
+        computedItems.push({
+          printed_item_id: sale.printed_item_id,
+          quantity_returned: it.quantity,
+          unit_sale_price: salePrice,
+          unit_cost_price: unitCost,
+          line_return_total: lineReturnTotal,
+        });
+      }
+
+      totalReturnAmount = Math.round(totalReturnAmount * 100) / 100;
+      totalCostBasis = Math.round(totalCostBasis * 100) / 100;
+      const returnDate = return_date || new Date().toISOString().split("T")[0];
+
+      // 1. Insert into sales_returns
+      const returnPayload = {
+        order_id: order_id || null,
+        printed_sale_id: printed_sale_id || null,
+        customer_id: custId || null,
+        return_date: returnDate,
+        total_return_amount: totalReturnAmount,
+        total_cost_basis: totalCostBasis,
+        refund_method,
+        notes: notes ? notes.trim() : null,
+      };
+
+      const { data: returnData, error: retErr } = await supabase
+        .from("sales_returns")
+        .insert([returnPayload])
+        .select();
+
+      if (retErr) throw retErr;
+      const createdReturn = returnData[0];
+
+      // 2. Insert into sales_return_items
+      const returnItemsPayload = computedItems.map((ci) => ({
+        return_id: createdReturn.id,
+        order_item_id: ci.order_item_id || null,
+        product_id: ci.product_id || null,
+        printed_item_id: ci.printed_item_id || null,
+        quantity_returned: ci.quantity_returned,
+        unit_sale_price: ci.unit_sale_price,
+        unit_cost_price: ci.unit_cost_price,
+        line_return_total: ci.line_return_total,
+      }));
+
+      const { error: retItemsErr } = await supabase
+        .from("sales_return_items")
+        .insert(returnItemsPayload);
+
+      if (retItemsErr) {
+        console.warn("Error inserting sales_return_items:", retItemsErr);
+      }
+
+      // 3. Handle cash refund settlement (negative payment)
+      if (refund_method === "cash_refund" && custId) {
+        if (order_id) {
+          const { error: payErr } = await supabase.from("payments").insert([{
+            order_id,
+            customer_id: custId,
+            amount: -totalReturnAmount,
+            payment_date: returnDate,
+            notes: `Cash refund for return #${createdReturn.id.slice(0, 8)}`,
+          }]);
+          if (payErr) console.warn("Error logging cash refund payment:", payErr);
+        } else if (printed_sale_id) {
+          const { error: payErr } = await supabase.from("printed_payments").insert([{
+            printed_sale_id,
+            customer_id: custId,
+            amount: -totalReturnAmount,
+            payment_date: returnDate,
+            notes: `Cash refund for return #${createdReturn.id.slice(0, 8)}`,
+          }]);
+          if (payErr) console.warn("Error logging printed cash refund payment:", payErr);
+        }
+      }
+
+      // 4. Update products & printed_items stock_quantity directly
+      for (const ci of computedItems) {
+        if (ci.product_id) {
+          const prod = products.find((p) => p.id === ci.product_id);
+          if (prod) {
+            const updatedStock = Number(prod.stock_quantity ?? 0) + ci.quantity_returned;
+            await supabase
+              .from("products")
+              .update({ stock_quantity: updatedStock })
+              .eq("id", ci.product_id);
+          }
+        }
+        if (ci.printed_item_id) {
+          const pItem = printedItems.find((p) => p.id === ci.printed_item_id);
+          if (pItem) {
+            const updatedStock = Number(pItem.stock_quantity ?? 0) + ci.quantity_returned;
+            await supabase
+              .from("printed_items")
+              .update({ stock_quantity: updatedStock })
+              .eq("id", ci.printed_item_id);
+          }
+        }
+      }
+
+      // 5. Trigger full sync
+      await fetchData();
+      return { success: true, data: createdReturn };
+    } catch (err) {
+      console.error("Error recording sales return:", err);
+      return { success: false, error: err.message || "Failed to record sales return" };
+    }
+  };
+
+  const deleteSalesReturn = async (id) => {
+    try {
+      const returnRecord = salesReturns.find((r) => r.id === id);
+      if (!returnRecord) {
+        return { success: false, error: "Return record not found." };
+      }
+
+      // 1. If cash refund was recorded, remove the negative payment
+      if (returnRecord.refund_method === "cash_refund") {
+        if (returnRecord.order_id) {
+          await supabase
+            .from("payments")
+            .delete()
+            .eq("order_id", returnRecord.order_id)
+            .ilike("notes", `%${returnRecord.id.slice(0, 8)}%`);
+        } else if (returnRecord.printed_sale_id) {
+          await supabase
+            .from("printed_payments")
+            .delete()
+            .eq("printed_sale_id", returnRecord.printed_sale_id)
+            .ilike("notes", `%${returnRecord.id.slice(0, 8)}%`);
+        }
+      }
+
+      // 2. Deduct the returned quantities back out of products/printed_items stock
+      for (const item of (returnRecord.items || [])) {
+        if (item.product_id) {
+          const prod = products.find((p) => p.id === item.product_id);
+          if (prod) {
+            const newStock = Math.max(0, Number(prod.stock_quantity ?? 0) - Number(item.quantity_returned ?? 0));
+            await supabase.from("products").update({ stock_quantity: newStock }).eq("id", item.product_id);
+          }
+        }
+        if (item.printed_item_id) {
+          const pItem = printedItems.find((p) => p.id === item.printed_item_id);
+          if (pItem) {
+            const newStock = Math.max(0, Number(pItem.stock_quantity ?? 0) - Number(item.quantity_returned ?? 0));
+            await supabase.from("printed_items").update({ stock_quantity: newStock }).eq("id", item.printed_item_id);
+          }
+        }
+      }
+
+      // 3. Delete from sales_returns (cascades to sales_return_items)
+      const { error: delErr } = await supabase
+        .from("sales_returns")
+        .delete()
+        .eq("id", id);
+
+      if (delErr) throw delErr;
+
+      await fetchData();
+      return { success: true };
+    } catch (err) {
+      console.error("Error deleting sales return:", err);
+      return { success: false, error: err.message || "Failed to delete sales return" };
+    }
+  };
+
   const getCustomerTotalBalance = useCallback((customerId) => {
     if (!customerId) return 0;
     const bagsBalance = orders
@@ -1864,6 +2277,7 @@ export function AppProvider({ children }) {
     printedSales,
     printedPayments,
     supplierReturns,
+    salesReturns,
     isLoading,
     error,
     refreshData: fetchData,
@@ -1895,6 +2309,8 @@ export function AppProvider({ children }) {
     addPrintedSale,
     deletePrintedSale,
     recordPrintedPayment,
+    recordSalesReturn,
+    deleteSalesReturn,
     getCustomerTotalBalance,
   };
 
