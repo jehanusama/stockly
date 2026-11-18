@@ -101,7 +101,7 @@ function CustomerRow({ rank, name, orders, spend, profit, marginPct }) {
 //  Main Component  
 export default function ProfitReport() {
   const navigate = useNavigate();
-  const { orders: mockOrders, products: mockProducts, customers: mockCustomers, categories, isLoading, error, refreshData } = useAppData();
+  const { orders: mockOrders, products: mockProducts, customers: mockCustomers, categories, salesReturns = [], isLoading, error, refreshData } = useAppData();
 
   const [preset, setPreset] = useState("all");
   const [customFrom, setCustomFrom] = useState("");
@@ -208,6 +208,13 @@ export default function ProfitReport() {
     }))
   ), [filteredOrders, mockCustomers, mockProducts]);
 
+  // Returns metrics (all-time, not date-filtered — returns are stored with their own date)
+  const totalReturnsAmount = useMemo(() =>
+    (salesReturns || []).reduce((sum, r) => sum + Number(r.return_amount ?? 0), 0),
+    [salesReturns]
+  );
+  const totalReturnsCount = (salesReturns || []).length;
+
   if (isLoading) {
     return (
       <PageContainer title="Profit Report" subtitle="Financial analytics and profit breakdown across products, categories, and customers.">
@@ -279,6 +286,15 @@ export default function ProfitReport() {
                     <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-app-text-muted)]">Transactions</span>
                     <span className="font-mono text-sm font-semibold text-[var(--color-app-text)]">{filteredOrders.length}</span>
                   </div>
+                  {totalReturnsCount > 0 && (
+                    <div className="flex flex-col">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-app-text-muted)]">Returns</span>
+                      <span className="font-mono text-sm font-semibold text-[var(--color-app-accent)]">
+                        -{formatCurrency(totalReturnsAmount)}
+                        <span className="text-[9px] ml-1 text-[var(--color-app-text-muted)]">({totalReturnsCount})</span>
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

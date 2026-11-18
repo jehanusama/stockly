@@ -520,6 +520,11 @@ export default function SalesByDay({ defaultTab = "daily" }) {
       dayPrintedSales.reduce((s, r) => s + (r.line_profit || 0), 0);
   }, [dayOrders, dayPrintedSales]);
 
+  const dayReturns = useMemo(() => {
+    return dayOrders.reduce((s, r) => s + (r.total_returned_amount || 0), 0) +
+      dayPrintedSales.reduce((s, r) => s + (r.total_returned_amount || 0), 0);
+  }, [dayOrders, dayPrintedSales]);
+
   const dayOrdersCount = dayOrders.length + dayPrintedSales.length;
 
   const customerEntries = useMemo(() => {
@@ -850,17 +855,18 @@ export default function SalesByDay({ defaultTab = "daily" }) {
 
             {/* Day Summary Strip */}
             {dayOrdersCount > 0 && (
-              <div className="grid grid-cols-3 gap-4">
+              <div className={`grid ${dayReturns > 0 ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"} gap-4`}>
                 {[
                   { label: "Revenue", value: formatCurrency(dayRevenue), highlight: false },
                   { label: "Net Profit", value: `+${formatCurrency(dayProfit)}`, highlight: true },
                   { label: "Transactions", value: dayOrdersCount.toString(), highlight: false },
-                ].map(({ label, value, highlight }) => (
+                  ...(dayReturns > 0 ? [{ label: "Returns", value: `-${formatCurrency(dayReturns)}`, highlight: false, isReturn: true }] : []),
+                ].map(({ label, value, highlight, isReturn }) => (
                   <Card key={label} padding="md" className="flex flex-col bg-[var(--color-app-panel)] border-[var(--color-app-border)]">
                     <span className="text-[10px] font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider mb-1">{label}</span>
                     <span className={[
                       "font-mono text-xl font-bold tracking-tight",
-                      highlight ? "text-[var(--color-app-success)]" : "text-[var(--color-app-text)]"
+                      highlight ? "text-[var(--color-app-success)]" : isReturn ? "text-[var(--color-app-warning)]" : "text-[var(--color-app-text)]"
                     ].join(" ")}>
                       {value}
                     </span>
@@ -1155,6 +1161,17 @@ export default function SalesByDay({ defaultTab = "daily" }) {
                                 </div>
                               )}
 
+                              {order.total_returned_amount > 0 && (
+                                <div className="flex items-center justify-between gap-4 pt-1 mt-1 border-t border-dashed border-[var(--color-app-border)]">
+                                  <span className="text-xs font-medium text-[var(--color-app-warning)] uppercase tracking-wider pl-6">
+                                    {order.available_to_return === 0 ? "Fully Returned" : "Returned Items"}
+                                  </span>
+                                  <span className="font-mono text-xs font-semibold text-[var(--color-app-warning)]">
+                                    -{formatCurrency(order.total_returned_amount)}
+                                  </span>
+                                </div>
+                              )}
+
                               <div className="flex items-center justify-end gap-6 shrink-0 pt-2 mt-1 border-t border-[var(--color-app-border)]">
                                 <div className="flex flex-col items-end">
                                   <span className="font-mono text-sm font-semibold text-[var(--color-app-text)]">{formatCurrency(order.final_total)}</span>
@@ -1178,6 +1195,11 @@ export default function SalesByDay({ defaultTab = "daily" }) {
                                 <div className="flex items-center gap-2">
                                   <span className="text-sm font-medium text-[var(--color-app-text)]">{sale.item_name}</span>
                                   <span className="text-[10px] font-semibold uppercase text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 px-1.5 py-0.5 rounded">Printed</span>
+                                  {sale.total_returned_amount > 0 && (
+                                    <span className="text-[10px] font-semibold text-[var(--color-app-warning)] bg-[var(--color-app-warning)]/10 px-1.5 py-0.5 rounded border border-[var(--color-app-warning)]/20">
+                                      Returned: -{formatCurrency(sale.total_returned_amount)}
+                                    </span>
+                                  )}
                                 </div>
                                 <span className="text-xs text-[var(--color-app-text-subtle)] font-mono">
                                   {sale.quantity} × {formatCurrency(sale.sale_price)}

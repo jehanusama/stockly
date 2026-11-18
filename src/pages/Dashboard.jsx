@@ -23,7 +23,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { products: mockProducts = [], customers: mockCustomers = [], orders: mockOrders = [], printedSales = [], isLoading, error, refreshData } = useAppData();
+  const { products: mockProducts = [], customers: mockCustomers = [], orders: mockOrders = [], printedSales = [], salesReturns = [], isLoading, error, refreshData } = useAppData();
 
   const bagsRevenue = useMemo(() => mockOrders.reduce((sum, o) => sum + (o.final_total ?? 0), 0), [mockOrders]);
   const printedRevenue = useMemo(() => (printedSales || []).reduce((sum, s) => sum + (s.line_total ?? 0), 0), [printedSales]);
@@ -36,6 +36,13 @@ export default function Dashboard() {
   const bagsOutstanding = useMemo(() => mockOrders.reduce((sum, o) => sum + (o.balance_due ?? 0), 0), [mockOrders]);
   const printedOutstanding = useMemo(() => (printedSales || []).reduce((sum, s) => sum + (s.balance_due ?? 0), 0), [printedSales]);
   const totalOutstanding = useMemo(() => bagsOutstanding + printedOutstanding, [bagsOutstanding, printedOutstanding]);
+
+  // Returns metrics
+  const totalReturnsAmount = useMemo(() =>
+    (salesReturns || []).reduce((sum, r) => sum + Number(r.return_amount ?? 0), 0),
+    [salesReturns]
+  );
+  const totalReturnsCount = (salesReturns || []).length;
 
   const unpaidCustomers = useMemo(() => {
     const balances = {};
@@ -368,6 +375,18 @@ export default function Dashboard() {
                 Bags: {formatCurrency(bagsOutstanding)} · Printed: {formatCurrency(printedOutstanding)}
               </p>
             </Card>
+
+            {totalReturnsCount > 0 && (
+              <Card padding="lg" className="flex-1 flex flex-col justify-center border-l-4 border-l-[var(--color-app-accent)] bg-[var(--color-app-accent)]/5">
+                <p className="text-xs text-[var(--color-app-text-muted)] uppercase tracking-wider mb-2">Customer Returns</p>
+                <p className="text-2xl font-mono font-bold text-[var(--color-app-accent)]">
+                  {formatCurrency(totalReturnsAmount)}
+                </p>
+                <p className="text-[11px] text-[var(--color-app-text-subtle)] font-mono mt-1">
+                  {totalReturnsCount} return{totalReturnsCount !== 1 ? "s" : ""} processed
+                </p>
+              </Card>
+            )}
 
             <div className="flex gap-4 flex-1">
               <Card padding="lg" className="flex-1 flex flex-col justify-center">
