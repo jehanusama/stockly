@@ -6,6 +6,7 @@ import { useAppData } from "@/context/AppContext";
 import { InvoiceModal, normalizePrintedSale } from "@/components/invoice";
 import { ReturnModal } from "@/components/returns";
 import { EditSaleModal } from "@/components/sales";
+import { useToast } from "@/context/ToastContext";
 
 // Filter Toolbar for Printed Sales
 function FilterToolbar({ filters, onChange, onClear, hasActiveFilters, customers, printedItems }) {
@@ -85,6 +86,7 @@ function FilterToolbar({ filters, onChange, onClear, hasActiveFilters, customers
 
 // Main Component
 export default function PrintedSalesHistory() {
+  const { success, error: toastError } = useToast();
   const {
     printedSales = [],
     customers = [],
@@ -176,8 +178,11 @@ export default function PrintedSalesHistory() {
     const res = await deletePrintedSale(deleteTarget.id);
     setIsDeleting(false);
     if (res && !res.success) {
-      setDeleteError(res.error || "Failed to delete printed sale.");
+      const msg = res.error || "Failed to delete printed sale.";
+      setDeleteError(msg);
+      toastError(msg);
     } else {
+      success("Printed sale deleted");
       setDeleteTarget(null);
     }
   };

@@ -4,6 +4,7 @@ import { Button, Card, Input, Select, Modal, LoadingState, ErrorState, Paginatio
 import { PageContainer } from "@/components/layout/PageContainer";
 import { useAppData } from "@/context/AppContext";
 import { formatCurrency, toEnglishDigits } from "@/utils/currency";
+import { useToast } from "@/context/ToastContext";
 
 function getInitials(name) {
   if (!name) return "?";
@@ -17,6 +18,7 @@ function getInitials(name) {
 export default function Customers() {
   const navigate = useNavigate();
   const { customers, orders, printedSales = [], getCustomerTotalBalance, addCustomer, updateCustomer, deleteCustomer, isLoading, error, refreshData } = useAppData();
+  const { success, error: toastError } = useToast();
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("balance"); // "balance" | "spend" | "name"
   const [currentPage, setCurrentPage] = useState(1);
@@ -130,9 +132,12 @@ export default function Customers() {
       });
       setIsSubmitting(false);
       if (res && !res.success) {
-        setFormError(res.error || "Failed to add customer.");
+        const msg = res.error || "Failed to add customer.";
+        setFormError(msg);
+        toastError(msg);
         return;
       }
+      success("Customer added successfully");
       setIsAddModalOpen(false);
     } else if (isEditModalOpen) {
       const res = await updateCustomer({
@@ -143,9 +148,12 @@ export default function Customers() {
       });
       setIsSubmitting(false);
       if (res && !res.success) {
-        setFormError(res.error || "Failed to update customer.");
+        const msg = res.error || "Failed to update customer.";
+        setFormError(msg);
+        toastError(msg);
         return;
       }
+      success("Customer updated");
       setIsEditModalOpen(false);
     }
     resetForm();
@@ -160,8 +168,11 @@ export default function Customers() {
     setIsDeleting(false);
 
     if (res && !res.success) {
-      setDeleteError(res.error || "Cannot delete customer because they have existing order history.");
+      const msg = res.error || "Cannot delete customer because they have existing order history.";
+      setDeleteError(msg);
+      toastError(msg);
     } else {
+      success("Customer deleted");
       setDeleteTarget(null);
     }
   };

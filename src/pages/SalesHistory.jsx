@@ -6,6 +6,7 @@ import { useAppData } from "@/context/AppContext";
 import { InvoiceModal, normalizeBagsOrder } from "@/components/invoice";
 import { ReturnModal } from "@/components/returns";
 import { EditSaleModal } from "@/components/sales";
+import { useToast } from "@/context/ToastContext";
 
 // Filter Toolbar 
 function FilterToolbar({ filters, onChange, onClear, hasActiveFilters, customers, products, categories }) {
@@ -352,6 +353,7 @@ function SaleDetailModal({ row, products, categories, onClose, onDelete, onOpenI
 // Main Component 
 export default function SalesHistory() {
   const { orders, customers: mockCustomers, products: mockProducts, categories, deleteOrder, isLoading, error, refreshData } = useAppData();
+  const { success, error: toastError } = useToast();
   const [filters, setFilters] = useState({ customerId: "", paymentStatus: "", productId: "", categoryId: "", dateFrom: "", dateTo: "" });
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -602,8 +604,10 @@ export default function SalesHistory() {
     setIsDeleting(false);
     if (res && !res.success) {
       setDeleteError(res.error || "Failed to delete sale.");
+      toastError(res.error || "Failed to delete sale.");
     } else {
       setDeleteTarget(null);
+      success("Sale deleted");
     }
   };
 

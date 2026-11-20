@@ -2,9 +2,11 @@ import { useState, useMemo, useEffect } from "react";
 import { Modal, Button, Input, DatePicker, Select } from "@/components/ui";
 import { formatCurrency, parseNumber, toEnglishDigits } from "@/utils/currency";
 import { useAppData } from "@/context/AppContext";
+import { useToast } from "@/context/ToastContext";
 
 export function EditSaleModal({ isOpen, onClose, sale, type = "bags" }) {
   const { products, categories, printedItems, editOrder, editPrintedSale } = useAppData();
+  const { success, error: toastError } = useToast();
 
   const [orderDate, setOrderDate] = useState("");
   const [notes, setNotes] = useState("");
@@ -204,9 +206,12 @@ export function EditSaleModal({ isOpen, onClose, sale, type = "bags" }) {
 
       setIsSubmitting(false);
       if (res && res.success) {
+        success("Sale updated successfully");
         onClose();
       } else {
-        setErrorMsg(res?.error || "Failed to update sale.");
+        const msg = res?.error || "Failed to update sale.";
+        setErrorMsg(msg);
+        toastError(msg);
       }
     } else {
       // Printed Sale
@@ -243,9 +248,12 @@ export function EditSaleModal({ isOpen, onClose, sale, type = "bags" }) {
 
       setIsSubmitting(false);
       if (res && res.success) {
+        success("Sale updated successfully");
         onClose();
       } else {
-        setErrorMsg(res?.error || "Failed to update printed sale.");
+        const msg = res?.error || "Failed to update printed sale.";
+        setErrorMsg(msg);
+        toastError(msg);
       }
     }
   };

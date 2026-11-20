@@ -7,6 +7,7 @@ import { formatCurrency, parseNumber } from "@/utils/currency";
 import { InvoiceModal, normalizeLedgerTransaction } from "@/components/invoice";
 import { ReturnModal } from "@/components/returns";
 import { EditSaleModal } from "@/components/sales";
+import { useToast } from "@/context/ToastContext";
 
 function getInitials(name) {
   if (!name) return "?";
@@ -20,6 +21,7 @@ function getInitials(name) {
 export default function CustomerDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { success, error: toastError } = useToast();
   const {
     customers: mockCustomers = [],
     orders: mockOrders = [],
@@ -187,11 +189,14 @@ export default function CustomerDetails() {
     setIsSubmitting(false);
 
     if (result.success) {
+      success("Payment recorded successfully");
       setIsPaymentModalOpen(false);
       setPaymentAmount("");
       setPaymentNotes("");
     } else {
-      setModalError(result.error || "Failed to record payment.");
+      const msg = result.error || "Failed to record payment.";
+      setModalError(msg);
+      toastError(msg);
     }
   };
 

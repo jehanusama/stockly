@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button, Card, Input, StockBar, Select, DatePicker, LoadingState, ErrorState, CustomerSelect } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { useAppData } from "@/context/AppContext";
+import { useToast } from "@/context/ToastContext";
 import { formatCurrency, parseNumber, toEnglishDigits } from "@/utils/currency";
 
 
@@ -377,6 +378,7 @@ export default function NewSale() {
   const [searchParams] = useSearchParams();
 
   const { customers: mockCustomers = [], products: mockProducts = [], categories = [], addOrder, isLoading, error, refreshData } = useAppData();
+  const { success, error: toastError, warning } = useToast();
 
   const urlCustomerId = searchParams.get("customer_id") || "";
   const [userSelectedCustomerId, setUserSelectedCustomerId] = useState(null);
@@ -472,7 +474,28 @@ export default function NewSale() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!isFormValid) return;
+
+    if (!customerId) {
+      warning("Please select a customer first.");
+      return;
+    }
+    if (processedCart.length === 0) {
+      warning("Please add at least one product to the sale.");
+      return;
+    }
+    if (!isPaidInputValid) {
+      warning("Amount paid cannot be negative.");
+      return;
+    }
+    const outOfStockItem = processedCart.find(item => !item.hasEnoughStock);
+    if (outOfStockItem) {
+      warning(`Not enough stock for ${outOfStockItem.product?.name || "selected item"}.`);
+      return;
+    }
+    if (!isFormValid) {
+      warning("Please fill in all required fields properly.");
+      return;
+    }
 
     setIsSubmitting(true);
     setSubmitError("");
@@ -498,9 +521,13 @@ export default function NewSale() {
     setIsSubmitting(false);
 
     if (res && !res.success) {
-      setSubmitError(res.error || "Failed to record sale.");
+      const msg = res.error || "Failed to record sale.";
+      setSubmitError(msg);
+      toastError(msg);
       return;
     }
+
+    success("Sale recorded successfully!");
 
     const savedOrder = res.data || {};
     const confirmedCustomer = (mockCustomers || []).find(c => c.id === savedOrder.customer_id) || selectedCustomer;

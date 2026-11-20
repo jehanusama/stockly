@@ -2,9 +2,11 @@ import { useState, useMemo, useEffect } from "react";
 import { Modal, Button, Input, DatePicker } from "@/components/ui";
 import { formatCurrency, parseNumber, toEnglishDigits } from "@/utils/currency";
 import { useAppData } from "@/context/AppContext";
+import { useToast } from "@/context/ToastContext";
 
 export function ReturnModal({ isOpen, onClose, sale, type = "bags" }) {
   const { products, printedItems, recordSalesReturn } = useAppData();
+  const { success, error: toastError } = useToast();
   
   const [returnDate, setReturnDate] = useState(new Date().toISOString().split("T")[0]);
   const [refundMethod, setRefundMethod] = useState("balance_deduction");
@@ -177,10 +179,13 @@ export function ReturnModal({ isOpen, onClose, sale, type = "bags" }) {
     setIsSubmitting(false);
 
     if (res && !res.success) {
-      setErrorMsg(res.error || "Failed to record sales return.");
+      const msg = res.error || "Failed to record sales return.";
+      setErrorMsg(msg);
+      toastError(msg);
       return;
     }
 
+    success("Customer return recorded successfully");
     onClose();
   };
 

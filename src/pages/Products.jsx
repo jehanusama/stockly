@@ -4,9 +4,11 @@ import { Button, Card, Table, Input, Modal, StockBar, Select, LoadingState, Erro
 import { PageContainer } from "@/components/layout/PageContainer";
 import { useAppData } from "@/context/AppContext";
 import { formatCurrency, parseNumber, toEnglishDigits } from "@/utils/currency";
+import { useToast } from "@/context/ToastContext";
 
 function ManageCategoriesModal({ isOpen, onClose }) {
   const { categories, addCategory, updateCategory, deleteCategory } = useAppData();
+  const { success, error: toastError } = useToast();
   const sortedCategories = useMemo(
     () => [...(categories || [])].sort((a, b) => a.name.localeCompare(b.name)),
     [categories]
@@ -28,8 +30,10 @@ function ManageCategoriesModal({ isOpen, onClose }) {
     setIsAdding(false);
     if (res && !res.success) {
       setErrorMsg(res.error || "Failed to add category");
+      toastError(res.error || "Failed to add category");
       return;
     }
+    success("Category added");
     setNewCatName("");
   };
 
@@ -41,9 +45,12 @@ function ManageCategoriesModal({ isOpen, onClose }) {
     const res = await updateCategory({ id: editingId, name: editName.trim() });
     setIsUpdating(false);
     if (res && !res.success) {
-      setErrorMsg(res.error || "Failed to update category");
+      const msg = res.error || "Failed to update category";
+      setErrorMsg(msg);
+      toastError(msg);
       return;
     }
+    success("Category updated");
     setEditingId(null);
     setEditName("");
   };
@@ -54,7 +61,11 @@ function ManageCategoriesModal({ isOpen, onClose }) {
     const res = await deleteCategory(id);
     setDeletingId(null);
     if (res && !res.success) {
-      setErrorMsg(res.error || "Failed to delete category");
+      const msg = res.error || "Failed to delete category";
+      setErrorMsg(msg);
+      toastError(msg);
+    } else {
+      success("Category deleted");
     }
   };
 
@@ -134,6 +145,7 @@ function ManageCategoriesModal({ isOpen, onClose }) {
 
 export default function Products() {
   const navigate = useNavigate();
+  const { success, error: toastError } = useToast();
   const {
     products,
     categories,
@@ -361,9 +373,12 @@ export default function Products() {
     const res = await addProduct(newProduct);
     setIsSubmitting(false);
     if (res && !res.success) {
-      setFormError(res.error || "Failed to add product.");
+      const msg = res.error || "Failed to add product.";
+      setFormError(msg);
+      toastError(msg);
       return;
     }
+    success("Product added successfully");
     setIsAddModalOpen(false);
     resetForms();
   };
@@ -384,9 +399,12 @@ export default function Products() {
     });
     setIsSubmitting(false);
     if (res && !res.success) {
-      setFormError(res.error || "Failed to update product.");
+      const msg = res.error || "Failed to update product.";
+      setFormError(msg);
+      toastError(msg);
       return;
     }
+    success("Product updated");
     setIsEditModalOpen(false);
     resetForms();
   };
@@ -417,9 +435,12 @@ export default function Products() {
 
     setIsSubmitting(false);
     if (res && !res.success) {
-      setFormError(res.error || "Failed to add stock batch.");
+      const msg = res.error || "Failed to add stock batch.";
+      setFormError(msg);
+      toastError(msg);
       return;
     }
+    success("Stock batch added");
     setIsRestockModalOpen(false);
     resetForms();
   };
@@ -454,9 +475,12 @@ export default function Products() {
 
     setIsSubmitting(false);
     if (res && !res.success) {
-      setFormError(res.error || "Failed to update batch.");
+      const msg = res.error || "Failed to update batch.";
+      setFormError(msg);
+      toastError(msg);
       return;
     }
+    success("Batch updated");
     setIsEditBatchOpen(false);
     resetForms();
   };
@@ -485,9 +509,12 @@ export default function Products() {
 
     setIsSubmitting(false);
     if (res && !res.success) {
-      setFormError(res.error || "Failed to return batch stock to factory.");
+      const msg = res.error || "Failed to return batch stock to factory.";
+      setFormError(msg);
+      toastError(msg);
       return;
     }
+    success("Return to supplier recorded");
     setIsFactoryReturnOpen(false);
     resetForms();
   };
@@ -496,7 +523,9 @@ export default function Products() {
     if (!deleteBatchTarget) return;
     const isUntouched = Number(deleteBatchTarget.quantity_remaining) === Number(deleteBatchTarget.quantity_received);
     if (!isUntouched) {
-      setDeleteError("Can't delete — some of this batch has already been sold");
+      const msg = "Can't delete — some of this batch has already been sold";
+      setDeleteError(msg);
+      toastError(msg);
       return;
     }
 
@@ -505,8 +534,11 @@ export default function Products() {
     const res = await deleteBatchFunc(deleteBatchTarget.id);
     setIsDeleting(false);
     if (res && !res.success) {
-      setDeleteError(res.error || "Failed to delete batch.");
+      const msg = res.error || "Failed to delete batch.";
+      setDeleteError(msg);
+      toastError(msg);
     } else {
+      success("Batch deleted");
       setDeleteBatchTarget(null);
     }
   };
@@ -518,8 +550,11 @@ export default function Products() {
     const res = await deleteProduct(deleteTarget.id);
     setIsDeleting(false);
     if (res && !res.success) {
-      setDeleteError(res.error || "Failed to delete product.");
+      const msg = res.error || "Failed to delete product.";
+      setDeleteError(msg);
+      toastError(msg);
     } else {
+      success("Product deleted");
       setDeleteTarget(null);
     }
   };

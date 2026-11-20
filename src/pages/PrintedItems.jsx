@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import { Button, Card, Table, Input, Modal, StockBar, Select, LoadingState, ErrorState, CustomerSelect, DatePicker } from "@/components/ui";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { useAppData } from "@/context/AppContext";
+import { useToast } from "@/context/ToastContext";
 import { formatCurrency, parseNumber, toEnglishDigits } from "@/utils/currency";
 
 const UNIT_OPTIONS = [
@@ -16,6 +17,7 @@ const UNIT_OPTIONS = [
 export default function PrintedItems() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { success, error: toastError } = useToast();
   const {
     printedItems = [],
     customers = [],
@@ -285,9 +287,12 @@ export default function PrintedItems() {
     const res = await addPrintedItem(newItem);
     setIsSubmitting(false);
     if (res && !res.success) {
-      setFormError(res.error || "Failed to add printed item.");
+      const msg = res.error || "Failed to add printed item.";
+      setFormError(msg);
+      toastError(msg);
       return;
     }
+    success("Printed item added successfully");
     setIsAddModalOpen(false);
     resetForms();
   };
@@ -307,9 +312,12 @@ export default function PrintedItems() {
 
     setIsSubmitting(false);
     if (res && !res.success) {
-      setFormError(res.error || "Failed to update printed item.");
+      const msg = res.error || "Failed to update printed item.";
+      setFormError(msg);
+      toastError(msg);
       return;
     }
+    success("Printed item updated");
     setIsEditModalOpen(false);
     resetForms();
   };
@@ -340,9 +348,12 @@ export default function PrintedItems() {
 
     setIsSubmitting(false);
     if (res && !res.success) {
-      setFormError(res.error || "Failed to add stock batch.");
+      const msg = res.error || "Failed to add stock batch.";
+      setFormError(msg);
+      toastError(msg);
       return;
     }
+    success("Stock batch added");
     setIsRestockModalOpen(false);
     resetForms();
   };
@@ -377,9 +388,12 @@ export default function PrintedItems() {
 
     setIsSubmitting(false);
     if (res && !res.success) {
-      setFormError(res.error || "Failed to update batch.");
+      const msg = res.error || "Failed to update batch.";
+      setFormError(msg);
+      toastError(msg);
       return;
     }
+    success("Stock batch updated");
     setIsEditBatchOpen(false);
     resetForms();
   };
@@ -408,9 +422,12 @@ export default function PrintedItems() {
 
     setIsSubmitting(false);
     if (res && !res.success) {
-      setFormError(res.error || "Failed to return printed batch stock to factory.");
+      const msg = res.error || "Failed to return printed batch stock to factory.";
+      setFormError(msg);
+      toastError(msg);
       return;
     }
+    success("Return to supplier recorded");
     setIsFactoryReturnOpen(false);
     resetForms();
   };
@@ -473,10 +490,13 @@ export default function PrintedItems() {
     setIsSubmitting(false);
 
     if (res && !res.success) {
-      setFormError(res.error || "Failed to record printed sale.");
+      const msg = res.error || "Failed to record printed sale.";
+      setFormError(msg);
+      toastError(msg);
       return;
     }
 
+    success("Printed sale recorded successfully");
     closeSaleModal();
   };
 
@@ -484,7 +504,9 @@ export default function PrintedItems() {
     if (!deleteBatchTarget) return;
     const isUntouched = Number(deleteBatchTarget.quantity_remaining) === Number(deleteBatchTarget.quantity_received);
     if (!isUntouched) {
-      setDeleteError("Can't delete — some of this batch has already been sold");
+      const msg = "Can't delete — some of this batch has already been sold";
+      setDeleteError(msg);
+      toastError(msg);
       return;
     }
 
@@ -493,8 +515,11 @@ export default function PrintedItems() {
     const res = await deletePrintedBatch(deleteBatchTarget.id);
     setIsDeleting(false);
     if (res && !res.success) {
-      setDeleteError(res.error || "Failed to delete batch.");
+      const msg = res.error || "Failed to delete batch.";
+      setDeleteError(msg);
+      toastError(msg);
     } else {
+      success("Batch deleted");
       setDeleteBatchTarget(null);
     }
   };
@@ -506,8 +531,11 @@ export default function PrintedItems() {
     const res = await deletePrintedItem(deleteTarget.id);
     setIsDeleting(false);
     if (res && !res.success) {
-      setDeleteError(res.error || "Failed to delete printed item.");
+      const msg = res.error || "Failed to delete printed item.";
+      setDeleteError(msg);
+      toastError(msg);
     } else {
+      success("Printed item deleted");
       setDeleteTarget(null);
     }
   };

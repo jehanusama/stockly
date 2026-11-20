@@ -4,6 +4,7 @@ import { Button, Card, Select, Input, Modal, LoadingState, ErrorState, Paginatio
 import { PageContainer } from "@/components/layout/PageContainer";
 import { useAppData } from "@/context/AppContext";
 import { formatCurrency, parseNumber } from "@/utils/currency";
+import { useToast } from "@/context/ToastContext";
 
 // Helpers
 function getInitials(name) {
@@ -56,6 +57,7 @@ function AgeBadge({ dateStr }) {
 export default function Outstanding() {
   const navigate = useNavigate();
   const { customers, orders, printedSales = [], isLoading, error, refreshData, recordCustomerPayment, addManualOutstanding } = useAppData();
+  const { success, error: toastError } = useToast();
 
   const [sortBy, setSortBy] = useState("balance"); // "balance" | "oldest"
   const [currentPage, setCurrentPage] = useState(1);
@@ -116,8 +118,10 @@ export default function Outstanding() {
     setIsAddSubmitting(false);
 
     if (res && res.success) {
+      success("Outstanding balance added");
       setIsAddOutstandingOpen(false);
     } else {
+      toastError(res?.error || "Failed to add manual outstanding balance.");
       setAddModalError(res?.error || "Failed to add manual outstanding balance.");
     }
   };
@@ -267,8 +271,10 @@ export default function Outstanding() {
     );
     setIsSubmitting(false);
     if (res.success) {
+      success("Payment recorded successfully");
       setPaymentTarget(null);
     } else {
+      toastError(res.error || "Failed to record payment");
       setModalError(res.error || "Failed to record payment.");
     }
   };
