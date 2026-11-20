@@ -1621,12 +1621,22 @@ export function AppProvider({ children }) {
         return { success: false, error: "Invalid payment amount" };
       }
 
-      // Get unpaid orders for this customer, sorted by oldest order_date first
-      const unpaidOrders = orders
-        .filter((o) => o.customer_id === customerId && (o.balance_due ?? 0) > 0)
-        .sort((a, b) => new Date(a.order_date).getTime() - new Date(b.order_date).getTime());
+      // Collect unpaid bags orders for this customer
+      const unpaidBags = orders
+        .filter((o) => o.customer_id === customerId && (o.balance_due ?? 0) >= 0.01)
+        .map((o) => ({ ...o, _type: "bags", _date: o.order_date, _bal: o.balance_due ?? 0 }));
 
-      const totalOutstanding = unpaidOrders.reduce((sum, o) => sum + (o.balance_due ?? 0), 0);
+      // Collect unpaid printed sales for this customer
+      const unpaidPrinted = (printedSales || [])
+        .filter((s) => s.customer_id === customerId && (s.balance_due ?? 0) >= 0.01)
+        .map((s) => ({ ...s, _type: "printed", _date: s.sale_date, _bal: s.balance_due ?? 0 }));
+
+      // Merge and sort FIFO (oldest first) across both types
+      const allUnpaid = [...unpaidBags, ...unpaidPrinted].sort(
+        (a, b) => new Date(a._date).getTime() - new Date(b._date).getTime()
+      );
+
+      const totalOutstanding = allUnpaid.reduce((sum, t) => sum + t._bal, 0);
 
       if (payAmount > totalOutstanding + 0.001) {
         return {
@@ -1636,37 +1646,63 @@ export function AppProvider({ children }) {
       }
 
       let remainingToAllocate = payAmount;
-      const paymentPayloads = [];
+      const bagsPayloads = [];
+      const printedPayloads = [];
+      const pDate = paymentDate || new Date().toISOString().split("T")[0];
+      const pNotes = notes || "FIFO payment allocation";
 
-      for (const order of unpaidOrders) {
+      for (const item of allUnpaid) {
         if (remainingToAllocate <= 0) break;
-        const allocated = Math.min(order.balance_due, remainingToAllocate);
+        const allocated = Math.min(item._bal, remainingToAllocate);
         remainingToAllocate -= allocated;
 
-        paymentPayloads.push({
-          order_id: order.id,
-          customer_id: customerId,
-          amount: Number(allocated.toFixed(2)),
-          payment_date: paymentDate || new Date().toISOString().split("T")[0],
-          notes: notes || "FIFO payment allocation",
-        });
+        if (item._type === "bags") {
+          bagsPayloads.push({
+            order_id: item.id,
+            customer_id: customerId,
+            amount: Number(allocated.toFixed(2)),
+            payment_date: pDate,
+            notes: pNotes,
+          });
+        } else {
+          printedPayloads.push({
+            printed_sale_id: item.id,
+            customer_id: customerId,
+            amount: Number(allocated.toFixed(2)),
+            payment_date: pDate,
+            notes: pNotes,
+          });
+        }
       }
 
-      if (paymentPayloads.length === 0) {
+      if (bagsPayloads.length === 0 && printedPayloads.length === 0) {
         return { success: false, error: "No unpaid orders found to apply payment to." };
       }
 
-      const { data, error: payErr } = await supabase
-        .from("payments")
-        .insert(paymentPayloads)
-        .select();
+      let insertedData = [];
 
-      if (payErr) throw payErr;
+      if (bagsPayloads.length > 0) {
+        const { data: bagsData, error: bagsErr } = await supabase
+          .from("payments")
+          .insert(bagsPayloads)
+          .select();
+        if (bagsErr) throw bagsErr;
+        insertedData = [...insertedData, ...(bagsData || [])];
+      }
 
-      // Refetch full state to update order balance_due & amount_paid
+      if (printedPayloads.length > 0) {
+        const { data: printedData, error: printedErr } = await supabase
+          .from("printed_payments")
+          .insert(printedPayloads)
+          .select();
+        if (printedErr) throw printedErr;
+        insertedData = [...insertedData, ...(printedData || [])];
+      }
+
+      // Refetch full state to update balance_due on both order types
       await fetchData();
 
-      return { success: true, data };
+      return { success: true, data: insertedData };
     } catch (err) {
       console.error("Error recording customer payment:", err);
       return { success: false, error: err.message || "Failed to record payment" };

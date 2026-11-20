@@ -614,7 +614,7 @@ export default function Outstanding() {
                         Order #{order.id}
                       </span>
                       <span className="text-[10px] text-[var(--color-app-text-subtle)]">
-                        {new Date(order.order_date).toLocaleDateString(undefined, {
+                        {new Date(order.date).toLocaleDateString(undefined, {
                           month: "short",
                           day: "numeric",
                           year: "numeric",
