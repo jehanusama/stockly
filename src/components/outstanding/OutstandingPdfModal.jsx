@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
-import { toPng, toBlob } from "html-to-image";
+import { toPng } from "html-to-image";
+import { jsPDF } from "jspdf";
 import { Modal, Button } from "@/components/ui";
 import { formatCurrency } from "@/utils/currency";
 import { useToast } from "@/context/ToastContext";
@@ -19,6 +20,7 @@ export function OutstandingPdfModal({
 }) {
   const sheetRef = useRef(null);
   const [isExportingImage, setIsExportingImage] = useState(false);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
   const { success, error: toastError } = useToast();
 
   if (!isOpen) return null;
@@ -33,6 +35,64 @@ export function OutstandingPdfModal({
     (c) => daysSince(c.oldestUnpaidDate) >= 30
   ).length;
 
+  const handleDownloadPdf = async () => {
+    if (!sheetRef.current) return;
+    setIsExportingPdf(true);
+    try {
+      if (document.fonts?.ready) {
+        await document.fonts.ready;
+      }
+
+      const element = sheetRef.current;
+      const dataUrl = await toPng(element, {
+        pixelRatio: 2,
+        backgroundColor: "#ffffff",
+        cacheBust: true,
+      });
+
+      const img = new Image();
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+        img.src = dataUrl;
+      });
+
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+      });
+
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 10;
+      const imgWidth = pageWidth - margin * 2;
+      const imgHeight = (img.height * imgWidth) / img.width;
+      const usablePageHeight = pageHeight - margin * 2;
+
+      let heightLeft = imgHeight;
+      let position = margin;
+
+      pdf.addImage(dataUrl, "PNG", margin, position, imgWidth, imgHeight);
+      heightLeft -= usablePageHeight;
+
+      while (heightLeft > 0) {
+        position = margin - (imgHeight - heightLeft);
+        pdf.addPage();
+        pdf.addImage(dataUrl, "PNG", margin, position, imgWidth, imgHeight);
+        heightLeft -= usablePageHeight;
+      }
+
+      pdf.save(`outstanding_report_${isoDate}.pdf`);
+      success("PDF downloaded successfully");
+    } catch (err) {
+      console.error("Error generating PDF:", err);
+      toastError("Failed to generate PDF file.");
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
+
   const handlePrint = () => {
     window.print();
   };
@@ -46,32 +106,6 @@ export function OutstandingPdfModal({
       }
 
       const filename = `outstanding_report_${isoDate}.png`;
-      const blob = await toBlob(sheetRef.current, {
-        pixelRatio: 2.5,
-        backgroundColor: "#ffffff",
-        cacheBust: true,
-      });
-
-      if (!blob) throw new Error("Could not generate image");
-
-      const file = new File([blob], filename, { type: "image/png" });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        try {
-          await navigator.share({
-            files: [file],
-            title: `Outstanding Report - ${todayStr}`,
-            text: `Total Outstanding: ${formatCurrency(totalOutstanding)}`,
-          });
-          setIsExportingImage(false);
-          return;
-        } catch (shareErr) {
-          if (shareErr.name === "AbortError") {
-            setIsExportingImage(false);
-            return;
-          }
-        }
-      }
-
       const dataUrl = await toPng(sheetRef.current, {
         pixelRatio: 2.5,
         backgroundColor: "#ffffff",
@@ -80,11 +114,13 @@ export function OutstandingPdfModal({
       const link = document.createElement("a");
       link.download = filename;
       link.href = dataUrl;
+      document.body.appendChild(link);
       link.click();
-      success("Image saved successfully");
+      document.body.removeChild(link);
+      success("Image downloaded successfully");
     } catch (err) {
       console.error("Error exporting outstanding image:", err);
-      toastError("Failed to generate image. Please use Print / Save as PDF.");
+      toastError("Failed to generate image. Please try Download PDF.");
     } finally {
       setIsExportingImage(false);
     }
@@ -122,10 +158,10 @@ export function OutstandingPdfModal({
       </Button>
 
       <Button
-        variant="primary"
+        variant="secondary"
         size="md"
         onClick={handlePrint}
-        className="flex items-center gap-2"
+        className="hidden sm:flex items-center gap-2"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -142,7 +178,32 @@ export function OutstandingPdfModal({
           <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
           <rect width="12" height="8" x="6" y="14" />
         </svg>
-        Print / Save as PDF
+        Print
+      </Button>
+
+      <Button
+        variant="primary"
+        size="md"
+        loading={isExportingPdf}
+        onClick={handleDownloadPdf}
+        className="flex items-center gap-2"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="15"
+          height="15"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <polyline points="7 10 12 15 17 10" />
+          <line x1="12" y1="15" x2="12" y2="3" />
+        </svg>
+        Download PDF
       </Button>
     </div>
   );
