@@ -31,11 +31,12 @@ function getInitials(name = "") {
 
 // CSV export 
 function exportCSV(rows, filename) {
-  const header = "Date,Customer,Product,Qty,Sale Price,Total,Profit\n";
+  const header = "Type,Date,Customer,Product,Qty,Sale Price,Total,Profit\n";
   const body = rows.map(r => {
+    const type = `"${r.type ?? "Bags"}"`;
     const cust = `"${(r.customerName ?? "—").replace(/"/g, '""')}"`;
     const prod = `"${(r.productName ?? "—").replace(/"/g, '""')}"`;
-    return `${r.date},${cust},${prod},${r.quantity},${r.sale_price},${r.line_total},${r.line_profit}`;
+    return `${type},${r.date},${cust},${prod},${r.quantity},${r.sale_price},${r.line_total},${r.line_profit}`;
   }).join("\n");
   const blob = new Blob([header + body], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
@@ -101,7 +102,18 @@ function CustomerRow({ rank, name, orders, spend, profit, marginPct }) {
 //  Main Component  
 export default function ProfitReport() {
   const navigate = useNavigate();
-  const { orders: mockOrders, products: mockProducts, customers: mockCustomers, categories, salesReturns = [], isLoading, error, refreshData } = useAppData();
+  const {
+    orders: mockOrders,
+    products: mockProducts,
+    customers: mockCustomers,
+    categories,
+    printedSales = [],
+    printedItems = [],
+    salesReturns = [],
+    isLoading,
+    error,
+    refreshData,
+  } = useAppData();
 
   const [preset, setPreset] = useState("all");
   const [customFrom, setCustomFrom] = useState("");
@@ -122,14 +134,24 @@ export default function ProfitReport() {
     });
   }, [mockOrders, from, to]);
 
-  // By-Product aggregation (proportional profit tracking)
+  // Filter printed sales by date range
+  const filteredPrintedSales = useMemo(() => {
+    return (printedSales || []).filter(sale => {
+      const d = new Date(sale.sale_date);
+      if (from && d < new Date(from)) return false;
+      if (to && d > new Date(to + "T23:59:59Z")) return false;
+      return true;
+    });
+  }, [printedSales, from, to]);
+
+  // By-Product aggregation (Bags + Printed combined)
   const byProduct = useMemo(() => {
     const map = {};
     filteredOrders.forEach(order => {
       const orderDiscount = order.discount_type !== "none" ? order.subtotal - order.final_total : 0;
       
       order.items.forEach(item => {
-        if (!map[item.product_id]) map[item.product_id] = { profit: 0, revenue: 0, qty: 0 };
+        if (!map[item.product_id]) map[item.product_id] = { profit: 0, revenue: 0, qty: 0, isPrinted: false };
         
         const proportion = order.subtotal > 0 ? (item.line_total / order.subtotal) : 0;
         const itemDiscount = orderDiscount * proportion;
@@ -142,33 +164,62 @@ export default function ProfitReport() {
         map[item.product_id].qty += item.quantity;
       });
     });
+
+    filteredPrintedSales.forEach(sale => {
+      const key = `printed_${sale.printed_item_id}`;
+      if (!map[key]) {
+        const pi = printedItems.find(p => p.id === sale.printed_item_id);
+        map[key] = {
+          profit: 0,
+          revenue: 0,
+          qty: 0,
+          isPrinted: true,
+          printedName: `${pi?.name ?? "Printed Item"} (Printed)`,
+        };
+      }
+      map[key].profit += Number(sale.line_profit ?? 0);
+      map[key].revenue += Number(sale.line_total ?? 0);
+      map[key].qty += Number(sale.quantity ?? 0);
+    });
+
     return Object.entries(map)
       .map(([id, v]) => {
+        if (v.isPrinted) {
+          return { id, name: v.printedName, ...v };
+        }
         const product = mockProducts.find(p => p.id === id);
         return { id, name: product?.name ?? "Unknown", ...v };
       })
       .sort((a, b) => b.profit - a.profit);
-  }, [filteredOrders, mockProducts]);
+  }, [filteredOrders, filteredPrintedSales, mockProducts, printedItems]);
 
-  // By-Customer aggregation
+  // By-Customer aggregation (Bags + Printed combined)
   const byCustomer = useMemo(() => {
     const map = {};
     filteredOrders.forEach(o => {
+      if (!o.customer_id) return;
       if (!map[o.customer_id]) map[o.customer_id] = { profit: 0, spend: 0, orders: 0 };
       map[o.customer_id].profit += o.final_profit;
       map[o.customer_id].spend += o.final_total;
       map[o.customer_id].orders += 1;
     });
+    filteredPrintedSales.forEach(s => {
+      const cid = s.customer_id || "__walkin__";
+      if (!map[cid]) map[cid] = { profit: 0, spend: 0, orders: 0 };
+      map[cid].profit += Number(s.line_profit ?? 0);
+      map[cid].spend += Number(s.line_total ?? 0);
+      map[cid].orders += 1;
+    });
     return Object.entries(map)
       .map(([id, v]) => {
-        const customer = mockCustomers.find(c => c.id === id);
+        const customer = id === "__walkin__" ? { name: "Walk-in Customer" } : mockCustomers.find(c => c.id === id);
         const marginPct = v.spend > 0 ? ((v.profit / v.spend) * 100).toFixed(0) : "0";
         return { id, name: customer?.name ?? "Unknown", marginPct, ...v };
       })
       .sort((a, b) => b.profit - a.profit);
-  }, [filteredOrders, mockCustomers]);
+  }, [filteredOrders, filteredPrintedSales, mockCustomers]);
 
-  // By-Category aggregation
+  // By-Category aggregation (Bags + Printed Items)
   const byCategory = useMemo(() => {
     const map = {};
     filteredOrders.forEach(order => {
@@ -184,29 +235,61 @@ export default function ProfitReport() {
         map[catId].qty += item.quantity;
       });
     });
+
+    if (filteredPrintedSales.length > 0) {
+      map["__printed__"] = { profit: 0, revenue: 0, qty: 0 };
+      filteredPrintedSales.forEach(s => {
+        map["__printed__"].profit += Number(s.line_profit ?? 0);
+        map["__printed__"].revenue += Number(s.line_total ?? 0);
+        map["__printed__"].qty += Number(s.quantity ?? 0);
+      });
+    }
+
     return Object.entries(map)
       .map(([id, v]) => {
-        const cat = id === "__uncategorised__" ? { name: "Uncategorised" } : categories.find(c => c.id === id);
+        const cat =
+          id === "__printed__"
+            ? { name: "Printed Items" }
+            : id === "__uncategorised__"
+            ? { name: "Uncategorised" }
+            : categories.find(c => c.id === id);
         return { id, name: cat?.name ?? "Unknown", ...v };
       })
       .sort((a, b) => b.profit - a.profit);
-  }, [filteredOrders, mockProducts, categories]);
+  }, [filteredOrders, filteredPrintedSales, mockProducts, categories]);
 
-  // CSV rows (flatten items)
-  const csvRows = useMemo(() => filteredOrders.flatMap(o => 
-    o.items.map(item => ({
-      order_id: o.id,
-      date: new Date(o.order_date).toLocaleDateString("en-GB"),
-      customerName: mockCustomers.find(c => c.id === o.customer_id)?.name ?? "—",
-      productName: mockProducts.find(p => p.id === item.product_id)?.name ?? "—",
-      quantity: item.quantity,
-      sale_price: item.sale_price,
-      line_total: item.line_total,
-      line_profit: item.line_profit,
-      order_discount_type: o.discount_type,
-      order_discount_value: o.discount_value
-    }))
-  ), [filteredOrders, mockCustomers, mockProducts]);
+  // CSV rows (flatten bags items + printed sales)
+  const csvRows = useMemo(() => {
+    const bagsRows = filteredOrders.flatMap(o =>
+      o.items.map(item => ({
+        type: "Bags",
+        order_id: o.id,
+        date: new Date(o.order_date).toLocaleDateString("en-GB"),
+        customerName: mockCustomers.find(c => c.id === o.customer_id)?.name ?? "—",
+        productName: mockProducts.find(p => p.id === item.product_id)?.name ?? "—",
+        quantity: item.quantity,
+        sale_price: item.sale_price,
+        line_total: item.line_total,
+        line_profit: item.line_profit,
+        order_discount_type: o.discount_type,
+        order_discount_value: o.discount_value
+      }))
+    );
+
+    const printedRows = filteredPrintedSales.map(s => ({
+      type: "Printed",
+      order_id: s.id,
+      date: new Date(s.sale_date).toLocaleDateString("en-GB"),
+      customerName: mockCustomers.find(c => c.id === s.customer_id)?.name ?? "Walk-in",
+      productName: printedItems.find(p => p.id === s.printed_item_id)?.name ?? "Printed Item",
+      quantity: s.quantity,
+      sale_price: s.sale_price,
+      line_total: s.line_total,
+      line_profit: s.line_profit,
+    }));
+
+    return [...bagsRows, ...printedRows];
+  }, [filteredOrders, filteredPrintedSales, mockCustomers, mockProducts, printedItems]);
 
   // Returns metrics (all-time, not date-filtered — returns are stored with their own date)
   const totalReturnsAmount = useMemo(() =>
@@ -231,12 +314,18 @@ export default function ProfitReport() {
     );
   }
 
-  const hasData = filteredOrders.length > 0;
+  const hasData = filteredOrders.length > 0 || filteredPrintedSales.length > 0;
 
-  // Hero metrics
-  const totalRevenue = filteredOrders.reduce((s, o) => s + o.final_total, 0);
-  const totalProfit = filteredOrders.reduce((s, o) => s + o.final_profit, 0);
+  // Hero metrics (Bags + Printed combined)
+  const bagsRevenue = filteredOrders.reduce((s, o) => s + o.final_total, 0);
+  const bagsProfit = filteredOrders.reduce((s, o) => s + o.final_profit, 0);
+  const printedRevenue = filteredPrintedSales.reduce((s, p) => s + Number(p.line_total ?? 0), 0);
+  const printedProfit = filteredPrintedSales.reduce((s, p) => s + Number(p.line_profit ?? 0), 0);
+
+  const totalRevenue = bagsRevenue + printedRevenue;
+  const totalProfit = bagsProfit + printedProfit;
   const totalCost = totalRevenue - totalProfit;
+  const totalTransactions = filteredOrders.length + filteredPrintedSales.length;
   const overallMargin = totalRevenue > 0 ? ((totalProfit / totalRevenue) * 100).toFixed(1) : "0.0";
 
   const maxProductProfit = byProduct[0]?.profit ?? 0;
@@ -273,7 +362,7 @@ export default function ProfitReport() {
 
               {/* Secondary metrics */}
               {hasData && (
-                <div className="flex items-center gap-6 mt-1">
+                <div className="flex flex-wrap items-center gap-6 mt-1">
                   <div className="flex flex-col">
                     <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-app-text-muted)]">Revenue</span>
                     <span className="font-mono text-sm font-semibold text-[var(--color-app-text)]">{formatCurrency(totalRevenue)}</span>
@@ -284,7 +373,13 @@ export default function ProfitReport() {
                   </div>
                   <div className="flex flex-col">
                     <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-app-text-muted)]">Transactions</span>
-                    <span className="font-mono text-sm font-semibold text-[var(--color-app-text)]">{filteredOrders.length}</span>
+                    <span className="font-mono text-sm font-semibold text-[var(--color-app-text)]">{totalTransactions}</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-app-text-muted)]">Bags / Printed Profit</span>
+                    <span className="font-mono text-xs font-semibold text-[var(--color-app-text-muted)]">
+                      {formatCurrency(bagsProfit)} / {formatCurrency(printedProfit)}
+                    </span>
                   </div>
                   {totalReturnsCount > 0 && (
                     <div className="flex flex-col">
