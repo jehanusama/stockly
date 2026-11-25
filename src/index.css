@@ -92,13 +92,16 @@ body {
     print-color-adjust: exact !important;
   }
 
-  /* Isolate invoice sheet */
+  /* Isolate invoice or outstanding report sheet */
   #stockly-invoice-sheet,
-  #stockly-invoice-sheet * {
+  #stockly-invoice-sheet *,
+  #stockly-outstanding-sheet,
+  #stockly-outstanding-sheet * {
     visibility: visible !important;
   }
 
-  #stockly-invoice-sheet {
+  #stockly-invoice-sheet,
+  #stockly-outstanding-sheet {
     position: absolute !important;
     left: 0 !important;
     top: 0 !important;
