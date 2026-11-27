@@ -29,6 +29,10 @@ export default function CustomerDetails() {
     printedItems = [],
     products: mockProducts = [],
     getCustomerTotalBalance,
+    customerDeposits = [],
+    getCustomerDepositBalance,
+    addCustomerDeposit,
+    deleteCustomerDeposit,
     isLoading,
     error,
     refreshData,
@@ -42,6 +46,14 @@ export default function CustomerDetails() {
   const [paymentNotes, setPaymentNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [modalError, setModalError] = useState("");
+
+  // Deposit Modal state
+  const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
+  const [depositAmount, setDepositAmount] = useState("");
+  const [depositDate, setDepositDate] = useState(new Date().toISOString().split("T")[0]);
+  const [depositNotes, setDepositNotes] = useState("");
+  const [isDepositSubmitting, setIsDepositSubmitting] = useState(false);
+  const [depositError, setDepositError] = useState("");
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -161,6 +173,63 @@ export default function CustomerDetails() {
     return allocations;
   }, [paymentAmount, oldestUnpaidTransactions]);
 
+  const availableDeposit = useMemo(
+    () => getCustomerDepositBalance(id),
+    [getCustomerDepositBalance, id]
+  );
+
+  const thisCustomerDeposits = useMemo(
+    () => (customerDeposits || []).filter((d) => d.customer_id === id),
+    [customerDeposits, id]
+  );
+
+  const handleOpenDepositModal = () => {
+    setDepositAmount("");
+    setDepositDate(new Date().toISOString().split("T")[0]);
+    setDepositNotes("");
+    setDepositError("");
+    setIsDepositModalOpen(true);
+  };
+
+  const handleRecordDepositSubmit = async (e) => {
+    e.preventDefault();
+    setDepositError("");
+    const amtNum = parseNumber(depositAmount);
+    if (isNaN(amtNum) || amtNum <= 0) {
+      setDepositError("Please enter a valid deposit amount greater than 0.");
+      return;
+    }
+
+    setIsDepositSubmitting(true);
+    const res = await addCustomerDeposit({
+      customer_id: customer.id,
+      amount: amtNum,
+      deposit_date: depositDate,
+      notes: depositNotes,
+    });
+    setIsDepositSubmitting(false);
+
+    if (res && res.success) {
+      success("Deposit recorded successfully");
+      setIsDepositModalOpen(false);
+      setDepositAmount("");
+      setDepositNotes("");
+    } else {
+      const msg = res?.error || "Failed to record deposit.";
+      setDepositError(msg);
+      toastError(msg);
+    }
+  };
+
+  const handleDeleteDeposit = async (depId) => {
+    const res = await deleteCustomerDeposit(depId);
+    if (res && res.success) {
+      success("Deposit deleted");
+    } else {
+      toastError(res?.error || "Failed to delete deposit.");
+    }
+  };
+
   const handleOpenPaymentModal = () => {
     setPaymentAmount(totalOutstandingBalance > 0 ? String(totalOutstandingBalance) : "");
     setPaymentDate(new Date().toISOString().split("T")[0]);
@@ -245,7 +314,10 @@ export default function CustomerDetails() {
         </div>
       }
       actions={
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="secondary" onClick={handleOpenDepositModal}>
+            + Record Deposit
+          </Button>
           {totalOutstandingBalance > 0 && (
             <Button variant="secondary" onClick={handleOpenPaymentModal}>
               💳 Record Payment
@@ -291,6 +363,12 @@ export default function CustomerDetails() {
               </span>
             </div>
             <div className="flex flex-col">
+              <span className="text-[10px] font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider mb-1">Deposit Credit</span>
+              <span className={`text-2xl sm:text-3xl font-mono font-bold tracking-tight ${availableDeposit > 0 ? "text-[var(--color-app-success)]" : "text-[var(--color-app-text-subtle)]"}`}>
+                {formatCurrency(availableDeposit)}
+              </span>
+            </div>
+            <div className="flex flex-col">
               <span className="text-[10px] font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider mb-1">Lifetime Spend</span>
               <span className="text-2xl sm:text-3xl font-mono font-bold text-[var(--color-app-text)] tracking-tight">
                 {formatCurrency(lifetimeSpend)}
@@ -308,6 +386,82 @@ export default function CustomerDetails() {
             </div>
           </div>
         </Card>
+
+        {/* ── Advance Deposits Section ── */}
+        {thisCustomerDeposits.length > 0 && (
+          <div>
+            <div className="flex items-center justify-between mb-3 px-1">
+              <h2 className="text-lg font-semibold text-[var(--color-app-text)] tracking-tight">
+                Advance Deposits
+              </h2>
+              <span className="text-xs font-mono font-semibold text-[var(--color-app-success)]">
+                Available: {formatCurrency(availableDeposit)}
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {thisCustomerDeposits.map((dep) => {
+                const isExhausted = dep.amount_remaining <= 0.001;
+                const isUntouched = dep.amount_used <= 0.001;
+                return (
+                  <Card
+                    key={dep.id}
+                    padding="md"
+                    className={`flex flex-col justify-between gap-3 ${
+                      isExhausted
+                        ? "opacity-65 border-[var(--color-app-border)] bg-[var(--color-app-panel)]"
+                        : "border-[var(--color-app-success)]/40 bg-[var(--color-app-success)]/[0.03]"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-app-text-muted)]">
+                          {new Date(dep.deposit_date).toLocaleDateString("en-GB", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </span>
+                        <div className="text-lg font-mono font-bold text-[var(--color-app-text)]">
+                          {formatCurrency(dep.amount)}
+                        </div>
+                      </div>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold border ${
+                          isExhausted
+                            ? "bg-[var(--color-app-elevated)] text-[var(--color-app-text-muted)] border-[var(--color-app-border)]"
+                            : "bg-[var(--color-app-success)]/15 text-[var(--color-app-success)] border-[var(--color-app-success)]/30"
+                        }`}
+                      >
+                        {isExhausted ? "Fully Used" : `${formatCurrency(dep.amount_remaining)} left`}
+                      </span>
+                    </div>
+
+                    {dep.notes && (
+                      <p className="text-xs text-[var(--color-app-text-muted)] italic line-clamp-2">
+                        "{dep.notes}"
+                      </p>
+                    )}
+
+                    <div className="flex items-center justify-between pt-2 border-t border-[var(--color-app-border)] text-xs">
+                      <span className="font-mono text-[var(--color-app-text-subtle)]">
+                        Used: {formatCurrency(dep.amount_used)}
+                      </span>
+                      {isUntouched && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteDeposit(dep.id)}
+                          className="text-[var(--color-app-danger)] hover:underline font-medium"
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* ── Unified Transaction Ledger ── */}
         <div>
@@ -616,6 +770,78 @@ export default function CustomerDetails() {
         sale={editSaleModal?.raw}
         type={editSaleModal?.type}
       />
+
+      {/* Record Deposit Modal */}
+      <Modal
+        isOpen={isDepositModalOpen}
+        onClose={() => setIsDepositModalOpen(false)}
+        title={`Record Advance Deposit — ${customer.name}`}
+      >
+        <form onSubmit={handleRecordDepositSubmit} className="flex flex-col gap-5">
+          {depositError && (
+            <div className="px-4 py-3 rounded-lg bg-[var(--color-app-danger-muted)] text-[var(--color-app-danger)] text-sm font-medium border border-[var(--color-app-danger)]">
+              {depositError}
+            </div>
+          )}
+
+          <div className="p-3.5 rounded-xl bg-[var(--color-app-elevated)] border border-[var(--color-app-border)] flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-app-text-muted)]">
+              Current Deposit Credit
+            </span>
+            <span className="text-lg font-mono font-bold text-[var(--color-app-success)]">
+              {formatCurrency(availableDeposit)}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="Deposit Amount (EGP)"
+              type="number"
+              min="0.01"
+              step="any"
+              value={depositAmount}
+              onChange={(e) => setDepositAmount(e.target.value)}
+              placeholder="0.00"
+              required
+              autoFocus
+            />
+
+            <DatePicker
+              label="Deposit Date"
+              value={depositDate}
+              onChange={(iso) => setDepositDate(iso)}
+              required
+            />
+          </div>
+
+          <Input
+            label="Notes (Optional)"
+            type="text"
+            value={depositNotes}
+            onChange={(e) => setDepositNotes(e.target.value)}
+            placeholder="e.g. Advance for next printed bags order..."
+          />
+
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-[var(--color-app-border)]">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setIsDepositModalOpen(false)}
+              disabled={isDepositSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              loading={isDepositSubmitting}
+              disabled={!depositAmount || parseNumber(depositAmount) <= 0}
+            >
+              Save Deposit
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </PageContainer>
   );
 }

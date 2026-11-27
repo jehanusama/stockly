@@ -377,7 +377,7 @@ export default function NewSale() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  const { customers: mockCustomers = [], products: mockProducts = [], categories = [], addOrder, isLoading, error, refreshData } = useAppData();
+  const { customers: mockCustomers = [], products: mockProducts = [], categories = [], getCustomerDepositBalance, addOrder, isLoading, error, refreshData } = useAppData();
   const { success, error: toastError, warning } = useToast();
 
   const urlCustomerId = searchParams.get("customer_id") || "";
@@ -393,6 +393,7 @@ export default function NewSale() {
   const [cart, setCart] = useState([]);
   const [discountType, setDiscountType] = useState("none");
   const [discountValue, setDiscountValue] = useState("");
+  const [depositAppliedInput, setDepositAppliedInput] = useState("");
   const [amountPaidInput, setAmountPaidInput] = useState("");
   const [isSuccess, setIsSuccess] = useState(false);
   const [lastSale, setLastSale] = useState(null);
@@ -452,19 +453,32 @@ export default function NewSale() {
   const finalProfit = finalTotal - totalCost;
   const finalMargin = finalTotal > 0 ? ((finalProfit / finalTotal) * 100).toFixed(0) : 0;
 
-  const effectiveAmountPaid = amountPaidInput !== "" ? parseNumber(amountPaidInput) : finalTotal;
+  const availableDeposit = useMemo(() => {
+    if (!customerId || !getCustomerDepositBalance) return 0;
+    return getCustomerDepositBalance(customerId);
+  }, [customerId, getCustomerDepositBalance]);
+
+  const maxDepositApplicable = Math.min(availableDeposit, finalTotal);
+  const numDepositApplied = Math.min(
+    Math.max(0, parseNumber(depositAppliedInput) || 0),
+    maxDepositApplicable
+  );
+  const billAfterDeposit = Math.max(0, finalTotal - numDepositApplied);
+
+  const effectiveAmountPaid = amountPaidInput !== "" ? parseNumber(amountPaidInput) : billAfterDeposit;
   const isPaidInputValid = effectiveAmountPaid >= 0;
-  const balanceDue = Math.max(0, finalTotal - effectiveAmountPaid);
+  const balanceDue = Math.max(0, billAfterDeposit - effectiveAmountPaid);
+  const totalPaidTowardsOrder = numDepositApplied + effectiveAmountPaid;
 
   const paymentBadge = useMemo(() => {
-    if (effectiveAmountPaid >= finalTotal && finalTotal > 0) {
+    if (totalPaidTowardsOrder >= finalTotal && finalTotal > 0) {
       return { label: "Fully Paid", style: "bg-[var(--color-app-success)]/10 text-[var(--color-app-success)] border-[var(--color-app-success)]/30" };
     }
-    if (effectiveAmountPaid > 0) {
+    if (totalPaidTowardsOrder > 0) {
       return { label: "Partially Paid", style: "bg-[var(--color-app-accent)]/10 text-[var(--color-app-accent)] border-[var(--color-app-accent)]/30" };
     }
     return { label: "Fully on Credit", style: "bg-[var(--color-app-warning)]/10 text-[var(--color-app-warning)] border-[var(--color-app-warning)]/30" };
-  }, [effectiveAmountPaid, finalTotal]);
+  }, [totalPaidTowardsOrder, finalTotal]);
 
   const isFormValid =
     customerId !== "" &&
@@ -508,6 +522,7 @@ export default function NewSale() {
       subtotal: totalRevenue,
       final_total: finalTotal,
       final_profit: finalProfit,
+      deposit_amount_applied: numDepositApplied,
       amount_paid_now: effectiveAmountPaid,
       items: processedCart.map(item => ({
         product_id: item.productId,
@@ -550,6 +565,7 @@ export default function NewSale() {
       discountAmount: confirmedDiscountAmount,
       finalTotal: confirmedFinalTotal,
       finalProfit: confirmedProfit,
+      depositApplied: numDepositApplied,
       amountPaidNow: effectiveAmountPaid,
       balanceDue,
       paymentBadge,
@@ -563,6 +579,7 @@ export default function NewSale() {
     setCart([]);
     setDiscountType("none");
     setDiscountValue("");
+    setDepositAppliedInput("");
     setAmountPaidInput("");
     setIsSuccess(false);
     setLastSale(null);
@@ -622,6 +639,12 @@ export default function NewSale() {
                 <span className="text-xs font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider">Total</span>
                 <span className="font-mono text-xl font-bold text-[var(--color-app-text)]">{formatCurrency(lastSale.finalTotal)}</span>
               </div>
+              {lastSale.depositApplied > 0 && (
+                <div className="flex justify-between items-center pb-2 border-b border-dashed border-[var(--color-app-border)]">
+                  <span className="text-xs font-semibold text-[var(--color-app-accent)] uppercase tracking-wider">Deposit Credit Used</span>
+                  <span className="font-mono text-sm font-semibold text-[var(--color-app-accent)]">-{formatCurrency(lastSale.depositApplied)}</span>
+                </div>
+              )}
               <div className="flex justify-between items-center pb-2 border-b border-dashed border-[var(--color-app-border)]">
                 <span className="text-xs font-semibold text-[var(--color-app-text-muted)] uppercase tracking-wider">Paid Now</span>
                 <span className="font-mono text-base font-semibold text-[var(--color-app-success)]">{formatCurrency(lastSale.amountPaidNow)}</span>
@@ -672,7 +695,10 @@ export default function NewSale() {
                 <CustomerSelect
                   label="Customer"
                   value={customerId}
-                  onChange={(val) => setCustomerId(val)}
+                  onChange={(val) => {
+                    setCustomerId(val);
+                    setDepositAppliedInput("");
+                  }}
                   customers={mockCustomers}
                   required
                   placeholder="Search by name or phone..."
@@ -886,6 +912,59 @@ export default function NewSale() {
                     )}
                   </div>
 
+                  {/* Customer Deposit Credit Option */}
+                  {availableDeposit > 0 && (
+                    <div className="p-3 rounded-xl bg-[var(--color-app-accent)]/10 border border-[var(--color-app-accent)]/30 flex flex-col gap-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-semibold text-[var(--color-app-accent)] flex items-center gap-1.5">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 18V6"/>
+                          </svg>
+                          Available Deposit Credit
+                        </span>
+                        <span className="font-mono font-bold text-[var(--color-app-accent)]">
+                          {formatCurrency(availableDeposit)}
+                        </span>
+                      </div>
+                      <div className="flex items-end gap-2">
+                        <div className="flex-1">
+                          <Input
+                            type="number"
+                            min="0"
+                            max={maxDepositApplicable}
+                            step="any"
+                            placeholder="0.00"
+                            label="Apply Deposit (EGP)"
+                            value={depositAppliedInput}
+                            onChange={(e) => setDepositAppliedInput(e.target.value)}
+                          />
+                        </div>
+                        {maxDepositApplicable > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setDepositAppliedInput(maxDepositApplicable.toString())}
+                            className="h-10 px-3 text-xs font-semibold rounded-lg bg-[var(--color-app-accent)] text-white hover:opacity-90 transition-opacity whitespace-nowrap cursor-pointer shrink-0"
+                          >
+                            Use Max ({formatCurrency(maxDepositApplicable)})
+                          </button>
+                        )}
+                      </div>
+                      {numDepositApplied > 0 && (
+                        <div className="text-[11px] text-[var(--color-app-text-muted)] flex justify-between pt-1 border-t border-[var(--color-app-accent)]/20">
+                          <span>Deposit applied: <strong className="text-[var(--color-app-accent)] font-mono">{formatCurrency(numDepositApplied)}</strong></span>
+                          <span>Remaining bill: <strong className="font-mono text-[var(--color-app-text)]">{formatCurrency(billAfterDeposit)}</strong></span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {numDepositApplied > 0 && (
+                    <div className="flex justify-between items-center pb-4 border-b border-dashed border-[var(--color-app-border)]">
+                      <span className="text-sm text-[var(--color-app-accent)] font-medium">Deposit Credit Applied</span>
+                      <span className="font-mono text-[var(--color-app-accent)] font-semibold">-{formatCurrency(numDepositApplied)}</span>
+                    </div>
+                  )}
+
                   {/* Payment & Credit Options */}
                   <div className="flex flex-col gap-3 pt-2">
                     <div className="flex justify-between items-center">
@@ -898,14 +977,14 @@ export default function NewSale() {
                     <div className="flex gap-2">
                       <button
                         type="button"
-                        onClick={() => setAmountPaidInput(finalTotal.toString())}
+                        onClick={() => setAmountPaidInput(billAfterDeposit.toString())}
                         className={`flex-1 py-1.5 px-2.5 text-xs font-semibold rounded-lg border transition-colors ${
-                          effectiveAmountPaid >= finalTotal && finalTotal > 0
+                          effectiveAmountPaid >= billAfterDeposit && billAfterDeposit > 0
                             ? "border-[var(--color-app-success)]/40 bg-[var(--color-app-success)]/10 text-[var(--color-app-success)]"
                             : "border-[var(--color-app-border)] hover:bg-[var(--color-app-panel-hover)] text-[var(--color-app-text-muted)]"
                         }`}
                       >
-                        Pay Full ({formatCurrency(finalTotal)})
+                        Pay Remaining ({formatCurrency(billAfterDeposit)})
                       </button>
                       <button
                         type="button"
@@ -925,9 +1004,9 @@ export default function NewSale() {
                       type="number"
                       min="0"
                       step="any"
-                      value={amountPaidInput === "" ? (finalTotal > 0 ? finalTotal.toString() : "0") : amountPaidInput}
+                      value={amountPaidInput === "" ? (billAfterDeposit > 0 ? billAfterDeposit.toString() : "0") : amountPaidInput}
                       onChange={e => setAmountPaidInput(e.target.value)}
-                      placeholder={finalTotal.toString()}
+                      placeholder={billAfterDeposit.toString()}
                     />
 
                     {!isPaidInputValid && (

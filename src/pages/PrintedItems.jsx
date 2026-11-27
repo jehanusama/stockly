@@ -21,6 +21,7 @@ export default function PrintedItems() {
   const {
     printedItems = [],
     customers = [],
+    getCustomerDepositBalance,
     addPrintedItem,
     updatePrintedItem,
     deletePrintedItem,
@@ -93,6 +94,7 @@ export default function PrintedItems() {
     quantity: "",
     sale_price: "",
     discount: "",
+    deposit_amount_applied: "",
     amount_paid_now: "",
     sale_date: new Date().toISOString().split("T")[0],
     notes: "",
@@ -235,6 +237,7 @@ export default function PrintedItems() {
       quantity: "",
       sale_price: targetItem && targetItem.cost_price ? (targetItem.cost_price * 1.2).toFixed(2) : "",
       discount: "",
+      deposit_amount_applied: "",
       amount_paid_now: "",
       sale_date: new Date().toISOString().split("T")[0],
       notes: "",
@@ -465,7 +468,18 @@ export default function PrintedItems() {
     }
     const subtotal = qty * price;
     const calculatedTotal = Math.max(0, subtotal - discount);
-    const paidNow = saleForm.amount_paid_now !== "" ? parseNumber(saleForm.amount_paid_now) : calculatedTotal;
+
+    const customerDepositAvail = (saleForm.customer_id && getCustomerDepositBalance)
+      ? getCustomerDepositBalance(saleForm.customer_id)
+      : 0;
+    const maxDeposit = Math.min(customerDepositAvail, calculatedTotal);
+    const depositApplied = Math.min(
+      Math.max(0, parseNumber(saleForm.deposit_amount_applied) || 0),
+      maxDeposit
+    );
+    const remainingBill = Math.max(0, calculatedTotal - depositApplied);
+
+    const paidNow = saleForm.amount_paid_now !== "" ? parseNumber(saleForm.amount_paid_now) : remainingBill;
 
     if (isNaN(paidNow) || paidNow < 0) {
       setFormError("Please enter a valid amount paid.");
@@ -482,6 +496,7 @@ export default function PrintedItems() {
       sale_price: price,
       discount: discount,
       line_total: calculatedTotal,
+      deposit_amount_applied: depositApplied,
       amount_paid_now: paidNow,
       sale_date: saleForm.sale_date,
       notes: saleForm.notes.trim() || null,
@@ -842,7 +857,7 @@ export default function PrintedItems() {
           <CustomerSelect
             label="Customer (Optional)"
             value={saleForm.customer_id}
-            onChange={(val) => setSaleForm((prev) => ({ ...prev, customer_id: val }))}
+            onChange={(val) => setSaleForm((prev) => ({ ...prev, customer_id: val, deposit_amount_applied: "" }))}
             customers={customers}
             allowGuest
             placeholder="Search by name or phone..."
@@ -920,6 +935,15 @@ export default function PrintedItems() {
             const discountNum = parseFloat(saleForm.discount) || 0;
             const subtotalNum = qtyNum * priceNum;
             const totalNum = Math.max(0, subtotalNum - discountNum);
+            const customerDepositAvail = (saleForm.customer_id && getCustomerDepositBalance)
+              ? getCustomerDepositBalance(saleForm.customer_id)
+              : 0;
+            const maxDeposit = Math.min(customerDepositAvail, totalNum);
+            const depositNumApplied = Math.min(
+              Math.max(0, parseNumber(saleForm.deposit_amount_applied) || 0),
+              maxDeposit
+            );
+            const remainingBill = Math.max(0, totalNum - depositNumApplied);
             const itemObj = printedItems.find(p => p.id === saleForm.printed_item_id);
             return subtotalNum > 0 ? (
               <div className="p-3.5 rounded-xl bg-[var(--color-app-elevated)] border border-[var(--color-app-border)] flex flex-col gap-1.5 text-xs">
@@ -943,8 +967,74 @@ export default function PrintedItems() {
                     {formatCurrency(totalNum)}
                   </span>
                 </div>
+                {depositNumApplied > 0 && (
+                  <div className="flex items-center justify-between pt-1 border-t border-dashed border-[var(--color-app-border)]">
+                    <span className="text-[var(--color-app-accent)] font-medium">Deposit Credit Applied</span>
+                    <span className="font-mono text-[var(--color-app-accent)] font-semibold">− {formatCurrency(depositNumApplied)}</span>
+                  </div>
+                )}
+                {depositNumApplied > 0 && (
+                  <div className="flex items-center justify-between pt-1 border-t border-[var(--color-app-border)]">
+                    <span className="font-semibold text-[var(--color-app-text)]">Remaining Bill</span>
+                    <span className="font-mono text-sm font-bold text-[var(--color-app-text)]">
+                      {formatCurrency(remainingBill)}
+                    </span>
+                  </div>
+                )}
               </div>
             ) : null;
+          })()}
+
+          {(() => {
+            const customerDepositAvail = (saleForm.customer_id && getCustomerDepositBalance)
+              ? getCustomerDepositBalance(saleForm.customer_id)
+              : 0;
+            if (customerDepositAvail <= 0) return null;
+
+            const qtyNum = parseFloat(saleForm.quantity) || 0;
+            const priceNum = parseFloat(saleForm.sale_price) || 0;
+            const discountNum = parseFloat(saleForm.discount) || 0;
+            const totalNum = Math.max(0, qtyNum * priceNum - discountNum);
+            const maxDeposit = Math.min(customerDepositAvail, totalNum);
+
+            return (
+              <div className="p-3 rounded-xl bg-[var(--color-app-accent)]/10 border border-[var(--color-app-accent)]/30 flex flex-col gap-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-[var(--color-app-accent)] flex items-center gap-1.5">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 18V6"/>
+                    </svg>
+                    Available Deposit Credit
+                  </span>
+                  <span className="font-mono font-bold text-[var(--color-app-accent)]">
+                    {formatCurrency(customerDepositAvail)}
+                  </span>
+                </div>
+                <div className="flex items-end gap-2">
+                  <div className="flex-1">
+                    <Input
+                      label="Apply Deposit (EGP)"
+                      type="number"
+                      min="0"
+                      max={maxDeposit}
+                      step="any"
+                      value={saleForm.deposit_amount_applied}
+                      onChange={(e) => setSaleForm(prev => ({ ...prev, deposit_amount_applied: e.target.value }))}
+                      placeholder="0.00"
+                    />
+                  </div>
+                  {maxDeposit > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setSaleForm(prev => ({ ...prev, deposit_amount_applied: maxDeposit.toString() }))}
+                      className="h-10 px-3 text-xs font-semibold rounded-lg bg-[var(--color-app-accent)] text-white hover:opacity-90 transition-opacity whitespace-nowrap cursor-pointer shrink-0"
+                    >
+                      Use Max ({formatCurrency(maxDeposit)})
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
           })()}
 
           <Input
@@ -976,7 +1066,7 @@ export default function PrintedItems() {
               step="any"
               value={saleForm.amount_paid_now}
               onChange={(e) => setSaleForm({ ...saleForm, amount_paid_now: e.target.value })}
-              placeholder="Leave empty for full payment"
+              placeholder="Leave empty for remaining payment"
             />
 
             <DatePicker

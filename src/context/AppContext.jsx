@@ -18,6 +18,8 @@ export function AppProvider({ children }) {
   const [printedPayments, setPrintedPayments] = useState([]);
   const [supplierReturns, setSupplierReturns] = useState([]);
   const [salesReturns, setSalesReturns] = useState([]);
+  const [customerDeposits, setCustomerDeposits] = useState([]);
+  const [depositApplications, setDepositApplications] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -57,6 +59,8 @@ export function AppProvider({ children }) {
         supplierRetRes,
         salesRetRes,
         salesRetItemsRes,
+        depositsRes,
+        depositAppsRes,
       ] = await Promise.all([
         supabase.from("categories").select("*").order("name"),
         supabase.from("products").select("*, categories(*)").order("name"),
@@ -71,6 +75,8 @@ export function AppProvider({ children }) {
         safeQuery(supabase.from("supplier_returns").select("*").order("return_date", { ascending: false })),
         safeQuery(supabase.from("sales_returns").select("*").order("return_date", { ascending: false })),
         safeQuery(supabase.from("sales_return_items").select("*")),
+        safeQuery(supabase.from("customer_deposits").select("*").order("deposit_date", { ascending: false }).order("created_at", { ascending: false })),
+        safeQuery(supabase.from("deposit_applications").select("*").order("applied_date", { ascending: false })),
       ]);
 
       if (catRes.error) throw catRes.error;
@@ -461,6 +467,24 @@ export function AppProvider({ children }) {
       setPrintedBatches(fetchedPrintedBatches);
       setPrintedSales(fetchedPrintedSales);
       setPrintedPayments(fetchedPrintedPayments);
+      setCustomerDeposits(
+        (depositsRes?.data || []).map((d) => {
+          const amt = Number(d.amount ?? 0);
+          const used = Number(d.amount_used ?? 0);
+          return {
+            ...d,
+            amount: amt,
+            amount_used: used,
+            amount_remaining: Math.max(0, Math.round((amt - used) * 100) / 100),
+          };
+        })
+      );
+      setDepositApplications(
+        (depositAppsRes?.data || []).map((a) => ({
+          ...a,
+          amount_applied: Number(a.amount_applied ?? 0),
+        }))
+      );
     } catch (err) {
       console.error("Error fetching data from Supabase:", err);
       setError(err.message || "Failed to load data from Supabase");
@@ -1070,18 +1094,32 @@ export function AppProvider({ children }) {
         }
       }
 
-      // 5b. Insert initial payment & handle excess payment
+      // 5b. Insert initial payment & deposit application
       const amountPaidNow = order.amount_paid_now !== undefined
         ? Number(order.amount_paid_now)
         : finalTotal;
 
       const customerId = createdOrder.customer_id;
       const saleTotal = finalTotal;
+      const depositApplied = Math.min(
+        Math.max(0, Number(order.deposit_amount_applied || 0)),
+        saleTotal
+      );
+      const remainingAfterDeposit = Math.max(0, saleTotal - depositApplied);
 
-      const primaryPayment = Math.min(amountPaidNow, saleTotal);
-      const excessAmount = Math.max(0, amountPaidNow - saleTotal);
+      const primaryPayment = Math.min(amountPaidNow, remainingAfterDeposit);
+      const excessAmount = Math.max(0, amountPaidNow - remainingAfterDeposit);
 
-      // Insert primary payment for this order
+      if (depositApplied > 0 && createdOrder.id && customerId) {
+        await applyDepositToSale({
+          customerId,
+          orderId: createdOrder.id,
+          applyAmount: depositApplied,
+          appliedDate: (order.order_date || new Date().toISOString()).slice(0, 10),
+        });
+      }
+
+      // Insert primary cash payment for this order
       if (primaryPayment > 0 && createdOrder.id && customerId) {
         const paymentPayload = {
           order_id: createdOrder.id,
@@ -1245,6 +1283,8 @@ export function AppProvider({ children }) {
           }
         }
       }
+
+      await restoreDepositsForSale({ orderId: id });
 
       // 3. Explicitly delete all payment rows for this order (belt-and-suspenders:
       //    this ensures no orphaned payments remain even if the DB-level
@@ -2102,11 +2142,25 @@ export function AppProvider({ children }) {
 
       const customerId = createdSale.customer_id;
       const saleTotal = lineTotal;
+      const depositApplied = Math.min(
+        Math.max(0, Number(sale.deposit_amount_applied || 0)),
+        saleTotal
+      );
+      const remainingAfterDeposit = Math.max(0, saleTotal - depositApplied);
 
-      const primaryPayment = Math.min(amountPaidNow, saleTotal);
-      const excessAmount = Math.max(0, amountPaidNow - saleTotal);
+      const primaryPayment = Math.min(amountPaidNow, remainingAfterDeposit);
+      const excessAmount = Math.max(0, amountPaidNow - remainingAfterDeposit);
 
-      // Insert primary payment for this printed sale
+      if (depositApplied > 0 && createdSale.id && customerId) {
+        await applyDepositToSale({
+          customerId,
+          printedSaleId: createdSale.id,
+          applyAmount: depositApplied,
+          appliedDate: (sale.sale_date || new Date().toISOString()).slice(0, 10),
+        });
+      }
+
+      // Insert primary cash payment for this printed sale
       if (primaryPayment > 0 && createdSale.id && customerId) {
         const paymentPayload = {
           printed_sale_id: createdSale.id,
@@ -2224,6 +2278,9 @@ export function AppProvider({ children }) {
           }
         }
       }
+
+      // Restore any customer deposits applied to this sale before deleting
+      await restoreDepositsForSale({ printedSaleId: id });
 
       // Explicitly delete all printed_payments rows for this sale (belt-and-suspenders:
       // ensures no orphaned payment rows remain if DB-level cascade is misconfigured).
@@ -2777,6 +2834,181 @@ export function AppProvider({ children }) {
     }
   };
 
+  // -- Customer Deposits (Advance Payments) --
+  const getCustomerDepositBalance = useCallback((customerId) => {
+    if (!customerId) return 0;
+    const total = (customerDeposits || [])
+      .filter((d) => d.customer_id === customerId)
+      .reduce((sum, d) => sum + (d.amount_remaining ?? 0), 0);
+    return Math.round(total * 100) / 100;
+  }, [customerDeposits]);
+
+  const addCustomerDeposit = async ({ customer_id, amount, deposit_date, notes }) => {
+    try {
+      const amtNum = Number(amount || 0);
+      if (!customer_id || isNaN(amtNum) || amtNum <= 0) {
+        return { success: false, error: "Please select a customer and enter a valid deposit amount." };
+      }
+
+      const payload = {
+        customer_id,
+        amount: Math.round(amtNum * 100) / 100,
+        amount_used: 0,
+        deposit_date: deposit_date || new Date().toISOString().split("T")[0],
+        notes: notes?.trim() || null,
+      };
+
+      const { data, error: depErr } = await supabase
+        .from("customer_deposits")
+        .insert([payload])
+        .select();
+
+      if (depErr) throw depErr;
+
+      await fetchData();
+      return { success: true, data: data?.[0] };
+    } catch (err) {
+      console.error("Error adding customer deposit:", err);
+      return { success: false, error: err.message || "Failed to record customer deposit" };
+    }
+  };
+
+  const deleteCustomerDeposit = async (id) => {
+    try {
+      const target = customerDeposits.find((d) => d.id === id);
+      if (target && Number(target.amount_used ?? 0) > 0.001) {
+        return {
+          success: false,
+          error: "Cannot delete a deposit that has already been applied to a sale.",
+        };
+      }
+
+      const { error: delErr } = await supabase
+        .from("customer_deposits")
+        .delete()
+        .eq("id", id);
+
+      if (delErr) throw delErr;
+
+      await fetchData();
+      return { success: true };
+    } catch (err) {
+      console.error("Error deleting customer deposit:", err);
+      return { success: false, error: err.message || "Failed to delete deposit" };
+    }
+  };
+
+  const applyDepositToSale = async ({ customerId, orderId = null, printedSaleId = null, applyAmount, appliedDate }) => {
+    const targetAmt = Math.round(Number(applyAmount || 0) * 100) / 100;
+    if (!customerId || targetAmt <= 0 || (!orderId && !printedSaleId)) return;
+
+    const { data: activeDeposits, error: fetchErr } = await supabase
+      .from("customer_deposits")
+      .select("*")
+      .eq("customer_id", customerId)
+      .order("deposit_date", { ascending: true })
+      .order("created_at", { ascending: true });
+
+    if (fetchErr) {
+      console.error("Error fetching deposits for application:", fetchErr);
+      return;
+    }
+
+    let remaining = targetAmt;
+    let totalApplied = 0;
+    const applications = [];
+
+    for (const dep of activeDeposits || []) {
+      if (remaining <= 0.001) break;
+      const amt = Number(dep.amount ?? 0);
+      const used = Number(dep.amount_used ?? 0);
+      const avail = Math.max(0, Math.round((amt - used) * 100) / 100);
+      if (avail <= 0) continue;
+
+      const take = Math.min(avail, remaining);
+      const roundedTake = Math.round(take * 100) / 100;
+      remaining = Math.round((remaining - roundedTake) * 100) / 100;
+      totalApplied = Math.round((totalApplied + roundedTake) * 100) / 100;
+
+      const { error: updErr } = await supabase
+        .from("customer_deposits")
+        .update({ amount_used: Math.round((used + roundedTake) * 100) / 100 })
+        .eq("id", dep.id);
+
+      if (updErr) {
+        console.error("Error updating customer_deposit amount_used:", updErr);
+      }
+
+      applications.push({
+        deposit_id: dep.id,
+        order_id: orderId,
+        printed_sale_id: printedSaleId,
+        amount_applied: roundedTake,
+        applied_date: appliedDate || new Date().toISOString().split("T")[0],
+      });
+    }
+
+    if (applications.length > 0) {
+      const { error: appErr } = await supabase
+        .from("deposit_applications")
+        .insert(applications);
+      if (appErr) {
+        console.error("Error inserting deposit_applications:", appErr);
+      }
+    }
+
+    if (totalApplied > 0) {
+      if (orderId) {
+        await supabase.from("payments").insert([
+          {
+            order_id: orderId,
+            customer_id: customerId,
+            amount: totalApplied,
+            payment_date: appliedDate || new Date().toISOString().split("T")[0],
+            notes: "Applied from customer deposit",
+          },
+        ]);
+      } else if (printedSaleId) {
+        await supabase.from("printed_payments").insert([
+          {
+            printed_sale_id: printedSaleId,
+            customer_id: customerId,
+            amount: totalApplied,
+            payment_date: appliedDate || new Date().toISOString().split("T")[0],
+            notes: "Applied from customer deposit",
+          },
+        ]);
+      }
+    }
+  };
+
+  const restoreDepositsForSale = async ({ orderId = null, printedSaleId = null }) => {
+    if (!orderId && !printedSaleId) return;
+    try {
+      let query = supabase.from("deposit_applications").select("*");
+      query = orderId ? query.eq("order_id", orderId) : query.eq("printed_sale_id", printedSaleId);
+      const { data: apps, error: fetchErr } = await query;
+      if (fetchErr || !apps || apps.length === 0) return;
+
+      for (const app of apps) {
+        const { data: depRows } = await supabase
+          .from("customer_deposits")
+          .select("id, amount_used")
+          .eq("id", app.deposit_id);
+        const dep = depRows?.[0];
+        if (dep) {
+          const restoredUsed = Math.max(0, Math.round((Number(dep.amount_used ?? 0) - Number(app.amount_applied ?? 0)) * 100) / 100);
+          await supabase
+            .from("customer_deposits")
+            .update({ amount_used: restoredUsed })
+            .eq("id", dep.id);
+        }
+      }
+    } catch (err) {
+      console.error("Error restoring customer deposits for deleted sale:", err);
+    }
+  };
+
   const getCustomerTotalBalance = useCallback((customerId) => {
     if (!customerId) return 0;
     const bagsBalance = orders
@@ -2801,6 +3033,8 @@ export function AppProvider({ children }) {
     printedPayments,
     supplierReturns,
     salesReturns,
+    customerDeposits,
+    depositApplications,
     isLoading,
     error,
     refreshData: fetchData,
@@ -2837,6 +3071,9 @@ export function AppProvider({ children }) {
     recordSalesReturn,
     deleteSalesReturn,
     getCustomerTotalBalance,
+    getCustomerDepositBalance,
+    addCustomerDeposit,
+    deleteCustomerDeposit,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
