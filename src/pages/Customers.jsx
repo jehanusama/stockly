@@ -17,7 +17,7 @@ function getInitials(name) {
 
 export default function Customers() {
   const navigate = useNavigate();
-  const { customers, orders, printedSales = [], getCustomerTotalBalance, addCustomer, updateCustomer, deleteCustomer, isLoading, error, refreshData } = useAppData();
+  const { customers, orders, printedSales = [], getCustomerTotalBalance, getCustomerDepositBalance, addCustomer, updateCustomer, deleteCustomer, isLoading, error, refreshData } = useAppData();
   const { success, error: toastError } = useToast();
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("balance"); // "balance" | "spend" | "name"
@@ -90,6 +90,7 @@ export default function Customers() {
         totalOrders: salesByCustomer[c.id]?.orders || 0,
         lifetimeSpend: salesByCustomer[c.id]?.spend || 0,
         outstandingBalance: getCustomerTotalBalance(c.id),
+        depositBalance: getCustomerDepositBalance(c.id),
       }))
       .filter(c => {
         const searchEng = toEnglishDigits(lowerSearch);
@@ -116,7 +117,7 @@ export default function Customers() {
         }
         return 0;
       }); 
-  }, [customers, orders, printedSales, getCustomerTotalBalance, search, sortBy]);
+  }, [customers, orders, printedSales, getCustomerTotalBalance, getCustomerDepositBalance, search, sortBy]);
 
   const handleSaveCustomer = async (e) => {
     e.preventDefault();
@@ -225,7 +226,19 @@ export default function Customers() {
     <PageContainer 
       title="Customers" 
       subtitle="View and manage your client relationships."
-      actions={<Button variant="primary" onClick={openAddModal}>+ Add Customer</Button>}
+      actions={
+        <div className="flex items-center gap-2">
+          <Button variant="secondary" onClick={() => navigate("/deposits")}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5">
+              <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" />
+              <path d="M3 5v14a2 2 0 0 0 2 2h16v-5" />
+              <path d="M18 12a2 2 0 0 0 0 4h4v-4Z" />
+            </svg>
+            Deposits
+          </Button>
+          <Button variant="primary" onClick={openAddModal}>+ Add Customer</Button>
+        </div>
+      }
     >
       <div className="flex flex-col gap-6 pb-8">
         
@@ -308,9 +321,16 @@ export default function Customers() {
                           <div className="w-9 h-9 rounded-full bg-[var(--color-app-accent)] flex items-center justify-center text-white font-semibold text-xs shrink-0 shadow-sm">
                             {getInitials(customer.name)}
                           </div>
-                          <span className="font-semibold text-[var(--color-app-text)] hover:text-[var(--color-app-accent)] transition-colors">
-                            {customer.name}
-                          </span>
+                          <div className="flex flex-col">
+                            <span className="font-semibold text-[var(--color-app-text)] hover:text-[var(--color-app-accent)] transition-colors">
+                              {customer.name}
+                            </span>
+                            {customer.depositBalance > 0 && (
+                              <span className="inline-flex items-center gap-1 mt-0.5 text-[10px] font-mono font-semibold text-[var(--color-app-success)]">
+                                Deposit Credit: {formatCurrency(customer.depositBalance)}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </td>
                       <td className="px-4 py-3.5 text-xs text-[var(--color-app-text-muted)] font-mono">

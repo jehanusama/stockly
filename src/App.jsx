@@ -10,6 +10,7 @@ import Dashboard         from "@/pages/Dashboard";
 import Products          from "@/pages/Products";
 import Customers         from "@/pages/Customers";
 import CustomerDetails   from "@/pages/CustomerDetails";
+import Deposits          from "@/pages/Deposits";
 import NewSale           from "@/pages/NewSale";
 import SalesHistory      from "@/pages/SalesHistory";
 import SalesByDay        from "@/pages/SalesByDay";
@@ -81,6 +82,7 @@ function AppLayout() {
           <Route path="/products"       element={<Products />} />
           <Route path="/customers"      element={<Customers />} />
           <Route path="/customers/:id"  element={<CustomerDetails />} />
+          <Route path="/deposits"       element={<Deposits />} />
           <Route path="/new-sale"       element={<NewSale />} />
           <Route path="/sales"          element={<SalesHistory />} />
           <Route path="/sales-by-day"   element={<SalesByDay />} />
